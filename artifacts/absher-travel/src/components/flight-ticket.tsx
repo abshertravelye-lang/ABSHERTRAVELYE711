@@ -88,11 +88,32 @@ function PrintStyles() {
   return (
     <style dangerouslySetInnerHTML={{ __html: `
       @media print {
-        body > * { display: none !important; }
-        body > div.fixed { display: block !important; }
-        .print\\:hidden { display: none !important; }
-        @page { margin: 0; size: A4; }
-        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        /* Visibility-isolation: hide everything, then reveal only the ticket */
+        * { visibility: hidden !important; }
+        .ticket-print-root,
+        .ticket-print-root * { visibility: visible !important; }
+
+        /* Stretch ticket to fill the page */
+        .ticket-print-root {
+          position: fixed !important;
+          inset: 0 !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          margin: 0 !important;
+          border-radius: 0 !important;
+          box-shadow: none !important;
+          overflow: visible !important;
+          background: white !important;
+        }
+
+        /* Page setup */
+        @page { margin: 0; size: A4 portrait; }
+
+        /* Force colors — background fills, gradients, images all preserved */
+        * {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
       }
     `}} />
   );
@@ -237,7 +258,7 @@ function TicketContent({
 
   return (
     <div
-      className="bg-white rounded-3xl overflow-hidden shadow-2xl print:shadow-none print:rounded-none relative"
+      className="ticket-print-root bg-white rounded-3xl overflow-hidden shadow-2xl print:shadow-none print:rounded-none relative"
       style={{ position: "relative" }}
     >
       <PrintStyles />

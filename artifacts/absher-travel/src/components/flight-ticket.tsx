@@ -1,9 +1,14 @@
-import { useRef } from "react";
-import { X, Printer, Download, Plane, CheckCircle, Clock, Luggage, ArrowRight } from "lucide-react";
+import { useState, useRef } from "react";
+import {
+  X, Printer, Plane, CheckCircle, Clock, Luggage, ArrowRight,
+  User, FileText, Globe, Calendar, ChevronRight, ShieldCheck, AlertCircle,
+  CreditCard,
+} from "lucide-react";
 import type { FlightOffer } from "@workspace/api-client-react";
 import type { Airport } from "@/data/airports";
 import type { PassengerConfig } from "./passenger-selector";
 
+/* ─────────────────── types ─────────────────── */
 interface FlightTicketProps {
   offer: FlightOffer;
   origin: Airport;
@@ -13,60 +18,671 @@ interface FlightTicketProps {
   onClose: () => void;
 }
 
+interface PassengerInfo {
+  fullName: string;
+  passport: string;
+  nationality: string;
+  dob: string;
+}
+
+type Step = "passengers" | "provisional" | "confirmed";
+
+/* ─────────────────── helpers ─────────────────── */
 const CABIN_LABELS: Record<string, { ar: string; en: string }> = {
-  economy:         { ar: "درجة اقتصادية",    en: "Economy Class" },
-  premium_economy: { ar: "اقتصادية مميزة",   en: "Premium Economy" },
-  business:        { ar: "رجال الأعمال",     en: "Business Class" },
-  first:           { ar: "الدرجة الأولى",    en: "First Class" },
+  economy:         { ar: "درجة اقتصادية",  en: "Economy Class" },
+  premium_economy: { ar: "اقتصادية مميزة", en: "Premium Economy" },
+  business:        { ar: "رجال الأعمال",   en: "Business Class" },
+  first:           { ar: "الدرجة الأولى",  en: "First Class" },
 };
 
-function formatTime(iso: string, lang: "ar" | "en") {
-  return new Date(iso).toLocaleTimeString(lang === "ar" ? "ar-SA" : "en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+function fmt(iso: string, lang: "ar" | "en") {
+  return new Date(iso).toLocaleTimeString(lang === "ar" ? "ar-SA" : "en-US", {
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  });
+}
+function fmtDate(iso: string, lang: "ar" | "en") {
+  return new Date(iso).toLocaleDateString(lang === "ar" ? "ar-SA" : "en-US", {
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
+  });
+}
+function dur(min: number) {
+  return `${Math.floor(min / 60)}h ${min % 60}m`;
+}
+function genRef(prefix = "ABT") {
+  return prefix + Math.random().toString(36).toUpperCase().slice(2, 8);
 }
 
-function formatDate(iso: string, lang: "ar" | "en") {
-  return new Date(iso).toLocaleDateString(lang === "ar" ? "ar-SA" : "en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+/* ─────────────────── Watermark SVG (inline, print-safe) ─────────────────── */
+const WATERMARK_STYLE: React.CSSProperties = {
+  position: "absolute",
+  inset: 0,
+  overflow: "hidden",
+  pointerEvents: "none",
+  zIndex: 0,
+  opacity: 0.045,
+};
+
+function Watermark() {
+  const items = Array.from({ length: 40 });
+  return (
+    <div style={WATERMARK_STYLE} aria-hidden>
+      <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+        {items.map((_, i) => {
+          const row = Math.floor(i / 5);
+          const col = i % 5;
+          return (
+            <text
+              key={i}
+              x={col * 22 + "%"}
+              y={row * 120 + 80}
+              fontSize="13"
+              fontFamily="Arial, sans-serif"
+              fontWeight="bold"
+              fill="#0d2351"
+              transform={`rotate(-38, ${col * 220 + 100}, ${row * 120 + 60})`}
+            >
+              أبشر أعمال
+            </text>
+          );
+        })}
+      </svg>
+    </div>
+  );
 }
 
-function formatDur(min: number) {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  return `${h}h ${m}m`;
+/* ─────────────────── Passenger Form ─────────────────── */
+function PassengerForm({
+  index, total, info, ar, onChange,
+}: {
+  index: number;
+  total: number;
+  info: PassengerInfo;
+  ar: boolean;
+  onChange: (info: PassengerInfo) => void;
+}) {
+  const label = (field: keyof PassengerInfo) => {
+    const labels: Record<keyof PassengerInfo, { ar: string; en: string }> = {
+      fullName:    { ar: "الاسم الكامل",       en: "Full Name" },
+      passport:    { ar: "رقم جواز السفر",     en: "Passport Number" },
+      nationality: { ar: "الجنسية",            en: "Nationality" },
+      dob:         { ar: "تاريخ الميلاد",      en: "Date of Birth" },
+    };
+    return ar ? labels[field].ar : labels[field].en;
+  };
+
+  const placeholder: Record<keyof PassengerInfo, { ar: string; en: string }> = {
+    fullName:    { ar: "كما هو في جواز السفر",    en: "As in passport" },
+    passport:    { ar: "مثال: A12345678",         en: "e.g. A12345678" },
+    nationality: { ar: "مثال: سعودي / يمني",      en: "e.g. Saudi / Yemeni" },
+    dob:         { ar: "",                        en: "" },
+  };
+
+  const icons: Record<keyof PassengerInfo, React.ReactNode> = {
+    fullName:    <User className="h-4 w-4 text-[#c8a84b]" />,
+    passport:    <FileText className="h-4 w-4 text-[#c8a84b]" />,
+    nationality: <Globe className="h-4 w-4 text-[#c8a84b]" />,
+    dob:         <Calendar className="h-4 w-4 text-[#c8a84b]" />,
+  };
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+      {/* Card header */}
+      <div className="bg-gradient-to-r from-[#0d2351] to-[#1a3875] px-5 py-3 flex items-center gap-3">
+        <div className="w-8 h-8 rounded-full bg-[#c8a84b] flex items-center justify-center">
+          <User className="h-4 w-4 text-white" />
+        </div>
+        <div>
+          <div className="text-white font-bold text-sm">
+            {ar ? `المسافر ${index + 1}` : `Passenger ${index + 1}`}
+            {total > 1 && <span className="text-white/50 text-xs ml-2 rtl:mr-2 rtl:ml-0">({ar ? `من ${total}` : `of ${total}`})</span>}
+          </div>
+          <div className="text-white/50 text-xs">{ar ? "بالغ" : "Adult"}</div>
+        </div>
+      </div>
+
+      <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+        {(["fullName", "passport", "nationality", "dob"] as (keyof PassengerInfo)[]).map(field => (
+          <div key={field} className={field === "fullName" ? "md:col-span-2" : ""}>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+              {label(field)} <span className="text-red-400">*</span>
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 start-3 flex items-center pointer-events-none">
+                {icons[field]}
+              </div>
+              <input
+                type={field === "dob" ? "date" : "text"}
+                value={info[field]}
+                onChange={e => onChange({ ...info, [field]: e.target.value })}
+                placeholder={ar ? placeholder[field].ar : placeholder[field].en}
+                className="w-full ps-10 pe-4 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800
+                  focus:outline-none focus:ring-2 focus:ring-[#c8a84b]/30 focus:border-[#c8a84b] transition-all
+                  placeholder:text-slate-300 bg-slate-50 hover:bg-white"
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
-function genRef() {
-  return "ABT" + Math.random().toString(36).toUpperCase().slice(2, 8);
-}
-
-const BOOKING_REF = genRef();
-
-export function FlightTicket({ offer, origin, destination, passengers, language, onClose }: FlightTicketProps) {
+/* ─────────────────── Ticket content (printed) ─────────────────── */
+function TicketContent({
+  offer, origin, destination, passengers, passengerDetails,
+  language, bookingRef, isConfirmed,
+}: {
+  offer: FlightOffer;
+  origin: Airport;
+  destination: Airport;
+  passengers: PassengerConfig;
+  passengerDetails: PassengerInfo[];
+  language: "ar" | "en";
+  bookingRef: string;
+  isConfirmed: boolean;
+}) {
   const ar = language === "ar";
-  const ticketRef = useRef<HTMLDivElement>(null);
-
   const firstSeg = offer.segments[0];
   const lastSeg = offer.segments[offer.segments.length - 1];
   const cabin = CABIN_LABELS[passengers.cabinClass] ?? CABIN_LABELS.economy;
-
-  const handlePrint = () => {
-    window.print();
-  };
-
-  const totalPassengers = passengers.adults + passengers.children + passengers.infants;
+  const total = passengers.adults + passengers.children + passengers.infants;
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto" dir={ar ? "rtl" : "ltr"}>
-      <div className="w-full max-w-2xl my-8">
+    <div
+      className="bg-white rounded-3xl overflow-hidden shadow-2xl print:shadow-none print:rounded-none relative"
+      style={{ position: "relative" }}
+    >
+      <Watermark />
+
+      {/* ── Header ── */}
+      <div className="relative z-10 bg-[#0d2351] px-8 py-6 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-lg shrink-0">
+            <svg viewBox="0 0 48 48" fill="none" className="w-10 h-10">
+              <circle cx="24" cy="24" r="20" fill="#0d2351"/>
+              <path d="M12 26L24 14L36 26" stroke="#c8a84b" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M18 34L24 28L30 34" stroke="#c8a84b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="24" cy="26" r="3" fill="#c8a84b"/>
+            </svg>
+          </div>
+          <div>
+            <div className="text-white font-black text-lg leading-tight">أبشر أعمال</div>
+            <div className="text-[#c8a84b] text-xs font-semibold">للسفريات والسياحة</div>
+            <div className="text-white/40 text-xs">Absher Travel & Tourism</div>
+          </div>
+        </div>
+
+        <div className="text-end rtl:text-start">
+          <div className="text-white/50 text-xs uppercase tracking-widest font-medium">
+            {ar ? "مرجع الحجز" : "Booking Ref"}
+          </div>
+          <div className="text-[#c8a84b] font-black text-2xl tracking-widest mt-0.5">{bookingRef}</div>
+          <div className="mt-2 flex items-center gap-1.5 justify-end rtl:justify-start">
+            {isConfirmed ? (
+              <>
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span className="text-emerald-300 text-xs font-bold">
+                  {ar ? "تذكرة مؤكدة – تم الحجز" : "Confirmed Ticket"}
+                </span>
+              </>
+            ) : (
+              <>
+                <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                <span className="text-amber-300 text-xs font-semibold">
+                  {ar ? "حجز مؤقت – بانتظار الدفع" : "Provisional – Pending Payment"}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Route hero ── */}
+      <div className="relative z-10 bg-gradient-to-br from-slate-900 to-[#0d2351] px-8 py-8">
+        <div className="flex items-center justify-between gap-4">
+          <div className="text-center flex-1">
+            <div className="text-5xl font-black text-white tracking-wider">{firstSeg.originIata}</div>
+            <div className="text-[#c8a84b] font-semibold text-base mt-1">
+              {ar ? origin.cityAr : origin.cityEn}
+            </div>
+            <div className="text-white/40 text-xs mt-0.5">
+              {ar ? origin.countryAr : origin.countryEn}
+            </div>
+          </div>
+
+          <div className="flex-1 flex flex-col items-center gap-2">
+            <div className="text-white/50 text-xs font-medium uppercase tracking-widest">
+              {offer.stops === 0
+                ? (ar ? "مباشر" : "Direct")
+                : `${offer.stops} ${ar ? "توقف" : "stop"}`}
+            </div>
+            <div className="w-full flex items-center gap-1">
+              <div className="h-px bg-gradient-to-r from-[#c8a84b]/20 to-[#c8a84b] flex-1" />
+              <div className="w-8 h-8 rounded-full bg-[#c8a84b]/20 border border-[#c8a84b] flex items-center justify-center">
+                <Plane className="h-4 w-4 text-[#c8a84b] rotate-90" />
+              </div>
+              <div className="h-px bg-gradient-to-r from-[#c8a84b] to-[#c8a84b]/20 flex-1" />
+            </div>
+            <div className="text-white/50 text-xs">{dur(offer.totalDurationMin)}</div>
+          </div>
+
+          <div className="text-center flex-1">
+            <div className="text-5xl font-black text-white tracking-wider">{lastSeg.destinationIata}</div>
+            <div className="text-[#c8a84b] font-semibold text-base mt-1">
+              {ar ? destination.cityAr : destination.cityEn}
+            </div>
+            <div className="text-white/40 text-xs mt-0.5">
+              {ar ? destination.countryAr : destination.countryEn}
+            </div>
+          </div>
+        </div>
+
+        {/* Times */}
+        <div className="flex items-center justify-between mt-6 bg-white/5 rounded-2xl px-6 py-4">
+          <div>
+            <div className="text-3xl font-black text-white tabular-nums">
+              {fmt(firstSeg.departureAt, language)}
+            </div>
+            <div className="text-white/50 text-xs mt-1">{fmtDate(firstSeg.departureAt, language)}</div>
+          </div>
+          <div className="flex flex-col items-center">
+            <div className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full border-2 border-white/30" />
+              <div className="w-16 h-px bg-white/20" />
+              <Plane className="h-4 w-4 text-white/40 rotate-90" />
+              <div className="w-16 h-px bg-white/20" />
+              <div className="w-2 h-2 rounded-full bg-[#c8a84b]" />
+            </div>
+            <div className="text-white/40 text-xs mt-1">{dur(offer.totalDurationMin)}</div>
+          </div>
+          <div className="text-end rtl:text-start">
+            <div className="text-3xl font-black text-white tabular-nums">
+              {fmt(lastSeg.arrivalAt, language)}
+            </div>
+            <div className="text-white/50 text-xs mt-1">{fmtDate(lastSeg.arrivalAt, language)}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Tear line ── */}
+      <div className="relative z-10 flex items-center">
+        <div className="absolute -start-4 w-8 h-8 rounded-full bg-slate-100" />
+        <div className="flex-1 border-t-2 border-dashed border-slate-200 mx-4" />
+        <div className="absolute -end-4 w-8 h-8 rounded-full bg-slate-100" />
+      </div>
+
+      {/* ── Flight details ── */}
+      <div className="relative z-10 px-8 py-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
+          <div>
+            <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">
+              {ar ? "شركة الطيران" : "Airline"}
+            </div>
+            <div className="flex items-center gap-2">
+              {firstSeg.airlineLogoUrl
+                ? <img src={firstSeg.airlineLogoUrl} alt="" className="h-6 w-6 object-contain" />
+                : <Plane className="h-5 w-5 text-slate-400" />}
+              <span className="font-semibold text-slate-800 text-sm">{firstSeg.airlineName}</span>
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">
+              {ar ? "رقم الرحلة" : "Flight No."}
+            </div>
+            <div className="font-black text-slate-800 text-sm tracking-widest">{firstSeg.flightNumber}</div>
+          </div>
+
+          <div>
+            <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">
+              {ar ? "درجة السفر" : "Cabin"}
+            </div>
+            <div className="font-semibold text-slate-800 text-sm">
+              {ar ? cabin.ar : cabin.en}
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">
+              {ar ? "الأمتعة" : "Baggage"}
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Luggage className="h-4 w-4 text-[#0d2351]" />
+              <span className="font-semibold text-slate-800 text-sm">
+                {offer.baggageIncludedKg} {ar ? "كجم" : "kg"}
+              </span>
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">
+              {ar ? "التوقفات" : "Stops"}
+            </div>
+            <div className="font-semibold text-slate-800 text-sm">
+              {offer.stops === 0
+                ? (ar ? "بدون توقف" : "Non-stop")
+                : `${offer.stops} ${ar ? "توقف" : "stop(s)"}`}
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">
+              {ar ? "عدد المسافرين" : "Passengers"}
+            </div>
+            <div className="font-semibold text-slate-800 text-sm">
+              {passengers.adults > 0 && `${passengers.adults} ${ar ? "بالغ" : "adult(s)"}`}
+              {passengers.children > 0 && `, ${passengers.children} ${ar ? "طفل" : "child(ren)"}`}
+              {passengers.infants > 0 && `, ${passengers.infants} ${ar ? "رضيع" : "infant(s)"}`}
+            </div>
+          </div>
+        </div>
+
+        {/* Multi-segment */}
+        {offer.segments.length > 1 && (
+          <div className="mt-5 bg-slate-50 rounded-2xl p-4 space-y-3">
+            <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+              {ar ? "تفاصيل المسار" : "Journey Segments"}
+            </div>
+            {offer.segments.map((seg, i) => (
+              <div key={i} className="flex items-center gap-3 text-sm">
+                <span className="font-black text-[#0d2351]">{seg.originIata}</span>
+                <ArrowRight className="h-4 w-4 text-slate-400 rtl:rotate-180" />
+                <span className="font-black text-slate-700">{seg.destinationIata}</span>
+                <span className="text-slate-400 text-xs">{seg.flightNumber}</span>
+                <span className="text-slate-400 text-xs">
+                  {fmt(seg.departureAt, language)} → {fmt(seg.arrivalAt, language)}
+                </span>
+                <span className="text-slate-400 text-xs">{dur(seg.durationMin)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Passengers table ── */}
+      {passengerDetails.some(p => p.fullName) && (
+        <div className="relative z-10 mx-8 mb-6">
+          <div className="bg-[#0d2351]/5 border border-[#0d2351]/10 rounded-2xl overflow-hidden">
+            <div className="bg-[#0d2351] px-5 py-2.5 flex items-center gap-2">
+              <User className="h-4 w-4 text-[#c8a84b]" />
+              <span className="text-white font-bold text-sm">
+                {ar ? "بيانات المسافرين" : "Passenger Details"}
+              </span>
+            </div>
+            <div className="divide-y divide-[#0d2351]/10">
+              {passengerDetails.map((p, i) => (
+                <div key={i} className="px-5 py-3 flex flex-wrap gap-x-8 gap-y-1 text-sm">
+                  <div className="flex items-center gap-2 font-bold text-[#0d2351] min-w-[160px]">
+                    <span className="w-5 h-5 rounded-full bg-[#c8a84b] text-white text-xs flex items-center justify-center font-black shrink-0">
+                      {i + 1}
+                    </span>
+                    {p.fullName || (ar ? "—" : "—")}
+                  </div>
+                  {p.passport && (
+                    <div className="text-slate-500">
+                      <span className="text-xs text-slate-400 font-medium">{ar ? "جواز: " : "PP: "}</span>
+                      {p.passport}
+                    </div>
+                  )}
+                  {p.nationality && (
+                    <div className="text-slate-500">
+                      <span className="text-xs text-slate-400 font-medium">{ar ? "الجنسية: " : "Nationality: "}</span>
+                      {p.nationality}
+                    </div>
+                  )}
+                  {p.dob && (
+                    <div className="text-slate-500">
+                      <span className="text-xs text-slate-400 font-medium">{ar ? "تاريخ الميلاد: " : "DOB: "}</span>
+                      {p.dob}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Price ── */}
+      <div className="relative z-10 mx-8 mb-6 rounded-2xl overflow-hidden border border-[#c8a84b]/20">
+        <div className="bg-gradient-to-r from-[#0d2351]/5 to-[#c8a84b]/10 px-5 py-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">
+                {ar ? "السعر الإجمالي" : "Total Price"}
+              </div>
+              <div className="flex items-end gap-2">
+                <div className="text-4xl font-black text-[#0d2351]">
+                  {offer.totalPrice.toLocaleString()}
+                </div>
+                <div className="text-lg font-semibold text-[#0d2351]/50 mb-1">{offer.currency}</div>
+              </div>
+              <div className="text-xs text-slate-400 mt-1">
+                {ar
+                  ? `شامل ${total} مسافر · جميع الرسوم شاملة`
+                  : `For ${total} passenger(s) · All fees included`}
+              </div>
+            </div>
+            <div className="flex flex-col items-end gap-2">
+              {offer.isRefundable && (
+                <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 text-xs font-semibold px-3 py-1.5 rounded-full border border-emerald-200">
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  {ar ? "قابل للاسترداد" : "Refundable"}
+                </div>
+              )}
+              {offer.carryOnIncluded && (
+                <div className="flex items-center gap-1.5 bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full border border-blue-200">
+                  <Clock className="h-3.5 w-3.5" />
+                  {ar ? "حقيبة يد مجانية" : "Carry-on included"}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Footer ── */}
+      <div className="relative z-10 bg-[#0d2351]/5 border-t border-[#0d2351]/10 px-8 py-5">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+          <div className="text-xs text-slate-500 space-y-0.5">
+            <div className="font-bold text-[#0d2351]">
+              {ar ? "أبشر أعمال للسفريات والسياحة" : "Absher Travel & Tourism"}
+            </div>
+            <div className="text-slate-400">
+              {ar
+                ? "اليمن - صنعاء - شارع الزبيري - جولة كنتاكي سابقاً"
+                : "Yemen – Sana'a – Al-Zubairi St – Former KFC Roundabout"}
+            </div>
+            <div className="text-slate-400">
+              {ar ? "هاتف: 967+ 779055511 / 784055511" : "Tel: +967 779055511 / 784055511"}
+            </div>
+          </div>
+          <div className="text-xs text-end rtl:text-start">
+            {isConfirmed ? (
+              <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-3 py-2 rounded-xl border border-emerald-200 font-semibold">
+                <ShieldCheck className="h-4 w-4" />
+                {ar ? "تذكرة مؤكدة — حجز نهائي" : "Confirmed Ticket — Final Booking"}
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 bg-amber-50 text-amber-700 px-3 py-2 rounded-xl border border-amber-200 font-semibold">
+                <AlertCircle className="h-4 w-4" />
+                {ar ? "وثيقة مؤقتة — يُرجى إتمام الدفع" : "Provisional — Please complete payment"}
+              </div>
+            )}
+            <div className="mt-2 text-[10px] text-slate-300">
+              {new Date().toLocaleString(ar ? "ar-SA" : "en-US")}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────── Main component ─────────────────── */
+export function FlightTicket({
+  offer, origin, destination, passengers, language, onClose,
+}: FlightTicketProps) {
+  const ar = language === "ar";
+  const totalPax = passengers.adults + passengers.children + passengers.infants;
+
+  const [step, setStep] = useState<Step>("passengers");
+  const [passengerDetails, setPassengerDetails] = useState<PassengerInfo[]>(
+    Array.from({ length: Math.max(totalPax, 1) }, () => ({
+      fullName: "", passport: "", nationality: "", dob: "",
+    }))
+  );
+  const [bookingRef] = useState(() => genRef("ABT"));
+  const [confirmedRef] = useState(() => genRef("CNF"));
+
+  const updatePassenger = (i: number, info: PassengerInfo) => {
+    setPassengerDetails(prev => prev.map((p, idx) => idx === i ? info : p));
+  };
+
+  const hasMinData = passengerDetails[0]?.fullName.trim().length > 0;
+
+  const handlePrint = () => window.print();
+
+  /* ── Step: Passenger form ── */
+  if (step === "passengers") {
+    return (
+      <div
+        className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto"
+        dir={ar ? "rtl" : "ltr"}
+      >
+        <div className="w-full max-w-2xl my-8">
+          {/* Header bar */}
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h2 className="text-white text-xl font-black">
+                {ar ? "بيانات المسافرين" : "Passenger Details"}
+              </h2>
+              <p className="text-white/50 text-sm mt-0.5">
+                {ar ? "أدخل بيانات كل مسافر لإصدار التذكرة" : "Enter passenger details to issue ticket"}
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Mini flight summary */}
+          <div className="bg-white/10 rounded-2xl px-5 py-4 mb-5 flex items-center gap-4">
+            <div className="text-center">
+              <div className="text-white font-black text-xl">{offer.segments[0].originIata}</div>
+              <div className="text-white/50 text-xs">{ar ? origin.cityAr : origin.cityEn}</div>
+            </div>
+            <div className="flex-1 flex flex-col items-center">
+              <div className="w-full flex items-center gap-1">
+                <div className="h-px bg-[#c8a84b]/40 flex-1" />
+                <Plane className="h-4 w-4 text-[#c8a84b] rotate-90" />
+                <div className="h-px bg-[#c8a84b]/40 flex-1" />
+              </div>
+              <div className="text-white/40 text-xs mt-1">{dur(offer.totalDurationMin)}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-white font-black text-xl">
+                {offer.segments[offer.segments.length - 1].destinationIata}
+              </div>
+              <div className="text-white/50 text-xs">{ar ? destination.cityAr : destination.cityEn}</div>
+            </div>
+            <div className="border-s border-white/20 ps-4 text-end rtl:text-start">
+              <div className="text-[#c8a84b] font-black text-lg">
+                {offer.totalPrice.toLocaleString()}
+              </div>
+              <div className="text-white/40 text-xs">{offer.currency}</div>
+            </div>
+          </div>
+
+          {/* Passenger forms */}
+          <div className="space-y-4">
+            {passengerDetails.map((info, i) => (
+              <PassengerForm
+                key={i}
+                index={i}
+                total={passengerDetails.length}
+                info={info}
+                ar={ar}
+                onChange={updated => updatePassenger(i, updated)}
+              />
+            ))}
+          </div>
+
+          {/* Actions */}
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <button
+              onClick={() => setStep("provisional")}
+              className="py-3.5 bg-white/10 hover:bg-white/20 text-white rounded-2xl font-semibold
+                transition-all border border-white/20 flex items-center justify-center gap-2"
+            >
+              <AlertCircle className="h-4 w-4 text-amber-400" />
+              {ar ? "حجز مؤقت" : "Provisional Booking"}
+            </button>
+            <button
+              onClick={() => { if (hasMinData) setStep("confirmed"); }}
+              disabled={!hasMinData}
+              className="py-3.5 bg-[#c8a84b] hover:bg-[#b8973b] disabled:bg-white/20 disabled:text-white/40
+                text-white rounded-2xl font-black transition-all shadow-lg shadow-amber-900/20
+                flex items-center justify-center gap-2"
+            >
+              <CreditCard className="h-4 w-4" />
+              {ar ? "تأكيد الدفع وإصدار التذكرة" : "Pay & Issue Ticket"}
+            </button>
+          </div>
+          {!hasMinData && (
+            <p className="text-center text-amber-400/70 text-xs mt-2">
+              {ar
+                ? "* أدخل اسم المسافر الأول على الأقل لإصدار تذكرة مؤكدة"
+                : "* Enter at least the first passenger's name to issue a confirmed ticket"}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Step: Ticket (provisional or confirmed) ── */
+  const isConfirmed = step === "confirmed";
+  const ref = isConfirmed ? confirmedRef : bookingRef;
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-start justify-center p-4 overflow-y-auto print:fixed print:inset-0 print:p-0 print:bg-white"
+      dir={ar ? "rtl" : "ltr"}
+    >
+      <div className="w-full max-w-2xl my-8 print:max-w-none print:my-0">
+
         {/* Action bar */}
         <div className="flex items-center justify-between mb-4 print:hidden">
-          <h2 className="text-white text-xl font-bold">{ar ? "تأكيد الحجز المؤقت" : "Provisional Booking Confirmation"}</h2>
+          <div>
+            <h2 className="text-white text-xl font-black">
+              {isConfirmed
+                ? (ar ? "تذكرة مؤكدة ✓" : "Confirmed Ticket ✓")
+                : (ar ? "حجز مؤقت" : "Provisional Booking")}
+            </h2>
+            <p className="text-white/50 text-sm">
+              {isConfirmed
+                ? (ar ? "تم تأكيد حجزك بنجاح" : "Your booking is confirmed")
+                : (ar ? "أكمل الدفع لتأكيد الحجز" : "Complete payment to confirm")}
+            </p>
+          </div>
           <div className="flex gap-2">
+            <button
+              onClick={() => setStep("passengers")}
+              className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all"
+            >
+              <ChevronRight className={`h-4 w-4 ${ar ? "" : "rotate-180"}`} />
+              {ar ? "تعديل البيانات" : "Edit Details"}
+            </button>
             <button
               onClick={handlePrint}
               className="flex items-center gap-2 bg-white/20 hover:bg-white/30 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all"
             >
               <Printer className="h-4 w-4" />
-              {ar ? "طباعة" : "Print"}
+              {ar ? "طباعة التذكرة" : "Print Ticket"}
             </button>
             <button onClick={onClose} className="p-2 bg-white/20 hover:bg-white/30 text-white rounded-xl transition-all">
               <X className="h-5 w-5" />
@@ -74,226 +690,18 @@ export function FlightTicket({ offer, origin, destination, passengers, language,
           </div>
         </div>
 
-        {/* Ticket */}
-        <div ref={ticketRef} className="bg-white rounded-3xl overflow-hidden shadow-2xl print:shadow-none print:rounded-none">
+        <TicketContent
+          offer={offer}
+          origin={origin}
+          destination={destination}
+          passengers={passengers}
+          passengerDetails={passengerDetails}
+          language={language}
+          bookingRef={ref}
+          isConfirmed={isConfirmed}
+        />
 
-          {/* Header — Company branding */}
-          <div className="bg-[#0d2351] px-8 py-6 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              {/* Logo mark */}
-              <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-lg flex-shrink-0">
-                <svg viewBox="0 0 48 48" fill="none" className="w-10 h-10">
-                  <circle cx="24" cy="24" r="20" fill="#0d2351"/>
-                  <path d="M12 26L24 14L36 26" stroke="#c8a84b" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M18 34L24 28L30 34" stroke="#c8a84b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  <circle cx="24" cy="26" r="3" fill="#c8a84b"/>
-                </svg>
-              </div>
-              <div>
-                <div className="text-white font-black text-lg leading-tight">أبشر أعمال</div>
-                <div className="text-[#c8a84b] text-xs font-medium">للسفريات والسياحة</div>
-                <div className="text-white/50 text-xs">Absher Travel & Tourism</div>
-              </div>
-            </div>
-            <div className="text-right rtl:text-left">
-              <div className="text-white/60 text-xs uppercase tracking-widest font-medium">{ar ? "مرجع الحجز" : "Booking Ref"}</div>
-              <div className="text-[#c8a84b] font-black text-2xl tracking-widest mt-1">{BOOKING_REF}</div>
-              <div className="mt-2 flex items-center gap-1.5 justify-end rtl:justify-start">
-                <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                <span className="text-amber-300 text-xs font-semibold">{ar ? "حجز مؤقت – بانتظار الدفع" : "Provisional – Pending Payment"}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Route hero */}
-          <div className="bg-gradient-to-br from-slate-900 to-[#0d2351] px-8 py-8">
-            <div className="flex items-center justify-between gap-4">
-              {/* Origin */}
-              <div className="text-center flex-1">
-                <div className="text-5xl font-black text-white tracking-wider">{firstSeg.originIata}</div>
-                <div className="text-[#c8a84b] font-semibold text-base mt-1">
-                  {ar ? origin.cityAr : origin.cityEn}
-                </div>
-                <div className="text-white/40 text-xs mt-0.5">{ar ? origin.countryAr : origin.countryEn}</div>
-              </div>
-
-              {/* Flight path visual */}
-              <div className="flex-1 flex flex-col items-center gap-2">
-                <div className="text-white/50 text-xs font-medium uppercase tracking-widest">
-                  {offer.stops === 0 ? (ar ? "مباشر" : "Direct") : `${offer.stops} ${ar ? "توقف" : "stop"}`}
-                </div>
-                <div className="w-full flex items-center gap-1">
-                  <div className="h-px bg-gradient-to-r from-[#c8a84b]/20 to-[#c8a84b] flex-1" />
-                  <div className="w-8 h-8 rounded-full bg-[#c8a84b]/20 border border-[#c8a84b] flex items-center justify-center">
-                    <Plane className="h-4 w-4 text-[#c8a84b] rotate-90" />
-                  </div>
-                  <div className="h-px bg-gradient-to-r from-[#c8a84b] to-[#c8a84b]/20 flex-1" />
-                </div>
-                <div className="text-white/60 text-xs">{formatDur(offer.totalDurationMin)}</div>
-              </div>
-
-              {/* Destination */}
-              <div className="text-center flex-1">
-                <div className="text-5xl font-black text-white tracking-wider">{lastSeg.destinationIata}</div>
-                <div className="text-[#c8a84b] font-semibold text-base mt-1">
-                  {ar ? destination.cityAr : destination.cityEn}
-                </div>
-                <div className="text-white/40 text-xs mt-0.5">{ar ? destination.countryAr : destination.countryEn}</div>
-              </div>
-            </div>
-
-            {/* Times */}
-            <div className="flex items-center justify-between mt-6 bg-white/5 rounded-2xl px-6 py-4">
-              <div>
-                <div className="text-3xl font-black text-white tabular-nums">{formatTime(firstSeg.departureAt, language)}</div>
-                <div className="text-white/50 text-xs mt-1">{formatDate(firstSeg.departureAt, language)}</div>
-              </div>
-              <div className="flex flex-col items-center">
-                <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 rounded-full border-2 border-white/30" />
-                  <div className="w-16 h-px bg-white/20" />
-                  <Plane className="h-4 w-4 text-white/40 rotate-90" />
-                  <div className="w-16 h-px bg-white/20" />
-                  <div className="w-2 h-2 rounded-full bg-[#c8a84b]" />
-                </div>
-                <div className="text-white/40 text-xs mt-1">{formatDur(offer.totalDurationMin)}</div>
-              </div>
-              <div className="text-right rtl:text-left">
-                <div className="text-3xl font-black text-white tabular-nums">{formatTime(lastSeg.arrivalAt, language)}</div>
-                <div className="text-white/50 text-xs mt-1">{formatDate(lastSeg.arrivalAt, language)}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Tear line */}
-          <div className="relative flex items-center">
-            <div className="absolute -left-4 w-8 h-8 rounded-full bg-slate-100" />
-            <div className="flex-1 border-t-2 border-dashed border-slate-200 mx-4" />
-            <div className="absolute -right-4 w-8 h-8 rounded-full bg-slate-100" />
-          </div>
-
-          {/* Flight details */}
-          <div className="px-8 py-6">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
-              {/* Airline */}
-              <div>
-                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">{ar ? "شركة الطيران" : "Airline"}</div>
-                <div className="flex items-center gap-2">
-                  {firstSeg.airlineLogoUrl ? (
-                    <img src={firstSeg.airlineLogoUrl} alt="" className="h-6 w-6 object-contain" />
-                  ) : (
-                    <Plane className="h-5 w-5 text-slate-400" />
-                  )}
-                  <span className="font-semibold text-slate-800 text-sm">{firstSeg.airlineName}</span>
-                </div>
-              </div>
-
-              {/* Flight No */}
-              <div>
-                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">{ar ? "رقم الرحلة" : "Flight No."}</div>
-                <div className="font-black text-slate-800 text-sm tracking-widest">{firstSeg.flightNumber}</div>
-              </div>
-
-              {/* Cabin */}
-              <div>
-                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">{ar ? "درجة السفر" : "Cabin"}</div>
-                <div className="font-semibold text-slate-800 text-sm">{ar ? cabin.ar : cabin.en}</div>
-              </div>
-
-              {/* Baggage */}
-              <div>
-                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">{ar ? "الأمتعة" : "Baggage"}</div>
-                <div className="flex items-center gap-1.5">
-                  <Luggage className="h-4 w-4 text-primary" />
-                  <span className="font-semibold text-slate-800 text-sm">{offer.baggageIncludedKg} {ar ? "كجم" : "kg"}</span>
-                </div>
-              </div>
-
-              {/* Passengers */}
-              <div>
-                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">{ar ? "المسافرون" : "Passengers"}</div>
-                <div className="font-semibold text-slate-800 text-sm">
-                  {passengers.adults > 0 && `${passengers.adults} ${ar ? "بالغ" : "adult(s)"}`}
-                  {passengers.children > 0 && `, ${passengers.children} ${ar ? "طفل" : "child(ren)"}`}
-                  {passengers.infants > 0 && `, ${passengers.infants} ${ar ? "رضيع" : "infant(s)"}`}
-                </div>
-              </div>
-
-              {/* Stops */}
-              <div>
-                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">{ar ? "التوقفات" : "Stops"}</div>
-                <div className="font-semibold text-slate-800 text-sm">
-                  {offer.stops === 0 ? (ar ? "بدون توقف" : "Non-stop") : `${offer.stops} ${ar ? "توقف" : "stop(s)"}`}
-                </div>
-              </div>
-            </div>
-
-            {/* Segment detail if multi-leg */}
-            {offer.segments.length > 1 && (
-              <div className="mt-5 bg-slate-50 rounded-2xl p-4 space-y-3">
-                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">{ar ? "تفاصيل المسار" : "Journey Segments"}</div>
-                {offer.segments.map((seg, i) => (
-                  <div key={i} className="flex items-center gap-3 text-sm">
-                    <span className="font-black text-primary">{seg.originIata}</span>
-                    <ArrowRight className="h-4 w-4 text-slate-400 rtl:rotate-180" />
-                    <span className="font-black text-slate-700">{seg.destinationIata}</span>
-                    <span className="text-slate-400 text-xs">{seg.flightNumber}</span>
-                    <span className="text-slate-400 text-xs">{formatTime(seg.departureAt, language)} → {formatTime(seg.arrivalAt, language)}</span>
-                    <span className="text-slate-400 text-xs">{formatDur(seg.durationMin)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Price section */}
-          <div className="mx-8 mb-6 bg-gradient-to-r from-primary/5 to-[#c8a84b]/10 rounded-2xl p-5 border border-primary/10">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">{ar ? "السعر الإجمالي" : "Total Price"}</div>
-                <div className="flex items-end gap-2">
-                  <div className="text-4xl font-black text-primary">{offer.totalPrice.toLocaleString()}</div>
-                  <div className="text-lg font-semibold text-primary/60 mb-1">{offer.currency}</div>
-                </div>
-                <div className="text-xs text-slate-400 mt-1">
-                  {ar ? `شامل ${totalPassengers} مسافر` : `For ${totalPassengers} passenger(s)`} · {ar ? "جميع الرسوم شاملة" : "All fees included"}
-                </div>
-              </div>
-              <div className="flex flex-col items-end gap-2">
-                {offer.isRefundable && (
-                  <div className="flex items-center gap-1.5 bg-green-50 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full border border-green-200">
-                    <CheckCircle className="h-3.5 w-3.5" />
-                    {ar ? "قابل للاسترداد" : "Refundable"}
-                  </div>
-                )}
-                {offer.carryOnIncluded && (
-                  <div className="flex items-center gap-1.5 bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full border border-blue-200">
-                    <Clock className="h-3.5 w-3.5" />
-                    {ar ? "حقيبة يد مجانية" : "Carry-on included"}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div className="bg-slate-50 px-8 py-5 border-t border-slate-100">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-              <div className="text-xs text-slate-400 space-y-1">
-                <div className="font-semibold text-slate-500">{ar ? "أبشر أعمال للسفريات والسياحة" : "Absher Travel & Tourism"}</div>
-                <div>{ar ? "اليمن - صنعاء - شارع الزبيري - جولة كنتاكي سابقاً" : "Yemen – Sana'a – Al-Zubairi St – Former KFC Roundabout"}</div>
-                <div>{ar ? "هاتف: 967+ 779055511 / 784055511" : "Tel: +967 779055511 / 784055511"}</div>
-              </div>
-              <div className="text-xs text-slate-300 text-right rtl:text-left">
-                <div>{ar ? "وثيقة حجز مؤقت — تذكرة غير نهائية" : "Provisional booking — Not a confirmed ticket"}</div>
-                <div>{ar ? "يُرجى إتمام الدفع لتأكيد الحجز" : "Please complete payment to confirm"}</div>
-                <div className="mt-1 text-[10px]">{new Date().toLocaleString(ar ? "ar-SA" : "en-US")}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* CTA buttons */}
+        {/* Bottom CTA */}
         <div className="mt-4 flex gap-3 print:hidden">
           <button
             onClick={onClose}
@@ -301,11 +709,15 @@ export function FlightTicket({ offer, origin, destination, passengers, language,
           >
             {ar ? "عودة للنتائج" : "Back to results"}
           </button>
-          <button
-            className="flex-1 py-3.5 bg-[#c8a84b] hover:bg-[#b8973b] text-white rounded-2xl font-bold transition-all shadow-lg shadow-amber-900/20"
-          >
-            {ar ? "تأكيد الحجز والدفع" : "Confirm & Pay"}
-          </button>
+          {!isConfirmed && (
+            <button
+              onClick={() => setStep("confirmed")}
+              className="flex-1 py-3.5 bg-[#c8a84b] hover:bg-[#b8973b] text-white rounded-2xl font-black transition-all shadow-lg shadow-amber-900/20 flex items-center justify-center gap-2"
+            >
+              <CreditCard className="h-4 w-4" />
+              {ar ? "تأكيد الدفع وإصدار التذكرة النهائية" : "Pay & Issue Confirmed Ticket"}
+            </button>
+          )}
         </div>
       </div>
     </div>

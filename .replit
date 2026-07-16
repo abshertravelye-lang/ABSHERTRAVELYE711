@@ -21,3 +21,9 @@ timeoutMs = 20000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+SESSION_SECRET = "aS5h0yg9oBVC8ioovmMDA4Q3X2SRZ3tJdtRNtFe8kS+939SKNRfxvaqRMaCXIIuIUcWWzy/+cESCeH+yIl9sYQ=="
+OPENAI_API_KEY = "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"

@@ -13,7 +13,6 @@
     "bcryptjs": "catalog:"
   },
   "devDependencies": {
-    "@types/bcryptjs": "catalog:",
     "@types/node": "catalog:",
     "tsx": "catalog:"
   }

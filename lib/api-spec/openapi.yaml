@@ -522,6 +522,29 @@ paths:
               schema:
                 $ref: "#/components/schemas/UploadUrlResponse"
 
+  /bookings/my:
+    get:
+      operationId: listMyBookings
+      tags: [bookings]
+      security:
+        - bearerAuth: []
+      summary: List the authenticated customer's own bookings
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [flight, hotel, program, visa]
+      responses:
+        "200":
+          description: List of user's bookings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Booking"
+
   /bookings:
     get:
       operationId: listBookings
@@ -773,6 +796,27 @@ paths:
       responses:
         "200":
           description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SafeUser"
+
+  /auth/profile:
+    patch:
+      operationId: updateProfile
+      tags: [auth]
+      security:
+        - bearerAuth: []
+      summary: Update the authenticated user's profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileUpdate"
+      responses:
+        "200":
+          description: Updated profile
           content:
             application/json:
               schema:
@@ -1419,6 +1463,9 @@ components:
         passportImageUrl: { type: ["string", "null"] }
         personalPhotoUrl: { type: ["string", "null"] }
         residencyImageUrl: { type: ["string", "null"] }
+        residencyBackImageUrl: { type: ["string", "null"] }
+        alternativeVisaNumber: { type: ["string", "null"] }
+        alternativeVisaExpiry: { type: ["string", "null"] }
         visaImageUrl: { type: ["string", "null"] }
         agreedToTerms: { type: boolean }
         status:
@@ -1452,6 +1499,9 @@ components:
         passportImageUrl: { type: string }
         personalPhotoUrl: { type: string }
         residencyImageUrl: { type: string }
+        residencyBackImageUrl: { type: string }
+        alternativeVisaNumber: { type: string }
+        alternativeVisaExpiry: { type: string }
         visaImageUrl: { type: string }
         agreedToTerms: { type: boolean }
 
@@ -1468,6 +1518,7 @@ components:
       required: [id, type, clientName, clientPhone, status, createdAt]
       properties:
         id: { type: integer }
+        userId: { type: ["string", "null"] }
         type: { type: string, enum: [flight, hotel, program, visa] }
         clientName: { type: string }
         clientPhone: { type: string }
@@ -1657,6 +1708,31 @@ components:
         phone: { type: string }
         password: { type: string }
 
+    ProfileUpdate:
+      type: object
+      properties:
+        firstName: { type: string }
+        lastName: { type: string }
+        phone: { type: string }
+        whatsapp: { type: string }
+        address: { type: string }
+        nationality: { type: string }
+        gender: { type: string, enum: [male, female, other] }
+        dateOfBirth: { type: string, format: date }
+        profilePhotoUrl: { type: string }
+        passportNumber: { type: string }
+        passportIssueCountry: { type: string }
+        passportIssuePlace: { type: string }
+        passportIssueDate: { type: string, format: date }
+        passportExpiryDate: { type: string, format: date }
+        passportImageUrl: { type: string }
+        isGccResident: { type: boolean }
+        gccResidenceCountry: { type: string }
+        gccResidenceNumber: { type: string }
+        gccResidenceExpiry: { type: string, format: date }
+        gccResidenceFrontUrl: { type: string }
+        gccResidenceBackUrl: { type: string }
+
     SafeUser:
       type: object
       required: [id, role, isActive, createdAt, updatedAt]
@@ -1676,6 +1752,21 @@ components:
         lastLoginAt: { type: ["string", "null"] }
         createdAt: { type: string }
         updatedAt: { type: string }
+        whatsapp: { type: ["string", "null"] }
+        address: { type: ["string", "null"] }
+        profilePhotoUrl: { type: ["string", "null"] }
+        passportNumber: { type: ["string", "null"] }
+        passportIssueCountry: { type: ["string", "null"] }
+        passportIssuePlace: { type: ["string", "null"] }
+        passportIssueDate: { type: ["string", "null"] }
+        passportExpiryDate: { type: ["string", "null"] }
+        passportImageUrl: { type: ["string", "null"] }
+        isGccResident: { type: boolean }
+        gccResidenceCountry: { type: ["string", "null"] }
+        gccResidenceNumber: { type: ["string", "null"] }
+        gccResidenceExpiry: { type: ["string", "null"] }
+        gccResidenceFrontUrl: { type: ["string", "null"] }
+        gccResidenceBackUrl: { type: ["string", "null"] }
 
     AuthResponse:
       type: object

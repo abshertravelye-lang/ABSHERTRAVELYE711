@@ -7,6 +7,8 @@ import { PassengerSelector, type PassengerConfig } from "@/components/passenger-
 import { FlightTicket } from "@/components/flight-ticket";
 import { generateMockFlights } from "@/data/mock-flights";
 import { AIRPORTS, type Airport } from "@/data/airports";
+import { useAuth } from "@/hooks/use-auth";
+import { useLocation } from "wouter";
 import {
   Plane, ArrowLeftRight, Loader2, Luggage, Clock,
   ArrowRight, Zap, Star, Shield, ChevronDown,
@@ -215,6 +217,16 @@ type TripType = "one_way" | "round_trip";
 export default function FlightsPage() {
   const { language } = useTranslation();
   const ar = language === "ar";
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
+
+  const handleBookFlight = (offer: FlightOffer) => {
+    if (!user) {
+      setLocation("/login?returnTo=/flights");
+      return;
+    }
+    setTicketOffer(offer);
+  };
 
   const [tripType, setTripType] = useState<TripType>("round_trip");
   const [origin, setOrigin] = useState<Airport | null>(null);
@@ -413,7 +425,7 @@ export default function FlightsPage() {
                   offer={offer}
                   language={language}
                   rank={i === 0 ? sort : undefined}
-                  onBook={() => setTicketOffer(offer)}
+                  onBook={() => handleBookFlight(offer)}
                 />
               ))}
             </div>

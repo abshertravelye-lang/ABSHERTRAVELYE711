@@ -26,6 +26,27 @@ export const usersTable = pgTable("users", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
+
+  // ── Extended profile fields ────────────────────────────────────────────
+  whatsapp: text("whatsapp"),
+  address: text("address"),
+  profilePhotoUrl: text("profile_photo_url"),
+
+  // Passport details
+  passportNumber: text("passport_number"),
+  passportIssueCountry: text("passport_issue_country"),
+  passportIssuePlace: text("passport_issue_place"),
+  passportIssueDate: date("passport_issue_date"),
+  passportExpiryDate: date("passport_expiry_date"),
+  passportImageUrl: text("passport_image_url"),
+
+  // GCC residence (optional — filled only if resident in GCC)
+  isGccResident: boolean("is_gcc_resident").notNull().default(false),
+  gccResidenceCountry: text("gcc_residence_country"),
+  gccResidenceNumber: text("gcc_residence_number"),
+  gccResidenceExpiry: date("gcc_residence_expiry"),
+  gccResidenceFrontUrl: text("gcc_residence_front_url"),
+  gccResidenceBackUrl: text("gcc_residence_back_url"),
 });
 
 export const userSessionsTable = pgTable("user_sessions", {

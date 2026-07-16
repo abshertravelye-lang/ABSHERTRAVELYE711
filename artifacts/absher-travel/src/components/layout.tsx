@@ -38,6 +38,7 @@ function AccountNavButton({ language }: { language: string }) {
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { t, language, setLanguage } = useTranslation();
+  const { isAuthenticated } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const toggleLanguage = () => {
@@ -53,6 +54,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
     { href: "/about", label: t("about") },
     { href: "/contact", label: t("contact") },
   ];
+
+  if (isAuthenticated) {
+    navLinks.splice(1, 0, { href: "/account", label: language === "ar" ? "طلباتي" : "My Requests" });
+  }
 
   return (
     <div className="min-h-[100dvh] flex flex-col w-full overflow-x-hidden bg-background">

@@ -19,7 +19,7 @@ export default function Visas() {
   // per the platform's "forced login for sensitive actions" auth policy.
   const handleApply = (visa: Visa) => {
     if (!isAuthenticated) {
-      setLocation(`/login?redirect=${encodeURIComponent("/visas")}`);
+      setLocation(`/login?returnTo=${encodeURIComponent("/visas")}`);
       return;
     }
     setSelectedVisa(visa);

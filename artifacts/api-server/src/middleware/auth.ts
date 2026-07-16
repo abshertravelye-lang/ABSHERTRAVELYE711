@@ -25,6 +25,20 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   }
 }
 
+/** Parses the Bearer token if present but does NOT reject unauthenticated requests. */
+export function optionalAuth(req: Request, _res: Response, next: NextFunction): void {
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.slice(7);
+    try {
+      req.user = verifyAccessToken(token);
+    } catch {
+      // Token invalid — just ignore it; route can proceed without user context
+    }
+  }
+  next();
+}
+
 export function requireRole(...roles: string[]) {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {

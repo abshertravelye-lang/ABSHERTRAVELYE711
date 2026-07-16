@@ -40,7 +40,10 @@ interface WizardData {
   passportImageUrl?: string;
   personalPhotoUrl?: string;
   residencyImageUrl?: string;
+  residencyBackImageUrl?: string;
   visaImageUrl?: string;
+  alternativeVisaNumber?: string;
+  alternativeVisaExpiry?: string;
 }
 
 const GCC_COUNTRIES = [
@@ -166,8 +169,16 @@ export function VisaApplicationWizard({ visa, open, onOpenChange }: { visa: Visa
   const isTerminal = currentStep === "rejection" || currentStep === "success";
   
   const canGoNext = () => {
-    if (currentStep === "gcc_check") return data.hasGcc !== undefined && (!data.hasGcc || !!data.gccCountry);
-    if (currentStep === "alternative_check") return data.hasAlternative !== undefined && (!data.hasAlternative || !!data.alternativeRegion);
+    if (currentStep === "gcc_check") {
+      if (data.hasGcc === undefined) return false;
+      if (!data.hasGcc) return true;
+      return !!data.gccCountry && !!data.residencyImageUrl && !!data.residencyBackImageUrl;
+    }
+    if (currentStep === "alternative_check") {
+      if (data.hasAlternative === undefined) return false;
+      if (!data.hasAlternative) return true;
+      return !!data.alternativeRegion && !!data.alternativeVisaNumber && !!data.alternativeVisaExpiry;
+    }
     if (currentStep === "nationality_check") return !!data.nationality?.trim();
     if (currentStep === "application_form") {
        if (!data.fullName || !data.passportNumber || !data.email || !data.phone || !data.dateOfBirth || !data.passportIssueDate || !data.passportExpiryDate || !data.agreedToTerms) return false;
@@ -237,7 +248,10 @@ export function VisaApplicationWizard({ visa, open, onOpenChange }: { visa: Visa
         passportImageUrl: data.passportImageUrl,
         personalPhotoUrl: data.personalPhotoUrl,
         residencyImageUrl: data.residencyImageUrl,
+        residencyBackImageUrl: data.residencyBackImageUrl,
         visaImageUrl: data.visaImageUrl,
+        alternativeVisaNumber: data.alternativeVisaNumber,
+        alternativeVisaExpiry: data.alternativeVisaExpiry,
         agreedToTerms: !!data.agreedToTerms,
       };
       submitApplication({ data: payload });
@@ -295,6 +309,24 @@ export function VisaApplicationWizard({ visa, open, onOpenChange }: { visa: Visa
                   </Select>
                 </div>
               )}
+              {data.hasGcc && data.gccCountry && (
+                <div className="space-y-4 pt-2 animate-in fade-in duration-200">
+                  <FileUploadField 
+                    required 
+                    language={language} 
+                    label={ar ? "صورة الوجه الأمامي لبطاقة الإقامة" : "Front of Residence Card"} 
+                    value={data.residencyImageUrl} 
+                    onChange={v => updateData({ residencyImageUrl: v })} 
+                  />
+                  <FileUploadField 
+                    required 
+                    language={language} 
+                    label={ar ? "صورة الوجه الخلفي لبطاقة الإقامة" : "Back of Residence Card"} 
+                    value={data.residencyBackImageUrl} 
+                    onChange={v => updateData({ residencyBackImageUrl: v })} 
+                  />
+                </div>
+              )}
             </div>
           )}
 
@@ -321,6 +353,33 @@ export function VisaApplicationWizard({ visa, open, onOpenChange }: { visa: Visa
                       {ALT_REGIONS.map(r => <SelectItem key={r.id} value={r.id}>{ar ? r.ar : r.en}</SelectItem>)}
                     </SelectContent>
                   </Select>
+                </div>
+              )}
+              {data.hasAlternative && data.alternativeRegion && (
+                <div className="space-y-4 pt-2 animate-in fade-in duration-200">
+                  <div className="space-y-2">
+                    <Label>{ar ? "رقم التأشيرة / الإقامة" : "Visa / Residency Number"} *</Label>
+                    <Input 
+                      value={data.alternativeVisaNumber || ""} 
+                      onChange={e => updateData({ alternativeVisaNumber: e.target.value })}
+                      placeholder={ar ? "مثال: A12345678" : "e.g. A12345678"}
+                      className="uppercase"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>{ar ? "تاريخ انتهاء التأشيرة / الإقامة" : "Visa / Residency Expiry Date"} *</Label>
+                    <Input 
+                      type="date" 
+                      value={data.alternativeVisaExpiry || ""} 
+                      onChange={e => updateData({ alternativeVisaExpiry: e.target.value })}
+                    />
+                  </div>
+                  <FileUploadField 
+                    language={language} 
+                    label={ar ? "صورة التأشيرة / الإقامة (اختياري)" : "Visa / Residency Image (optional)"} 
+                    value={data.visaImageUrl} 
+                    onChange={v => updateData({ visaImageUrl: v })} 
+                  />
                 </div>
               )}
             </div>

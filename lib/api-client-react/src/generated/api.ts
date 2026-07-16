@@ -38,6 +38,7 @@ import type {
   GetRecentBookingsParams,
   HealthStatus,
   ListBookingsParams,
+  ListMyBookingsParams,
   ListNotificationsParams,
   ListOffersParams,
   ListProgramsParams,
@@ -49,6 +50,7 @@ import type {
   Offer,
   OfferInput,
   OfferUpdate,
+  ProfileUpdate,
   Program,
   ProgramInput,
   ProgramUpdate,
@@ -2018,6 +2020,90 @@ export const useRequestUploadUrl = <TError = ErrorType<unknown>,
       return useMutation(getRequestUploadUrlMutationOptions(options));
     }
 
+export const getListMyBookingsUrl = (params?: ListMyBookingsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/bookings/my?${stringifiedParams}` : `/api/bookings/my`
+}
+
+/**
+ * @summary List the authenticated customer's own bookings
+ */
+export const listMyBookings = async (params?: ListMyBookingsParams, options?: RequestInit): Promise<Booking[]> => {
+
+  return customFetch<Booking[]>(getListMyBookingsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMyBookingsQueryKey = (params?: ListMyBookingsParams,) => {
+    return [
+    `/api/bookings/my`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListMyBookingsQueryOptions = <TData = Awaited<ReturnType<typeof listMyBookings>>, TError = ErrorType<unknown>>(params?: ListMyBookingsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMyBookings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMyBookingsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMyBookings>>> = ({ signal }) => listMyBookings(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMyBookings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListMyBookingsQueryResult = NonNullable<Awaited<ReturnType<typeof listMyBookings>>>
+export type ListMyBookingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List the authenticated customer's own bookings
+ */
+
+export function useListMyBookings<TData = Awaited<ReturnType<typeof listMyBookings>>, TError = ErrorType<unknown>>(
+ params?: ListMyBookingsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMyBookings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListMyBookingsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getListBookingsUrl = (params?: ListBookingsParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -2984,6 +3070,76 @@ export function useGetCurrentUser<TData = Awaited<ReturnType<typeof getCurrentUs
 
 
 
+
+export const getUpdateProfileUrl = () => {
+
+
+
+
+  return `/api/auth/profile`
+}
+
+/**
+ * @summary Update the authenticated user's profile
+ */
+export const updateProfile = async (profileUpdate: ProfileUpdate, options?: RequestInit): Promise<SafeUser> => {
+
+  return customFetch<SafeUser>(getUpdateProfileUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(profileUpdate)
+  }
+);}
+
+
+
+
+export const getUpdateProfileMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProfile>>, TError,{data: BodyType<ProfileUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateProfile>>, TError,{data: BodyType<ProfileUpdate>}, TContext> => {
+
+const mutationKey = ['updateProfile'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateProfile>>, {data: BodyType<ProfileUpdate>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateProfile(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateProfileMutationResult = NonNullable<Awaited<ReturnType<typeof updateProfile>>>
+    export type UpdateProfileMutationBody = BodyType<ProfileUpdate>
+    export type UpdateProfileMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update the authenticated user's profile
+ */
+export const useUpdateProfile = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProfile>>, TError,{data: BodyType<ProfileUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateProfile>>,
+        TError,
+        {data: BodyType<ProfileUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateProfileMutationOptions(options));
+    }
 
 export const getSearchFlightsUrl = (params?: SearchFlightsParams,) => {
   const normalizedParams = new URLSearchParams();

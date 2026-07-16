@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import QRCode from 'qrcode';
 import {
   X, Printer, Plane, CheckCircle, Clock, Luggage, ArrowRight,
   User, FileText, Globe, Calendar, ChevronRight, ShieldCheck, AlertCircle,
@@ -50,6 +51,51 @@ function dur(min: number) {
 }
 function genRef(prefix = "ABT") {
   return prefix + Math.random().toString(36).toUpperCase().slice(2, 8);
+}
+
+function useQRCode(text: string): string | null {
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
+  useEffect(() => {
+    QRCode.toDataURL(text, { width: 120, margin: 1, color: { dark: '#0d2351', light: '#ffffff' } })
+      .then(setDataUrl)
+      .catch(() => {});
+  }, [text]);
+  return dataUrl;
+}
+
+function Barcode({ value }: { value: string }) {
+  const bars = value.split('').map(c => c.charCodeAt(0));
+  const totalBars = bars.reduce((a, b) => a + (b % 4) + 2, 0) + bars.length;
+  let x = 0;
+  const elements: React.ReactNode[] = [];
+  bars.forEach((code, i) => {
+    const barCount = (code % 4) + 2;
+    for (let j = 0; j < barCount; j++) {
+      const w = j % 2 === 0 ? 2 : 1;
+      elements.push(<rect key={`${i}-${j}`} x={x} y={0} width={w} height={40} fill={j % 2 === 0 ? "#0d2351" : "transparent"} />);
+      x += w + 1;
+    }
+    x += 2;
+  });
+  return (
+    <svg width={Math.min(x, 200)} height={40} viewBox={`0 0 ${x} 40`} preserveAspectRatio="none" style={{ width: '100%', maxWidth: 200, height: 40 }}>
+      {elements}
+    </svg>
+  );
+}
+
+function PrintStyles() {
+  return (
+    <style dangerouslySetInnerHTML={{ __html: `
+      @media print {
+        body > * { display: none !important; }
+        body > div.fixed { display: block !important; }
+        .print\\:hidden { display: none !important; }
+        @page { margin: 0; size: A4; }
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      }
+    `}} />
+  );
 }
 
 /* ─────────────────── Watermark SVG (inline, print-safe) ─────────────────── */
@@ -187,11 +233,14 @@ function TicketContent({
   const cabin = CABIN_LABELS[passengers.cabinClass] ?? CABIN_LABELS.economy;
   const total = passengers.adults + passengers.children + passengers.infants;
 
+  const qrDataUrl = useQRCode(`ABT-${bookingRef}-${firstSeg.originIata}-${firstSeg.destinationIata}`);
+
   return (
     <div
       className="bg-white rounded-3xl overflow-hidden shadow-2xl print:shadow-none print:rounded-none relative"
       style={{ position: "relative" }}
     >
+      <PrintStyles />
       <Watermark />
 
       {/* ── Header ── */}
@@ -480,6 +529,22 @@ function TicketContent({
           </div>
         </div>
       </div>
+
+        <div className="relative z-10 mx-8 mb-4 flex items-end gap-6 flex-wrap">
+          {qrDataUrl && (
+            <div className="flex flex-col items-center gap-1">
+              <img src={qrDataUrl} alt="QR" className="w-[80px] h-[80px] rounded-lg border border-slate-200 p-1 bg-white" />
+              <div className="text-[9px] text-slate-400 font-mono">{bookingRef}</div>
+            </div>
+          )}
+          <div className="flex flex-col gap-1 flex-1">
+            <div className="text-[9px] text-slate-400 uppercase tracking-widest font-medium">
+              {ar ? "رمز الحجز" : "Booking Code"}
+            </div>
+            <Barcode value={bookingRef} />
+            <div className="text-[10px] font-mono text-slate-500 tracking-widest">{bookingRef}</div>
+          </div>
+        </div>
 
       {/* ── Footer ── */}
       <div className="relative z-10 bg-[#0d2351]/5 border-t border-[#0d2351]/10 px-8 py-5">

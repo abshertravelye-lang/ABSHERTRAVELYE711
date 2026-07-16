@@ -16,7 +16,6 @@ import Programs from "@/pages/programs";
 import Visas from "@/pages/visas";
 import About from "@/pages/about";
 import Contact from "@/pages/contact";
-import Book from "@/pages/book";
 import Flights from "@/pages/flights";
 import Login from "@/pages/login";
 import Register from "@/pages/register";
@@ -36,10 +35,14 @@ function Router() {
       <Route path="/visas" component={Visas} />
       <Route path="/about" component={About} />
       <Route path="/contact" component={Contact} />
-      <Route path="/book" component={Book} />
       <Route path="/flights" component={Flights} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
+      <Route path="/account" nest>
+        <RequireAuth>
+          <Account />
+        </RequireAuth>
+      </Route>
       <Route path="/account/:rest*">
         <RequireAuth>
           <Account />

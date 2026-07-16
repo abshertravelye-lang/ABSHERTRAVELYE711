@@ -820,6 +820,9 @@ export const ListVisaApplicationsResponseItem = zod.object({
   "passportImageUrl": zod.string().nullish(),
   "personalPhotoUrl": zod.string().nullish(),
   "residencyImageUrl": zod.string().nullish(),
+  "residencyBackImageUrl": zod.string().nullish(),
+  "alternativeVisaNumber": zod.string().nullish(),
+  "alternativeVisaExpiry": zod.string().nullish(),
   "visaImageUrl": zod.string().nullish(),
   "agreedToTerms": zod.boolean(),
   "status": zod.enum(['received', 'under_review', 'awaiting_documents', 'documents_uploaded', 'sent_to_embassy', 'processing', 'issued', 'completed', 'rejected']),
@@ -850,6 +853,9 @@ export const CreateVisaApplicationBody = zod.object({
   "passportImageUrl": zod.string().optional(),
   "personalPhotoUrl": zod.string().optional(),
   "residencyImageUrl": zod.string().optional(),
+  "residencyBackImageUrl": zod.string().optional(),
+  "alternativeVisaNumber": zod.string().optional(),
+  "alternativeVisaExpiry": zod.string().optional(),
   "visaImageUrl": zod.string().optional(),
   "agreedToTerms": zod.boolean()
 })
@@ -873,6 +879,9 @@ export const CreateVisaApplicationResponse = zod.object({
   "passportImageUrl": zod.string().nullish(),
   "personalPhotoUrl": zod.string().nullish(),
   "residencyImageUrl": zod.string().nullish(),
+  "residencyBackImageUrl": zod.string().nullish(),
+  "alternativeVisaNumber": zod.string().nullish(),
+  "alternativeVisaExpiry": zod.string().nullish(),
   "visaImageUrl": zod.string().nullish(),
   "agreedToTerms": zod.boolean(),
   "status": zod.enum(['received', 'under_review', 'awaiting_documents', 'documents_uploaded', 'sent_to_embassy', 'processing', 'issued', 'completed', 'rejected']),
@@ -908,6 +917,9 @@ export const GetVisaApplicationResponse = zod.object({
   "passportImageUrl": zod.string().nullish(),
   "personalPhotoUrl": zod.string().nullish(),
   "residencyImageUrl": zod.string().nullish(),
+  "residencyBackImageUrl": zod.string().nullish(),
+  "alternativeVisaNumber": zod.string().nullish(),
+  "alternativeVisaExpiry": zod.string().nullish(),
   "visaImageUrl": zod.string().nullish(),
   "agreedToTerms": zod.boolean(),
   "status": zod.enum(['received', 'under_review', 'awaiting_documents', 'documents_uploaded', 'sent_to_embassy', 'processing', 'issued', 'completed', 'rejected']),
@@ -948,6 +960,9 @@ export const UpdateVisaApplicationResponse = zod.object({
   "passportImageUrl": zod.string().nullish(),
   "personalPhotoUrl": zod.string().nullish(),
   "residencyImageUrl": zod.string().nullish(),
+  "residencyBackImageUrl": zod.string().nullish(),
+  "alternativeVisaNumber": zod.string().nullish(),
+  "alternativeVisaExpiry": zod.string().nullish(),
   "visaImageUrl": zod.string().nullish(),
   "agreedToTerms": zod.boolean(),
   "status": zod.enum(['received', 'under_review', 'awaiting_documents', 'documents_uploaded', 'sent_to_embassy', 'processing', 'issued', 'completed', 'rejected']),
@@ -973,6 +988,33 @@ export const RequestUploadUrlResponse = zod.object({
 
 
 /**
+ * @summary List the authenticated customer's own bookings
+ */
+export const ListMyBookingsQueryParams = zod.object({
+  "type": zod.enum(['flight', 'hotel', 'program', 'visa']).optional()
+})
+
+export const ListMyBookingsResponseItem = zod.object({
+  "id": zod.number(),
+  "userId": zod.string().nullish(),
+  "type": zod.enum(['flight', 'hotel', 'program', 'visa']),
+  "clientName": zod.string(),
+  "clientPhone": zod.string(),
+  "clientEmail": zod.string().nullish(),
+  "destination": zod.string().nullish(),
+  "travelDate": zod.string().nullish(),
+  "returnDate": zod.string().nullish(),
+  "adults": zod.number().optional(),
+  "children": zod.number().optional(),
+  "notes": zod.string().nullish(),
+  "status": zod.enum(['pending', 'confirmed', 'cancelled']),
+  "totalPrice": zod.number().nullish(),
+  "createdAt": zod.string()
+})
+export const ListMyBookingsResponse = zod.array(ListMyBookingsResponseItem)
+
+
+/**
  * @summary List all bookings
  */
 export const ListBookingsQueryParams = zod.object({
@@ -982,6 +1024,7 @@ export const ListBookingsQueryParams = zod.object({
 
 export const ListBookingsResponseItem = zod.object({
   "id": zod.number(),
+  "userId": zod.string().nullish(),
   "type": zod.enum(['flight', 'hotel', 'program', 'visa']),
   "clientName": zod.string(),
   "clientPhone": zod.string(),
@@ -1018,6 +1061,7 @@ export const CreateBookingBody = zod.object({
 
 export const CreateBookingResponse = zod.object({
   "id": zod.number(),
+  "userId": zod.string().nullish(),
   "type": zod.enum(['flight', 'hotel', 'program', 'visa']),
   "clientName": zod.string(),
   "clientPhone": zod.string(),
@@ -1043,6 +1087,7 @@ export const GetBookingParams = zod.object({
 
 export const GetBookingResponse = zod.object({
   "id": zod.number(),
+  "userId": zod.string().nullish(),
   "type": zod.enum(['flight', 'hotel', 'program', 'visa']),
   "clientName": zod.string(),
   "clientPhone": zod.string(),
@@ -1074,6 +1119,7 @@ export const UpdateBookingBody = zod.object({
 
 export const UpdateBookingResponse = zod.object({
   "id": zod.number(),
+  "userId": zod.string().nullish(),
   "type": zod.enum(['flight', 'hotel', 'program', 'visa']),
   "clientName": zod.string(),
   "clientPhone": zod.string(),
@@ -1177,6 +1223,7 @@ export const GetRecentBookingsQueryParams = zod.object({
 
 export const GetRecentBookingsResponseItem = zod.object({
   "id": zod.number(),
+  "userId": zod.string().nullish(),
   "type": zod.enum(['flight', 'hotel', 'program', 'visa']),
   "clientName": zod.string(),
   "clientPhone": zod.string(),
@@ -1228,7 +1275,22 @@ export const RegisterUserResponse = zod.object({
   "phoneVerifiedAt": zod.string().nullish(),
   "lastLoginAt": zod.string().nullish(),
   "createdAt": zod.string(),
-  "updatedAt": zod.string()
+  "updatedAt": zod.string(),
+  "whatsapp": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "profilePhotoUrl": zod.string().nullish(),
+  "passportNumber": zod.string().nullish(),
+  "passportIssueCountry": zod.string().nullish(),
+  "passportIssuePlace": zod.string().nullish(),
+  "passportIssueDate": zod.string().nullish(),
+  "passportExpiryDate": zod.string().nullish(),
+  "passportImageUrl": zod.string().nullish(),
+  "isGccResident": zod.boolean().optional(),
+  "gccResidenceCountry": zod.string().nullish(),
+  "gccResidenceNumber": zod.string().nullish(),
+  "gccResidenceExpiry": zod.string().nullish(),
+  "gccResidenceFrontUrl": zod.string().nullish(),
+  "gccResidenceBackUrl": zod.string().nullish()
 }),
   "accessToken": zod.string(),
   "refreshToken": zod.string()
@@ -1260,7 +1322,22 @@ export const LoginUserResponse = zod.object({
   "phoneVerifiedAt": zod.string().nullish(),
   "lastLoginAt": zod.string().nullish(),
   "createdAt": zod.string(),
-  "updatedAt": zod.string()
+  "updatedAt": zod.string(),
+  "whatsapp": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "profilePhotoUrl": zod.string().nullish(),
+  "passportNumber": zod.string().nullish(),
+  "passportIssueCountry": zod.string().nullish(),
+  "passportIssuePlace": zod.string().nullish(),
+  "passportIssueDate": zod.string().nullish(),
+  "passportExpiryDate": zod.string().nullish(),
+  "passportImageUrl": zod.string().nullish(),
+  "isGccResident": zod.boolean().optional(),
+  "gccResidenceCountry": zod.string().nullish(),
+  "gccResidenceNumber": zod.string().nullish(),
+  "gccResidenceExpiry": zod.string().nullish(),
+  "gccResidenceFrontUrl": zod.string().nullish(),
+  "gccResidenceBackUrl": zod.string().nullish()
 }),
   "accessToken": zod.string(),
   "refreshToken": zod.string()
@@ -1308,7 +1385,83 @@ export const GetCurrentUserResponse = zod.object({
   "phoneVerifiedAt": zod.string().nullish(),
   "lastLoginAt": zod.string().nullish(),
   "createdAt": zod.string(),
-  "updatedAt": zod.string()
+  "updatedAt": zod.string(),
+  "whatsapp": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "profilePhotoUrl": zod.string().nullish(),
+  "passportNumber": zod.string().nullish(),
+  "passportIssueCountry": zod.string().nullish(),
+  "passportIssuePlace": zod.string().nullish(),
+  "passportIssueDate": zod.string().nullish(),
+  "passportExpiryDate": zod.string().nullish(),
+  "passportImageUrl": zod.string().nullish(),
+  "isGccResident": zod.boolean().optional(),
+  "gccResidenceCountry": zod.string().nullish(),
+  "gccResidenceNumber": zod.string().nullish(),
+  "gccResidenceExpiry": zod.string().nullish(),
+  "gccResidenceFrontUrl": zod.string().nullish(),
+  "gccResidenceBackUrl": zod.string().nullish()
+})
+
+
+/**
+ * @summary Update the authenticated user's profile
+ */
+export const UpdateProfileBody = zod.object({
+  "firstName": zod.string().optional(),
+  "lastName": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "whatsapp": zod.string().optional(),
+  "address": zod.string().optional(),
+  "nationality": zod.string().optional(),
+  "gender": zod.enum(['male', 'female', 'other']).optional(),
+  "dateOfBirth": zod.coerce.date().optional(),
+  "profilePhotoUrl": zod.string().optional(),
+  "passportNumber": zod.string().optional(),
+  "passportIssueCountry": zod.string().optional(),
+  "passportIssuePlace": zod.string().optional(),
+  "passportIssueDate": zod.coerce.date().optional(),
+  "passportExpiryDate": zod.coerce.date().optional(),
+  "passportImageUrl": zod.string().optional(),
+  "isGccResident": zod.boolean().optional(),
+  "gccResidenceCountry": zod.string().optional(),
+  "gccResidenceNumber": zod.string().optional(),
+  "gccResidenceExpiry": zod.coerce.date().optional(),
+  "gccResidenceFrontUrl": zod.string().optional(),
+  "gccResidenceBackUrl": zod.string().optional()
+})
+
+export const UpdateProfileResponse = zod.object({
+  "id": zod.string().uuid(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "nationality": zod.string().nullish(),
+  "gender": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "role": zod.enum(['customer', 'agent', 'admin', 'super_admin']),
+  "isActive": zod.boolean(),
+  "emailVerifiedAt": zod.string().nullish(),
+  "phoneVerifiedAt": zod.string().nullish(),
+  "lastLoginAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "whatsapp": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "profilePhotoUrl": zod.string().nullish(),
+  "passportNumber": zod.string().nullish(),
+  "passportIssueCountry": zod.string().nullish(),
+  "passportIssuePlace": zod.string().nullish(),
+  "passportIssueDate": zod.string().nullish(),
+  "passportExpiryDate": zod.string().nullish(),
+  "passportImageUrl": zod.string().nullish(),
+  "isGccResident": zod.boolean().optional(),
+  "gccResidenceCountry": zod.string().nullish(),
+  "gccResidenceNumber": zod.string().nullish(),
+  "gccResidenceExpiry": zod.string().nullish(),
+  "gccResidenceFrontUrl": zod.string().nullish(),
+  "gccResidenceBackUrl": zod.string().nullish()
 })
 
 

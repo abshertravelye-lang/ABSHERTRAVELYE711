@@ -509,6 +509,12 @@ export interface VisaApplication {
   /** @nullable */
   residencyImageUrl?: string | null;
   /** @nullable */
+  residencyBackImageUrl?: string | null;
+  /** @nullable */
+  alternativeVisaNumber?: string | null;
+  /** @nullable */
+  alternativeVisaExpiry?: string | null;
+  /** @nullable */
   visaImageUrl?: string | null;
   agreedToTerms: boolean;
   status: VisaApplicationStatus;
@@ -552,6 +558,9 @@ export interface VisaApplicationInput {
   passportImageUrl?: string;
   personalPhotoUrl?: string;
   residencyImageUrl?: string;
+  residencyBackImageUrl?: string;
+  alternativeVisaNumber?: string;
+  alternativeVisaExpiry?: string;
   visaImageUrl?: string;
   agreedToTerms: boolean;
 }
@@ -597,6 +606,8 @@ export const BookingStatus = {
 
 export interface Booking {
   id: number;
+  /** @nullable */
+  userId?: string | null;
   type: BookingType;
   clientName: string;
   clientPhone: string;
@@ -834,6 +845,39 @@ export interface LoginInput {
   password: string;
 }
 
+export type ProfileUpdateGender = typeof ProfileUpdateGender[keyof typeof ProfileUpdateGender];
+
+
+export const ProfileUpdateGender = {
+  male: 'male',
+  female: 'female',
+  other: 'other',
+} as const;
+
+export interface ProfileUpdate {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  whatsapp?: string;
+  address?: string;
+  nationality?: string;
+  gender?: ProfileUpdateGender;
+  dateOfBirth?: string;
+  profilePhotoUrl?: string;
+  passportNumber?: string;
+  passportIssueCountry?: string;
+  passportIssuePlace?: string;
+  passportIssueDate?: string;
+  passportExpiryDate?: string;
+  passportImageUrl?: string;
+  isGccResident?: boolean;
+  gccResidenceCountry?: string;
+  gccResidenceNumber?: string;
+  gccResidenceExpiry?: string;
+  gccResidenceFrontUrl?: string;
+  gccResidenceBackUrl?: string;
+}
+
 export type SafeUserRole = typeof SafeUserRole[keyof typeof SafeUserRole];
 
 
@@ -870,6 +914,35 @@ export interface SafeUser {
   lastLoginAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** @nullable */
+  whatsapp?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  profilePhotoUrl?: string | null;
+  /** @nullable */
+  passportNumber?: string | null;
+  /** @nullable */
+  passportIssueCountry?: string | null;
+  /** @nullable */
+  passportIssuePlace?: string | null;
+  /** @nullable */
+  passportIssueDate?: string | null;
+  /** @nullable */
+  passportExpiryDate?: string | null;
+  /** @nullable */
+  passportImageUrl?: string | null;
+  isGccResident?: boolean;
+  /** @nullable */
+  gccResidenceCountry?: string | null;
+  /** @nullable */
+  gccResidenceNumber?: string | null;
+  /** @nullable */
+  gccResidenceExpiry?: string | null;
+  /** @nullable */
+  gccResidenceFrontUrl?: string | null;
+  /** @nullable */
+  gccResidenceBackUrl?: string | null;
 }
 
 export interface AuthResponse {
@@ -967,6 +1040,20 @@ export const ListVisaApplicationsStatus = {
   issued: 'issued',
   completed: 'completed',
   rejected: 'rejected',
+} as const;
+
+export type ListMyBookingsParams = {
+type?: ListMyBookingsType;
+};
+
+export type ListMyBookingsType = typeof ListMyBookingsType[keyof typeof ListMyBookingsType];
+
+
+export const ListMyBookingsType = {
+  flight: 'flight',
+  hotel: 'hotel',
+  program: 'program',
+  visa: 'visa',
 } as const;
 
 export type ListBookingsParams = {

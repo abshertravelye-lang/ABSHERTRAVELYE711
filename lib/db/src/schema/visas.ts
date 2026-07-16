@@ -108,7 +108,10 @@ export const visaApplicationSubmissionsTable = pgTable("visa_application_submiss
   phone: text("phone").notNull(),
   passportImageUrl: text("passport_image_url"),
   personalPhotoUrl: text("personal_photo_url"),
-  residencyImageUrl: text("residency_image_url"),
+  residencyImageUrl: text("residency_image_url"),       // front of GCC residency
+  residencyBackImageUrl: text("residency_back_image_url"), // back of GCC residency
+  alternativeVisaNumber: text("alternative_visa_number"),
+  alternativeVisaExpiry: text("alternative_visa_expiry"),
   visaImageUrl: text("visa_image_url"),
   agreedToTerms: boolean("agreed_to_terms").notNull().default(false),
   status: visaApplicationSubmissionStatusEnum("status").notNull().default("received"),

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { bookingsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import {
   ListBookingsQueryParams,
   CreateBookingBody,
@@ -9,6 +9,7 @@ import {
   UpdateBookingParams,
   UpdateBookingBody,
 } from "@workspace/api-zod";
+import { requireAuth, optionalAuth } from "../middleware/auth";
 
 const router = Router();
 
@@ -16,6 +17,21 @@ const formatBooking = (r: typeof bookingsTable.$inferSelect) => ({
   ...r,
   totalPrice: r.totalPrice ? Number(r.totalPrice) : null,
   createdAt: r.createdAt.toISOString(),
+});
+
+// GET /api/bookings/my — customer's own bookings (must be before /bookings/:id)
+router.get("/bookings/my", requireAuth, async (req, res) => {
+  try {
+    const query = ListBookingsQueryParams.parse(req.query);
+    let rows = await db.select().from(bookingsTable)
+      .where(eq(bookingsTable.userId, req.user!.sub))
+      .orderBy(bookingsTable.createdAt);
+    if (query.type) rows = rows.filter((r) => r.type === query.type);
+    res.json(rows.map(formatBooking));
+  } catch (e) {
+    req.log.error(e);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 router.get("/bookings", async (req, res) => {
@@ -31,10 +47,12 @@ router.get("/bookings", async (req, res) => {
   }
 });
 
-router.post("/bookings", async (req, res) => {
+router.post("/bookings", optionalAuth, async (req, res) => {
   try {
     const body = CreateBookingBody.parse(req.body);
-    const [row] = await db.insert(bookingsTable).values(body).returning();
+    // Attach userId if the request is authenticated
+    const userId = (req as any).user?.sub ?? null;
+    const [row] = await db.insert(bookingsTable).values({ ...body, userId }).returning();
     res.status(201).json(formatBooking(row));
   } catch (e) {
     req.log.error(e);

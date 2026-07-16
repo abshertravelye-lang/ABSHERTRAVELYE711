@@ -223,4 +223,59 @@ router.get("/auth/me", requireAuth, async (req, res) => {
   }
 });
 
+// PATCH /api/auth/profile
+const profileUpdateSchema = z.object({
+  firstName: z.string().min(1).optional(),
+  lastName: z.string().min(1).optional(),
+  phone: z.string().optional(),
+  whatsapp: z.string().optional(),
+  address: z.string().optional(),
+  nationality: z.string().optional(),
+  gender: z.enum(["male", "female", "other"]).optional(),
+  dateOfBirth: z.string().optional(),
+  profilePhotoUrl: z.string().optional(),
+  // Passport
+  passportNumber: z.string().optional(),
+  passportIssueCountry: z.string().optional(),
+  passportIssuePlace: z.string().optional(),
+  passportIssueDate: z.string().optional(),
+  passportExpiryDate: z.string().optional(),
+  passportImageUrl: z.string().optional(),
+  // GCC residence
+  isGccResident: z.boolean().optional(),
+  gccResidenceCountry: z.string().optional(),
+  gccResidenceNumber: z.string().optional(),
+  gccResidenceExpiry: z.string().optional(),
+  gccResidenceFrontUrl: z.string().optional(),
+  gccResidenceBackUrl: z.string().optional(),
+});
+
+router.patch("/auth/profile", requireAuth, async (req, res) => {
+  try {
+    const body = profileUpdateSchema.parse(req.body);
+
+    // If phone is changing, check uniqueness
+    if (body.phone) {
+      const existing = await db.select({ id: usersTable.id })
+        .from(usersTable)
+        .where(and(eq(usersTable.phone, body.phone), isNull(usersTable.deletedAt)));
+      if (existing.length > 0 && existing[0].id !== req.user!.sub) {
+        return res.status(409).json({ error: "Phone already in use" });
+      }
+    }
+
+    const [updated] = await db.update(usersTable)
+      .set({ ...body, updatedAt: new Date() })
+      .where(and(eq(usersTable.id, req.user!.sub), isNull(usersTable.deletedAt)))
+      .returning();
+
+    if (!updated) return res.status(404).json({ error: "User not found" });
+    res.json(safeUser(updated));
+  } catch (e) {
+    req.log.error(e);
+    if (e instanceof z.ZodError) return res.status(400).json({ error: "Invalid input", details: e.issues });
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export default router;

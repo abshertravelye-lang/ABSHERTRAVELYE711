@@ -7,7 +7,132 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
 import { getImageUrl } from '@/hooks/useImageUrl';
+
+type ThemeMode = 'light' | 'dark' | 'system';
+
+const THEME_OPTIONS: { value: ThemeMode; label: string; icon: keyof typeof Ionicons.glyphMap; desc: string }[] = [
+  { value: 'light', label: 'النهاري', icon: 'sunny-outline', desc: 'أبيض وأزرق' },
+  { value: 'dark',  label: 'الليلي',  icon: 'moon-outline',  desc: 'داكن ومريح' },
+  { value: 'system',label: 'تلقائي',  icon: 'phone-portrait-outline', desc: 'حسب الجهاز' },
+];
+
+// ── ThemeSection component ─────────────────────────────────────────────────
+function ThemeSection({
+  colors,
+  mode,
+  setMode,
+}: {
+  colors: ReturnType<typeof import('@/hooks/useColors').useColors>;
+  mode: string;
+  setMode: (m: 'light' | 'dark' | 'system') => void;
+}) {
+  return (
+    <View style={[themeStyles.card, { backgroundColor: colors.card, shadowColor: colors.primary, marginHorizontal: 16, marginBottom: 12 }]}>
+      {/* Header */}
+      <View style={themeStyles.header}>
+        <View style={[themeStyles.headerIcon, { backgroundColor: '#FFF7E0' }]}>
+          <Ionicons name="contrast-outline" size={20} color="#D4AF37" />
+        </View>
+        <Text style={[themeStyles.headerTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>
+          المظهر
+        </Text>
+      </View>
+
+      {/* Options row */}
+      <View style={themeStyles.optionsRow}>
+        {THEME_OPTIONS.map((opt) => {
+          const active = mode === opt.value;
+          return (
+            <Pressable
+              key={opt.value}
+              style={({ pressed }) => [
+                themeStyles.option,
+                {
+                  backgroundColor: active ? '#0A2342' : colors.muted,
+                  borderColor: active ? '#D4AF37' : colors.border,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setMode(opt.value);
+              }}
+            >
+              <Ionicons
+                name={opt.icon}
+                size={22}
+                color={active ? '#D4AF37' : colors.mutedForeground}
+              />
+              <Text
+                style={[
+                  themeStyles.optionLabel,
+                  { color: active ? '#FFFFFF' : colors.foreground, fontFamily: 'Cairo_700Bold' },
+                ]}
+              >
+                {opt.label}
+              </Text>
+              <Text
+                style={[
+                  themeStyles.optionDesc,
+                  { color: active ? 'rgba(255,255,255,0.65)' : colors.mutedForeground, fontFamily: 'Cairo_400Regular' },
+                ]}
+              >
+                {opt.desc}
+              </Text>
+              {active && (
+                <View style={themeStyles.activeDot}>
+                  <Ionicons name="checkmark-circle" size={16} color="#D4AF37" />
+                </View>
+              )}
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const themeStyles = StyleSheet.create({
+  card: {
+    borderRadius: 16,
+    padding: 16,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 14,
+    justifyContent: 'flex-end',
+  },
+  headerIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: { fontSize: 16 },
+  optionsRow: { flexDirection: 'row', gap: 8 },
+  option: {
+    flex: 1,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    padding: 12,
+    alignItems: 'center',
+    gap: 6,
+    position: 'relative',
+  },
+  optionLabel: { fontSize: 13 },
+  optionDesc: { fontSize: 10, textAlign: 'center' },
+  activeDot: { position: 'absolute', top: 6, left: 6 },
+});
+// ─────────────────────────────────────────────────────────────────────────────
 
 const MENU_ITEMS = [
   { icon: 'calendar-outline' as const, label: 'حجوزاتي', route: null },
@@ -23,6 +148,7 @@ export default function AccountScreen() {
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const bottomInset = Platform.OS === 'web' ? 34 : 0;
   const { user, isLoading, logout } = useAuth();
+  const { mode, setMode } = useTheme();
 
   const handleLogout = () => {
     Alert.alert('تسجيل الخروج', 'هل تريد تسجيل الخروج؟', [
@@ -76,6 +202,8 @@ export default function AccountScreen() {
             </View>
           ))}
         </View>
+        {/* Theme even for guests */}
+        <ThemeSection colors={colors} mode={mode} setMode={setMode} />
       </View>
     );
   }
@@ -124,6 +252,9 @@ export default function AccountScreen() {
           </Pressable>
         ))}
       </View>
+
+      {/* Theme Section */}
+      <ThemeSection colors={colors} mode={mode} setMode={setMode} />
 
       {/* Logout */}
       <Pressable

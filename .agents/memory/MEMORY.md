@@ -1,3 +1,4 @@
 - [Visa schema naming collision](absher-travel-visa-schema.md) — a pre-existing unused `visa_applications` table collided with a new feature; renamed to avoid silent data corruption.
 - [Monorepo tsc project references](monorepo-tsc-project-refs.md) — stale `dist/*.d.ts` in referenced lib packages can make tsc report "no exported member" even when src is correct; fix by rebuilding refs, not by re-reading src.
 - [No-auth posture in absher-travel](absher-travel-no-auth.md) — the app has no auth anywhere; new features should match that (deliberately, with tradeoffs flagged) rather than bolting on auth alone.
+- [Duffel order flow](duffel-order-flow.md) — POST /api/flights/book creates real Duffel orders; passenger IDs come from GET /air/offers/{id}; payment type "balance"; falls back to pending DB record for mock/expired offers.

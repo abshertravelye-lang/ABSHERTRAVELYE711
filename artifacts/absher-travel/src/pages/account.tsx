@@ -95,7 +95,8 @@ function BookingCard({ booking, language }: { booking: Booking; language: string
   const typeInfo = typeLabels[booking.type as keyof typeof typeLabels] || { ar: booking.type, en: booking.type, icon: Package };
   const statusInfo = statusLabels[booking.status as keyof typeof statusLabels] || statusLabels.pending;
   const TypeIcon = typeInfo.icon;
-  const details = (booking.details as Record<string, any>) || {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const details: Record<string, any> = {};
 
   return (
     <Card className="border border-slate-200 rounded-xl overflow-hidden hover:border-primary/30 transition-colors">
@@ -261,10 +262,12 @@ export default function Account() {
 
   const filteredItems = allItems.filter(item => {
     if (activeSubTab === "all") return true;
-    if (activeSubTab === "visas") return item._itemType === "app" || (item._itemType === "booking" && item.type === "visa");
-    if (activeSubTab === "flights") return item._itemType === "booking" && item.type === "flight";
-    if (activeSubTab === "hotels") return item._itemType === "booking" && item.type === "hotel";
-    if (activeSubTab === "programs") return item._itemType === "booking" && item.type === "program";
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const bookingType = item._itemType === "booking" ? (item as any).type as string : undefined;
+    if (activeSubTab === "visas") return item._itemType === "app" || bookingType === "visa";
+    if (activeSubTab === "flights") return bookingType === "flight";
+    if (activeSubTab === "hotels") return bookingType === "hotel";
+    if (activeSubTab === "programs") return bookingType === "program";
     return true;
   });
 
@@ -375,7 +378,7 @@ export default function Account() {
                     {isUploadingAvatar ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
                     <input type="file" className="hidden" accept="image/*" onChange={async e => {
                        const f = e.target.files?.[0]; if (!f) return;
-                       const r = await uploadAvatar(f); if (r) setProfile(p => ({ ...p, profilePhotoUrl: r.objectPath }));
+                       const r = await uploadAvatar(f); if (r) setProfile((p: typeof profile) => ({ ...p, profilePhotoUrl: r.objectPath }));
                     }} disabled={isUploadingAvatar} />
                   </label>
                 </div>

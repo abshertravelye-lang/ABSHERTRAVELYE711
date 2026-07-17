@@ -53,6 +53,10 @@ function Router() {
           <Admin />
         </RequireAuth>
       </Route>
+      {/* Legacy /book redirect → /flights */}
+      <Route path="/book">
+        {() => { window.location.replace("/flights"); return null; }}
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );

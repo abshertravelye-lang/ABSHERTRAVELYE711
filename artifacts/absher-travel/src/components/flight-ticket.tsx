@@ -729,6 +729,7 @@ export function FlightTicket({
           })),
           adults: passengers.adults,
           children: passengers.children,
+          infants: passengers.infants,
           totalPrice: offer.totalPrice,
           currency: offer.currency,
           destination: firstSeg && lastSeg

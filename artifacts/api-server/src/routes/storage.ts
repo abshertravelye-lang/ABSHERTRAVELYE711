@@ -1,15 +1,69 @@
+import { randomUUID } from 'crypto';
 import { Readable } from 'stream';
 import {
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
 } from '@workspace/api-zod';
 import { Router, type IRouter, type Request, type Response } from 'express';
+import multer from 'multer';
 
-import { ObjectStorageService } from '../lib/objectStorage';
+import { ObjectStorageService, objectStorageClient } from '../lib/objectStorage';
 import { ObjectNotFoundError } from '../lib/objectStorage';
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
+});
+
+function parseObjectPath(path: string): { bucketName: string; objectName: string } {
+  const p = path.startsWith('/') ? path.slice(1) : path;
+  const slashIdx = p.indexOf('/');
+  if (slashIdx === -1) return { bucketName: p, objectName: '' };
+  return { bucketName: p.slice(0, slashIdx), objectName: p.slice(slashIdx + 1) };
+}
+
+/**
+ * POST /storage/uploads
+ *
+ * Direct multipart file upload — the client sends the file as multipart/form-data.
+ * The server stores it in GCS via the sidecar-authenticated client and returns
+ * the objectPath for later serving via GET /storage/objects/*.
+ *
+ * This avoids the CORS issue that occurs when browsers try to PUT directly to
+ * a GCS presigned URL.
+ */
+router.post(
+  '/storage/uploads',
+  upload.single('file'),
+  async (req: Request, res: Response) => {
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ error: 'No file provided' });
+      return;
+    }
+
+    try {
+      const privateObjectDir = objectStorageService.getPrivateObjectDir();
+      const objectId = randomUUID();
+      const fullPath = `${privateObjectDir}/uploads/${objectId}`;
+      const { bucketName, objectName } = parseObjectPath(fullPath);
+
+      const gcsFile = objectStorageClient.bucket(bucketName).file(objectName);
+      await gcsFile.save(file.buffer, {
+        contentType: file.mimetype || 'application/octet-stream',
+        resumable: false,
+      });
+
+      const objectPath = `/objects/uploads/${objectId}`;
+      res.json({ objectPath });
+    } catch (error) {
+      req.log.error({ err: error }, 'Error uploading file');
+      res.status(500).json({ error: 'Failed to upload file' });
+    }
+  },
+);
 
 /**
  * POST /storage/uploads/request-url

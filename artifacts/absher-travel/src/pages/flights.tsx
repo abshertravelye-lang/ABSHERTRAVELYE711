@@ -5,7 +5,6 @@ import { AirportSearch } from "@/components/airport-search";
 import { FlightDatePicker } from "@/components/flight-date-picker";
 import { PassengerSelector, type PassengerConfig } from "@/components/passenger-selector";
 import { FlightTicket } from "@/components/flight-ticket";
-import { generateMockFlights } from "@/data/mock-flights";
 import { AIRPORTS, type Airport } from "@/data/airports";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
@@ -236,7 +235,6 @@ export default function FlightsPage() {
   const [sort, setSort] = useState<SortKey>("best_value");
   const [searchParams, setSearchParams] = useState<Record<string, unknown> | null>(null);
   const [ticketOffer, setTicketOffer] = useState<FlightOffer | null>(null);
-  const [mockFlights, setMockFlights] = useState<FlightOffer[] | null>(null);
 
   const { data, isFetching } = useSearchFlights(
     searchParams as Parameters<typeof useSearchFlights>[0] ?? undefined,
@@ -263,17 +261,13 @@ export default function FlightsPage() {
       adults: passengers.adults,
       children: passengers.children,
       infants: passengers.infants,
-      currency: "SAR",
+      currency: "USD",
     });
-    // Prepare mock data for immediate/fallback display
-    setMockFlights(
-      generateMockFlights(origin.iata, destination.iata, depStr, passengers.adults, passengers.cabinClass)
-    );
   }, [origin, destination, dates, tripType, passengers]);
 
-  // Prefer real API results; fall back to mock
+  // Real flights from Duffel API
   const apiOffers = (data as FlightSearchResults | undefined)?.offers;
-  const rawOffers: FlightOffer[] = (apiOffers && apiOffers.length > 0) ? apiOffers : (mockFlights ?? []);
+  const rawOffers: FlightOffer[] = apiOffers ?? [];
 
   const sorted = [...rawOffers].sort((a, b) => {
     if (sort === "cheapest")   return a.totalPrice - b.totalPrice;

@@ -5,7 +5,8 @@ import {
   User, FileText, Globe, Calendar, ChevronRight, ShieldCheck, AlertCircle,
   CreditCard,
 } from "lucide-react";
-import type { FlightOffer } from "@workspace/api-client-react";
+import { useCreateBooking, type FlightOffer } from "@workspace/api-client-react";
+import { useAuth } from "@/hooks/use-auth";
 import type { Airport } from "@/data/airports";
 import type { PassengerConfig } from "./passenger-selector";
 
@@ -620,6 +621,8 @@ export function FlightTicket({
   );
   const [bookingRef] = useState(() => genRef("ABT"));
   const [confirmedRef] = useState(() => genRef("CNF"));
+  const createBooking = useCreateBooking();
+  const { user } = useAuth();
 
   const updatePassenger = (i: number, info: PassengerInfo) => {
     setPassengerDetails(prev => prev.map((p, idx) => idx === i ? info : p));
@@ -628,6 +631,28 @@ export function FlightTicket({
   const hasMinData = passengerDetails[0]?.fullName.trim().length > 0;
 
   const handlePrint = () => window.print();
+
+  /** Save booking to DB then advance to confirmed step */
+  const handleConfirm = () => {
+    if (!hasMinData) return;
+    const firstSeg = offer.segments[0];
+    const lastSeg = offer.segments[offer.segments.length - 1];
+    createBooking.mutate({
+      data: {
+        type: "flight",
+        clientName: passengerDetails[0]?.fullName || (user ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() : "—"),
+        clientPhone: user?.phone ?? "—",
+        clientEmail: user?.email ?? undefined,
+        destination: `${firstSeg?.originIata} → ${lastSeg?.destinationIata}`,
+        travelDate: firstSeg?.departureAt?.slice(0, 10),
+        adults: passengers.adults,
+        children: passengers.children,
+        totalPrice: offer.totalPrice,
+        notes: `${firstSeg?.airlineName} · ${firstSeg?.flightNumber} · ${confirmedRef}`,
+      }
+    });
+    setStep("confirmed");
+  };
 
   /* ── Step: Passenger form ── */
   if (step === "passengers") {
@@ -708,14 +733,16 @@ export function FlightTicket({
               {ar ? "حجز مؤقت" : "Provisional Booking"}
             </button>
             <button
-              onClick={() => { if (hasMinData) setStep("confirmed"); }}
-              disabled={!hasMinData}
+              onClick={handleConfirm}
+              disabled={!hasMinData || createBooking.isPending}
               className="py-3.5 bg-[#c8a84b] hover:bg-[#b8973b] disabled:bg-white/20 disabled:text-white/40
                 text-white rounded-2xl font-black transition-all shadow-lg shadow-amber-900/20
                 flex items-center justify-center gap-2"
             >
               <CreditCard className="h-4 w-4" />
-              {ar ? "تأكيد الدفع وإصدار التذكرة" : "Pay & Issue Ticket"}
+              {createBooking.isPending
+                ? (ar ? "جارٍ الحفظ…" : "Saving…")
+                : (ar ? "تأكيد الدفع وإصدار التذكرة" : "Pay & Issue Ticket")}
             </button>
           </div>
           {!hasMinData && (
@@ -797,11 +824,14 @@ export function FlightTicket({
           </button>
           {!isConfirmed && (
             <button
-              onClick={() => setStep("confirmed")}
-              className="flex-1 py-3.5 bg-[#c8a84b] hover:bg-[#b8973b] text-white rounded-2xl font-black transition-all shadow-lg shadow-amber-900/20 flex items-center justify-center gap-2"
+              onClick={handleConfirm}
+              disabled={createBooking.isPending}
+              className="flex-1 py-3.5 bg-[#c8a84b] hover:bg-[#b8973b] disabled:bg-white/20 text-white rounded-2xl font-black transition-all shadow-lg shadow-amber-900/20 flex items-center justify-center gap-2"
             >
               <CreditCard className="h-4 w-4" />
-              {ar ? "تأكيد الدفع وإصدار التذكرة النهائية" : "Pay & Issue Confirmed Ticket"}
+              {createBooking.isPending
+                ? (ar ? "جارٍ الحفظ…" : "Saving…")
+                : (ar ? "تأكيد الدفع وإصدار التذكرة النهائية" : "Pay & Issue Confirmed Ticket")}
             </button>
           )}
         </div>

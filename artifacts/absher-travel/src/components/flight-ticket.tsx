@@ -5,7 +5,7 @@ import {
   User, FileText, Globe, Calendar, ChevronRight, ShieldCheck, AlertCircle,
   CreditCard,
 } from "lucide-react";
-import { useCreateBooking, type FlightOffer } from "@workspace/api-client-react";
+import { type FlightOffer } from "@workspace/api-client-react";
 import { useAuth } from "@/hooks/use-auth";
 import type { Airport } from "@/data/airports";
 import type { PassengerConfig } from "./passenger-selector";
@@ -21,10 +21,15 @@ interface FlightTicketProps {
 }
 
 interface PassengerInfo {
-  fullName: string;
+  givenName: string;
+  familyName: string;
+  title: "mr" | "ms" | "mrs" | "miss" | "dr" | "";
+  gender: "m" | "f" | "";
+  dob: string;
+  email: string;
+  phone: string;
   passport: string;
   nationality: string;
-  dob: string;
 }
 
 type Step = "passengers" | "provisional" | "confirmed";
@@ -159,6 +164,38 @@ function Watermark() {
 }
 
 /* ─────────────────── Passenger Form ─────────────────── */
+const TITLES: Array<{ value: PassengerInfo["title"]; ar: string; en: string }> = [
+  { value: "mr",   ar: "السيد",    en: "Mr." },
+  { value: "ms",   ar: "الآنسة",  en: "Ms." },
+  { value: "mrs",  ar: "السيدة",  en: "Mrs." },
+  { value: "miss", ar: "الآنسة",  en: "Miss" },
+  { value: "dr",   ar: "الدكتور", en: "Dr." },
+];
+
+const INPUT_CLS = `w-full ps-10 pe-4 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800
+  focus:outline-none focus:ring-2 focus:ring-[#c8a84b]/30 focus:border-[#c8a84b] transition-all
+  placeholder:text-slate-300 bg-slate-50 hover:bg-white`;
+
+const SELECT_CLS = `w-full ps-10 pe-4 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800
+  focus:outline-none focus:ring-2 focus:ring-[#c8a84b]/30 focus:border-[#c8a84b] transition-all
+  bg-slate-50 hover:bg-white appearance-none`;
+
+function PaxField({
+  icon, label, required, children,
+}: { icon: React.ReactNode; label: string; required?: boolean; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+        {label}{required && <span className="text-red-400 ms-0.5">*</span>}
+      </label>
+      <div className="relative">
+        <div className="absolute inset-y-0 start-3 flex items-center pointer-events-none">{icon}</div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function PassengerForm({
   index, total, info, ar, onChange,
 }: {
@@ -168,33 +205,10 @@ function PassengerForm({
   ar: boolean;
   onChange: (info: PassengerInfo) => void;
 }) {
-  const label = (field: keyof PassengerInfo) => {
-    const labels: Record<keyof PassengerInfo, { ar: string; en: string }> = {
-      fullName:    { ar: "الاسم الكامل",       en: "Full Name" },
-      passport:    { ar: "رقم جواز السفر",     en: "Passport Number" },
-      nationality: { ar: "الجنسية",            en: "Nationality" },
-      dob:         { ar: "تاريخ الميلاد",      en: "Date of Birth" },
-    };
-    return ar ? labels[field].ar : labels[field].en;
-  };
-
-  const placeholder: Record<keyof PassengerInfo, { ar: string; en: string }> = {
-    fullName:    { ar: "كما هو في جواز السفر",    en: "As in passport" },
-    passport:    { ar: "مثال: A12345678",         en: "e.g. A12345678" },
-    nationality: { ar: "مثال: سعودي / يمني",      en: "e.g. Saudi / Yemeni" },
-    dob:         { ar: "",                        en: "" },
-  };
-
-  const icons: Record<keyof PassengerInfo, React.ReactNode> = {
-    fullName:    <User className="h-4 w-4 text-[#c8a84b]" />,
-    passport:    <FileText className="h-4 w-4 text-[#c8a84b]" />,
-    nationality: <Globe className="h-4 w-4 text-[#c8a84b]" />,
-    dob:         <Calendar className="h-4 w-4 text-[#c8a84b]" />,
-  };
+  const up = (patch: Partial<PassengerInfo>) => onChange({ ...info, ...patch });
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-      {/* Card header */}
       <div className="bg-gradient-to-r from-[#0d2351] to-[#1a3875] px-5 py-3 flex items-center gap-3">
         <div className="w-8 h-8 rounded-full bg-[#c8a84b] flex items-center justify-center">
           <User className="h-4 w-4 text-white" />
@@ -202,34 +216,70 @@ function PassengerForm({
         <div>
           <div className="text-white font-bold text-sm">
             {ar ? `المسافر ${index + 1}` : `Passenger ${index + 1}`}
-            {total > 1 && <span className="text-white/50 text-xs ml-2 rtl:mr-2 rtl:ml-0">({ar ? `من ${total}` : `of ${total}`})</span>}
+            {total > 1 && <span className="text-white/50 text-xs ms-2">({ar ? `من ${total}` : `of ${total}`})</span>}
           </div>
-          <div className="text-white/50 text-xs">{ar ? "بالغ" : "Adult"}</div>
+          <div className="text-white/50 text-xs">{ar ? "أدخل البيانات كما في جواز السفر" : "Enter details exactly as in passport"}</div>
         </div>
       </div>
 
       <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-        {(["fullName", "passport", "nationality", "dob"] as (keyof PassengerInfo)[]).map(field => (
-          <div key={field} className={field === "fullName" ? "md:col-span-2" : ""}>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-              {label(field)} <span className="text-red-400">*</span>
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 start-3 flex items-center pointer-events-none">
-                {icons[field]}
-              </div>
-              <input
-                type={field === "dob" ? "date" : "text"}
-                value={info[field]}
-                onChange={e => onChange({ ...info, [field]: e.target.value })}
-                placeholder={ar ? placeholder[field].ar : placeholder[field].en}
-                className="w-full ps-10 pe-4 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800
-                  focus:outline-none focus:ring-2 focus:ring-[#c8a84b]/30 focus:border-[#c8a84b] transition-all
-                  placeholder:text-slate-300 bg-slate-50 hover:bg-white"
-              />
-            </div>
-          </div>
-        ))}
+        {/* Given Name */}
+        <PaxField icon={<User className="h-4 w-4 text-[#c8a84b]" />} label={ar ? "الاسم الأول" : "Given Name"} required>
+          <input type="text" value={info.givenName} onChange={e => up({ givenName: e.target.value })}
+            placeholder={ar ? "كما في جواز السفر" : "As in passport"} className={INPUT_CLS} />
+        </PaxField>
+
+        {/* Family Name */}
+        <PaxField icon={<User className="h-4 w-4 text-[#c8a84b]" />} label={ar ? "اسم العائلة" : "Family Name"} required>
+          <input type="text" value={info.familyName} onChange={e => up({ familyName: e.target.value })}
+            placeholder={ar ? "كما في جواز السفر" : "As in passport"} className={INPUT_CLS} />
+        </PaxField>
+
+        {/* Title */}
+        <PaxField icon={<User className="h-4 w-4 text-[#c8a84b]" />} label={ar ? "اللقب" : "Title"} required>
+          <select value={info.title} onChange={e => up({ title: e.target.value as PassengerInfo["title"] })} className={SELECT_CLS}>
+            <option value="">{ar ? "اختر اللقب" : "Select title"}</option>
+            {TITLES.map(t => <option key={t.value} value={t.value}>{ar ? t.ar : t.en}</option>)}
+          </select>
+        </PaxField>
+
+        {/* Gender */}
+        <PaxField icon={<User className="h-4 w-4 text-[#c8a84b]" />} label={ar ? "الجنس" : "Gender"} required>
+          <select value={info.gender} onChange={e => up({ gender: e.target.value as PassengerInfo["gender"] })} className={SELECT_CLS}>
+            <option value="">{ar ? "اختر الجنس" : "Select gender"}</option>
+            <option value="m">{ar ? "ذكر" : "Male"}</option>
+            <option value="f">{ar ? "أنثى" : "Female"}</option>
+          </select>
+        </PaxField>
+
+        {/* Date of Birth */}
+        <PaxField icon={<Calendar className="h-4 w-4 text-[#c8a84b]" />} label={ar ? "تاريخ الميلاد" : "Date of Birth"} required>
+          <input type="date" value={info.dob} onChange={e => up({ dob: e.target.value })} className={INPUT_CLS} />
+        </PaxField>
+
+        {/* Email */}
+        <PaxField icon={<FileText className="h-4 w-4 text-[#c8a84b]" />} label={ar ? "البريد الإلكتروني" : "Email"} required>
+          <input type="email" value={info.email} onChange={e => up({ email: e.target.value })}
+            placeholder="name@email.com" className={INPUT_CLS} dir="ltr" />
+        </PaxField>
+
+        {/* Phone */}
+        <PaxField icon={<Globe className="h-4 w-4 text-[#c8a84b]" />} label={ar ? "رقم الهاتف (دولي)" : "Phone (intl.)"} required>
+          <input type="tel" value={info.phone} onChange={e => up({ phone: e.target.value })}
+            placeholder="+967xxxxxxxxx" className={INPUT_CLS} dir="ltr" />
+        </PaxField>
+
+        {/* Passport */}
+        <PaxField icon={<FileText className="h-4 w-4 text-[#c8a84b]" />} label={ar ? "رقم الجواز" : "Passport No."}>
+          <input type="text" value={info.passport} onChange={e => up({ passport: e.target.value })}
+            placeholder={ar ? "A12345678" : "A12345678"} className={INPUT_CLS} />
+        </PaxField>
+
+        {/* Nationality */}
+        <PaxField icon={<Globe className="h-4 w-4 text-[#c8a84b]" />} label={ar ? "الجنسية" : "Nationality"}>
+          <input type="text" value={info.nationality} onChange={e => up({ nationality: e.target.value })}
+            placeholder={ar ? "مثال: يمني / سعودي" : "e.g. Yemeni / Saudi"} className={INPUT_CLS} />
+        </PaxField>
       </div>
     </div>
   );
@@ -471,7 +521,7 @@ function TicketContent({
       </div>
 
       {/* ── Passengers table ── */}
-      {passengerDetails.some(p => p.fullName) && (
+      {passengerDetails.some(p => p.givenName || p.familyName) && (
         <div className="relative z-10 mx-8 mb-6">
           <div className="bg-[#0d2351]/5 border border-[#0d2351]/10 rounded-2xl overflow-hidden">
             <div className="bg-[#0d2351] px-5 py-2.5 flex items-center gap-2">
@@ -487,7 +537,7 @@ function TicketContent({
                     <span className="w-5 h-5 rounded-full bg-[#c8a84b] text-white text-xs flex items-center justify-center font-black shrink-0">
                       {i + 1}
                     </span>
-                    {p.fullName || (ar ? "—" : "—")}
+                    {[p.givenName, p.familyName].filter(Boolean).join(" ") || "—"}
                   </div>
                   {p.passport && (
                     <div className="text-slate-500">
@@ -505,6 +555,12 @@ function TicketContent({
                     <div className="text-slate-500">
                       <span className="text-xs text-slate-400 font-medium">{ar ? "تاريخ الميلاد: " : "DOB: "}</span>
                       {p.dob}
+                    </div>
+                  )}
+                  {p.email && (
+                    <div className="text-slate-500">
+                      <span className="text-xs text-slate-400 font-medium">{ar ? "البريد: " : "Email: "}</span>
+                      {p.email}
                     </div>
                   )}
                 </div>
@@ -616,42 +672,83 @@ export function FlightTicket({
   const [step, setStep] = useState<Step>("passengers");
   const [passengerDetails, setPassengerDetails] = useState<PassengerInfo[]>(
     Array.from({ length: Math.max(totalPax, 1) }, () => ({
-      fullName: "", passport: "", nationality: "", dob: "",
+      givenName: "", familyName: "", title: "" as PassengerInfo["title"],
+      gender: "" as PassengerInfo["gender"], dob: "", email: "", phone: "",
+      passport: "", nationality: "",
     }))
   );
   const [bookingRef] = useState(() => genRef("ABT"));
   const [confirmedRef] = useState(() => genRef("CNF"));
-  const createBooking = useCreateBooking();
-  const { user } = useAuth();
+  const [duffelBookingRef, setDuffelBookingRef] = useState<string | null>(null);
+  const [duffelOrderId, setDuffelOrderId] = useState<string | null>(null);
+  const [isBooking, setIsBooking] = useState(false);
+  const { accessToken } = useAuth();
 
   const updatePassenger = (i: number, info: PassengerInfo) => {
     setPassengerDetails(prev => prev.map((p, idx) => idx === i ? info : p));
   };
 
-  const hasMinData = passengerDetails[0]?.fullName.trim().length > 0;
+  const p0 = passengerDetails[0];
+  const hasMinData = !!(
+    p0?.givenName.trim() &&
+    p0?.familyName.trim() &&
+    p0?.dob &&
+    p0?.email.trim() &&
+    p0?.phone.trim() &&
+    p0?.title &&
+    p0?.gender
+  );
 
   const handlePrint = () => window.print();
 
-  /** Save booking to DB then advance to confirmed step */
-  const handleConfirm = () => {
-    if (!hasMinData) return;
+  /** Call POST /api/flights/book → real Duffel order, then advance to confirmed step */
+  const handleConfirm = async () => {
+    if (!hasMinData || isBooking) return;
+    setIsBooking(true);
     const firstSeg = offer.segments[0];
     const lastSeg = offer.segments[offer.segments.length - 1];
-    createBooking.mutate({
-      data: {
-        type: "flight",
-        clientName: passengerDetails[0]?.fullName || (user ? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim() : "—"),
-        clientPhone: user?.phone ?? "—",
-        clientEmail: user?.email ?? undefined,
-        destination: `${firstSeg?.originIata} → ${lastSeg?.destinationIata}`,
-        travelDate: firstSeg?.departureAt?.slice(0, 10),
-        adults: passengers.adults,
-        children: passengers.children,
-        totalPrice: offer.totalPrice,
-        notes: `${firstSeg?.airlineName} · ${firstSeg?.flightNumber} · ${confirmedRef}`,
+    try {
+      const headers: HeadersInit = { "Content-Type": "application/json" };
+      if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+      const resp = await fetch("/api/flights/book", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          providerSlug: offer.providerSlug,
+          providerOfferId: offer.providerOfferId,
+          passengers: passengerDetails.map(p => ({
+            givenName: p.givenName,
+            familyName: p.familyName,
+            title: p.title || "mr",
+            gender: p.gender || "m",
+            dob: p.dob,
+            email: p.email,
+            phone: p.phone,
+            passport: p.passport,
+            nationality: p.nationality,
+          })),
+          adults: passengers.adults,
+          children: passengers.children,
+          totalPrice: offer.totalPrice,
+          currency: offer.currency,
+          destination: firstSeg && lastSeg
+            ? `${firstSeg.originIata} → ${lastSeg.destinationIata}` : undefined,
+          travelDate: firstSeg?.departureAt?.slice(0, 10),
+        }),
+      });
+      if (resp.ok) {
+        const data = await resp.json() as {
+          bookingReference?: string; orderId?: string | null; bookingId?: number;
+        };
+        if (data.bookingReference) setDuffelBookingRef(data.bookingReference);
+        if (data.orderId) setDuffelOrderId(data.orderId);
       }
-    });
-    setStep("confirmed");
+    } catch (err) {
+      console.error("Flight booking API error:", err);
+    } finally {
+      setIsBooking(false);
+      setStep("confirmed");
+    }
   };
 
   /* ── Step: Passenger form ── */
@@ -734,22 +831,22 @@ export function FlightTicket({
             </button>
             <button
               onClick={handleConfirm}
-              disabled={!hasMinData || createBooking.isPending}
+              disabled={!hasMinData || isBooking}
               className="py-3.5 bg-[#c8a84b] hover:bg-[#b8973b] disabled:bg-white/20 disabled:text-white/40
                 text-white rounded-2xl font-black transition-all shadow-lg shadow-amber-900/20
                 flex items-center justify-center gap-2"
             >
               <CreditCard className="h-4 w-4" />
-              {createBooking.isPending
-                ? (ar ? "جارٍ الحفظ…" : "Saving…")
+              {isBooking
+                ? (ar ? "جارٍ الحجز…" : "Booking…")
                 : (ar ? "تأكيد الدفع وإصدار التذكرة" : "Pay & Issue Ticket")}
             </button>
           </div>
           {!hasMinData && (
             <p className="text-center text-amber-400/70 text-xs mt-2">
               {ar
-                ? "* أدخل اسم المسافر الأول على الأقل لإصدار تذكرة مؤكدة"
-                : "* Enter at least the first passenger's name to issue a confirmed ticket"}
+                ? "* أكمل بيانات الاسم والبريد والهاتف والجنس واللقب والميلاد"
+                : "* Fill in name, email, phone, gender, title and date of birth"}
             </p>
           )}
         </div>
@@ -759,7 +856,10 @@ export function FlightTicket({
 
   /* ── Step: Ticket (provisional or confirmed) ── */
   const isConfirmed = step === "confirmed";
-  const ref = isConfirmed ? confirmedRef : bookingRef;
+  // Use real Duffel PNR when available, otherwise use local reference
+  const ref = isConfirmed
+    ? (duffelBookingRef ?? confirmedRef)
+    : bookingRef;
 
   return (
     <div
@@ -825,12 +925,12 @@ export function FlightTicket({
           {!isConfirmed && (
             <button
               onClick={handleConfirm}
-              disabled={createBooking.isPending}
+              disabled={isBooking}
               className="flex-1 py-3.5 bg-[#c8a84b] hover:bg-[#b8973b] disabled:bg-white/20 text-white rounded-2xl font-black transition-all shadow-lg shadow-amber-900/20 flex items-center justify-center gap-2"
             >
               <CreditCard className="h-4 w-4" />
-              {createBooking.isPending
-                ? (ar ? "جارٍ الحفظ…" : "Saving…")
+              {isBooking
+                ? (ar ? "جارٍ الحجز…" : "Booking…")
                 : (ar ? "تأكيد الدفع وإصدار التذكرة النهائية" : "Pay & Issue Confirmed Ticket")}
             </button>
           )}

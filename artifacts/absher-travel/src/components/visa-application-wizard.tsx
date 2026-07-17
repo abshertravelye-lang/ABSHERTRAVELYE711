@@ -8,7 +8,6 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateVisaApplication, Visa, VisaApplicationInput } from "@workspace/api-client-react";
-import { useUpload } from "@workspace/object-storage-web";
 import { CountrySelect } from "@/components/country-select";
 import {
   CheckCircle, X, UploadCloud, AlertCircle, ArrowRight, ArrowLeft,
@@ -65,12 +64,34 @@ const STEP_META: Record<StepId, { arTitle: string; enTitle: string; icon: React.
 function FileUploadField({ label, value, onChange, required, language }: {
   label: string; value?: string; onChange: (val: string) => void; required?: boolean; language: string;
 }) {
-  const { uploadFile, isUploading, error, progress } = useUpload({ basePath: "/api/storage" });
+  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const res = await uploadFile(file);
-      if (res) onChange(res.objectPath);
+    if (!file) return;
+    setIsUploading(true);
+    setError(null);
+    setProgress(10);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      setProgress(40);
+      const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+      const res = await fetch(`${base}/api/storage/uploads`, { method: "POST", body: formData });
+      setProgress(90);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "فشل الرفع");
+      }
+      const data = await res.json();
+      setProgress(100);
+      onChange(data.objectPath);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "فشل الرفع");
+    } finally {
+      setIsUploading(false);
     }
   };
   return (
@@ -110,7 +131,7 @@ function FileUploadField({ label, value, onChange, required, language }: {
       )}
       {error && (
         <p className="text-xs text-red-500 flex items-center gap-1">
-          <AlertCircle className="w-3 h-3" /> {error.message}
+          <AlertCircle className="w-3 h-3" /> {error}
         </p>
       )}
     </div>

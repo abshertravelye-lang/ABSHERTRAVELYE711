@@ -6,7 +6,6 @@ import {
   useListMyBookings, useUpdateProfile, useGetCurrentUser, getGetCurrentUserQueryKey,
   VisaApplication, Notification as ApiNotification, Booking
 } from "@workspace/api-client-react";
-import { useUpload } from "@workspace/object-storage-web";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -155,8 +154,17 @@ const getDisplayUrl = (url?: string | null) => {
   return url;
 };
 
+async function uploadFileDirect(file: File): Promise<{ objectPath: string } | null> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+  const res = await fetch(`${base}/api/storage/uploads`, { method: "POST", body: formData });
+  if (!res.ok) return null;
+  return res.json();
+}
+
 function ProfileFileUpload({ label, value, onChange }: { label: string; value?: string | null; onChange: (url: string) => void }) {
-  const { uploadFile, isUploading } = useUpload({ basePath: "/api/storage" });
+  const [isUploading, setIsUploading] = useState(false);
   return (
     <div>
       <Label className="text-sm font-semibold">{label}</Label>
@@ -170,7 +178,10 @@ function ProfileFileUpload({ label, value, onChange }: { label: string; value?: 
         <label className="mt-2 flex items-center justify-center gap-2 px-4 py-6 border-2 border-dashed rounded-xl cursor-pointer bg-slate-50 hover:bg-primary/5 hover:border-primary/40 transition-colors text-sm text-slate-500">
           <input type="file" className="hidden" onChange={async e => {
             const f = e.target.files?.[0]; if (!f) return;
-            const r = await uploadFile(f); if (r) onChange(r.objectPath);
+            setIsUploading(true);
+            const r = await uploadFileDirect(f);
+            setIsUploading(false);
+            if (r) onChange(r.objectPath);
           }} disabled={isUploading} />
           {isUploading ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : <Camera className="h-5 w-5 text-slate-400" />}
           <span className="font-medium">{isUploading ? "جاري الرفع..." : "اختر ملفاً"}</span>
@@ -243,7 +254,7 @@ export default function Account() {
     }
   });
 
-  const { uploadFile: uploadAvatar, isUploading: isUploadingAvatar } = useUpload({ basePath: "/api/storage" });
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
   const handleSaveProfile = () => {
     updateProfileMutation.mutate({ data: profile });
@@ -378,7 +389,10 @@ export default function Account() {
                     {isUploadingAvatar ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
                     <input type="file" className="hidden" accept="image/*" onChange={async e => {
                        const f = e.target.files?.[0]; if (!f) return;
-                       const r = await uploadAvatar(f); if (r) setProfile((p: typeof profile) => ({ ...p, profilePhotoUrl: r.objectPath }));
+                       setIsUploadingAvatar(true);
+                       const r = await uploadFileDirect(f);
+                       setIsUploadingAvatar(false);
+                       if (r) setProfile((p: typeof profile) => ({ ...p, profilePhotoUrl: r.objectPath }));
                     }} disabled={isUploadingAvatar} />
                   </label>
                 </div>

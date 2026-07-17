@@ -513,15 +513,46 @@ export function VisaApplicationWizard({ visa, open, onOpenChange }: { visa: Visa
           )}
 
           {currentStep === "success" && (
-            <div className="text-center py-12 px-4 space-y-5 animate-in zoom-in-95 duration-300">
-              <div className="w-20 h-20 bg-green-50 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm border border-green-100">
-                <CheckCircle className="w-10 h-10" />
+            <div className="flex flex-col items-center py-10 px-4 space-y-6 animate-in zoom-in-95 duration-300">
+              {/* Icon */}
+              <div className="w-24 h-24 bg-green-50 text-green-500 rounded-full flex items-center justify-center shadow-sm border-2 border-green-200">
+                <CheckCircle className="w-12 h-12" />
               </div>
-              <h2 className="text-2xl font-bold text-slate-800">{ar ? "تم استلام الطلب بنجاح" : "Application Received Successfully"}</h2>
-              <p className="text-slate-600 max-w-sm mx-auto leading-relaxed">
-                {ar ? `تم استلام طلب التأشيرة الخاص بك ورقم الطلب هو` : `Your visa application has been received. Your Application ID is`}<br />
-                <strong className="text-primary text-xl mt-2 block">#{applicationId}</strong>
-              </p>
+
+              {/* Title */}
+              <div className="text-center space-y-1">
+                <h2 className="text-2xl font-black text-slate-800">
+                  {ar ? "تم استلام الطلب بنجاح ✓" : "Application Submitted ✓"}
+                </h2>
+                <p className="text-slate-500 text-sm">
+                  {ar
+                    ? `تأشيرة ${visa.countryAr} — ${visa.visaType}`
+                    : `${visa.countryEn} Visa — ${visa.visaType}`}
+                </p>
+              </div>
+
+              {/* Reference card */}
+              <div className="w-full max-w-sm bg-gradient-to-br from-[#0d2351] to-[#1a3875] rounded-2xl p-5 text-center shadow-lg">
+                <p className="text-white/60 text-xs uppercase tracking-widest font-semibold mb-2">
+                  {ar ? "رقم الطلب" : "Application Reference"}
+                </p>
+                <p className="text-[#c8a84b] font-black text-3xl tracking-widest">
+                  VIS-{String(applicationId).padStart(6, "0")}
+                </p>
+                <p className="text-white/40 text-xs mt-2">
+                  {ar ? "احتفظ بهذا الرقم للمتابعة" : "Keep this number to track your application"}
+                </p>
+              </div>
+
+              {/* Next steps */}
+              <div className="w-full max-w-sm bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 space-y-1">
+                <p className="font-bold">{ar ? "الخطوات التالية:" : "What's next:"}</p>
+                <p className="text-amber-700 leading-relaxed">
+                  {ar
+                    ? "سيقوم فريقنا بمراجعة طلبك وسيتواصل معك خلال 1-2 يوم عمل على البريد الإلكتروني أو رقم الهاتف المُدخَل."
+                    : "Our team will review your application and contact you within 1–2 business days via the email or phone number you provided."}
+                </p>
+              </div>
             </div>
           )}
         </div>

@@ -9,7 +9,7 @@ import {
   UpdateVisaApplicationParams,
   UpdateVisaApplicationBody,
 } from "@workspace/api-zod";
-import { requireAuth, requireRole } from "../middleware/auth";
+import { requireAuth, requireRole, optionalAuth } from "../middleware/auth";
 
 const router = Router();
 
@@ -93,9 +93,10 @@ router.get("/visa-applications", requireAuth, async (req, res) => {
   }
 });
 
-// Submitting a visa application requires an account — guests can browse visas freely,
-// but must register/log in first, per the platform's auth policy.
-router.post("/visa-applications", requireAuth, async (req, res) => {
+// Visa applications are accepted from both guests and logged-in users.
+// userId is stored when available (links the application to "My Requests"),
+// but a missing session never blocks submission.
+router.post("/visa-applications", optionalAuth, async (req, res) => {
   try {
     const body = CreateVisaApplicationBody.parse(req.body);
 
@@ -135,20 +136,28 @@ router.post("/visa-applications", requireAuth, async (req, res) => {
       }
     }
 
-    const data: Record<string, unknown> = { ...body, userId: req.user!.sub };
+    const userId = (req as Record<string, unknown> & { user?: { sub?: string } }).user?.sub ?? null;
+    const data: Record<string, unknown> = { ...body, ...(userId ? { userId } : {}) };
     const [row] = await db.insert(visaApplicationSubmissionsTable).values(data as never).returning();
 
-    await db.insert(notificationsTable).values({
-      userId: req.user!.sub,
-      ...STATUS_MESSAGES.received,
-      relatedEntityType: "visa_application",
-      relatedEntityId: String(row.id),
-    });
+    // Notification only makes sense for logged-in users who can view "My Requests"
+    if (userId) {
+      await db.insert(notificationsTable).values({
+        userId,
+        ...STATUS_MESSAGES.received,
+        relatedEntityType: "visa_application",
+        relatedEntityId: String(row.id),
+      });
+    }
 
     res.status(201).json(toResponse(row));
-  } catch (e) {
+  } catch (e: unknown) {
     req.log.error(e);
-    res.status(400).json({ error: "Invalid input" });
+    // Distinguish Zod validation errors (400) from unexpected server errors (500)
+    if (e && typeof e === "object" && "name" in e && (e as { name: string }).name === "ZodError") {
+      return res.status(400).json({ error: "Invalid input", details: e });
+    }
+    res.status(500).json({ error: "An error occurred while processing your application. Please try again." });
   }
 });
 

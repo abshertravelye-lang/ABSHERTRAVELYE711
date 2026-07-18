@@ -25,7 +25,7 @@ export default function ProgramDetailScreen() {
           { text: 'إلغاء', style: 'cancel' },
           {
             text: 'تأكيد الحجز',
-            onPress: (name) => confirmBook(name || 'زبون'),
+            onPress: (name?: string) => confirmBook(name || 'زبون'),
           },
         ])
       : Alert.alert('احجز الآن', 'هل تريد حجز هذا البرنامج؟', [

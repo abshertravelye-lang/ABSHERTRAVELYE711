@@ -237,6 +237,221 @@ export interface ProgramUpdate {
   isActive?: boolean;
 }
 
+export type VisaCountryRegion = typeof VisaCountryRegion[keyof typeof VisaCountryRegion];
+
+
+export const VisaCountryRegion = {
+  gulf: 'gulf',
+  arab: 'arab',
+  asian: 'asian',
+  european: 'european',
+  african: 'african',
+  american: 'american',
+} as const;
+
+export interface VisaCountry {
+  id: number;
+  nameAr: string;
+  nameEn: string;
+  countryCode: string;
+  region: VisaCountryRegion;
+  /** @nullable */
+  imageUrl?: string | null;
+  /** @nullable */
+  flagEmoji?: string | null;
+  /** @nullable */
+  descriptionAr?: string | null;
+  /** @nullable */
+  descriptionEn?: string | null;
+  isActive: boolean;
+  sortOrder: number;
+  visaCount?: number;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export type VisaCountryInputRegion = typeof VisaCountryInputRegion[keyof typeof VisaCountryInputRegion];
+
+
+export const VisaCountryInputRegion = {
+  gulf: 'gulf',
+  arab: 'arab',
+  asian: 'asian',
+  european: 'european',
+  african: 'african',
+  american: 'american',
+} as const;
+
+export interface VisaCountryInput {
+  nameAr: string;
+  nameEn: string;
+  countryCode: string;
+  region: VisaCountryInputRegion;
+  imageUrl?: string;
+  flagEmoji?: string;
+  descriptionAr?: string;
+  descriptionEn?: string;
+  isActive?: boolean;
+  sortOrder?: number;
+}
+
+export type VisaCountryUpdateRegion = typeof VisaCountryUpdateRegion[keyof typeof VisaCountryUpdateRegion];
+
+
+export const VisaCountryUpdateRegion = {
+  gulf: 'gulf',
+  arab: 'arab',
+  asian: 'asian',
+  european: 'european',
+  african: 'african',
+  american: 'american',
+} as const;
+
+export interface VisaCountryUpdate {
+  nameAr?: string;
+  nameEn?: string;
+  countryCode?: string;
+  region?: VisaCountryUpdateRegion;
+  imageUrl?: string;
+  flagEmoji?: string;
+  descriptionAr?: string;
+  descriptionEn?: string;
+  isActive?: boolean;
+  sortOrder?: number;
+}
+
+export type VisaCustomFieldFieldType = typeof VisaCustomFieldFieldType[keyof typeof VisaCustomFieldFieldType];
+
+
+export const VisaCustomFieldFieldType = {
+  text: 'text',
+  textarea: 'textarea',
+  number: 'number',
+  select: 'select',
+  boolean: 'boolean',
+  date: 'date',
+} as const;
+
+export interface VisaCustomField {
+  id: number;
+  visaId: number;
+  labelAr: string;
+  labelEn: string;
+  fieldType: VisaCustomFieldFieldType;
+  isRequired: boolean;
+  options?: string[];
+  /** @nullable */
+  placeholderAr?: string | null;
+  /** @nullable */
+  placeholderEn?: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export type VisaCustomFieldInputFieldType = typeof VisaCustomFieldInputFieldType[keyof typeof VisaCustomFieldInputFieldType];
+
+
+export const VisaCustomFieldInputFieldType = {
+  text: 'text',
+  textarea: 'textarea',
+  number: 'number',
+  select: 'select',
+  boolean: 'boolean',
+  date: 'date',
+} as const;
+
+export interface VisaCustomFieldInput {
+  labelAr: string;
+  labelEn: string;
+  fieldType: VisaCustomFieldInputFieldType;
+  isRequired?: boolean;
+  options?: string[];
+  placeholderAr?: string;
+  placeholderEn?: string;
+  sortOrder?: number;
+  isActive?: boolean;
+}
+
+export type VisaCustomFieldUpdateFieldType = typeof VisaCustomFieldUpdateFieldType[keyof typeof VisaCustomFieldUpdateFieldType];
+
+
+export const VisaCustomFieldUpdateFieldType = {
+  text: 'text',
+  textarea: 'textarea',
+  number: 'number',
+  select: 'select',
+  boolean: 'boolean',
+  date: 'date',
+} as const;
+
+export interface VisaCustomFieldUpdate {
+  labelAr?: string;
+  labelEn?: string;
+  fieldType?: VisaCustomFieldUpdateFieldType;
+  isRequired?: boolean;
+  options?: string[];
+  placeholderAr?: string;
+  placeholderEn?: string;
+  sortOrder?: number;
+  isActive?: boolean;
+}
+
+export interface OcrResult {
+  success: boolean;
+  /** @nullable */
+  fullName?: string | null;
+  /** @nullable */
+  fullNameEn?: string | null;
+  /** @nullable */
+  passportNumber?: string | null;
+  /** @nullable */
+  nationality?: string | null;
+  /** @nullable */
+  gender?: string | null;
+  /** @nullable */
+  dateOfBirth?: string | null;
+  /** @nullable */
+  issueDate?: string | null;
+  /** @nullable */
+  expiryDate?: string | null;
+  /** @nullable */
+  issuingCountry?: string | null;
+  /** @nullable */
+  error?: string | null;
+}
+
+export type VisaApplicationTrackingStatus = typeof VisaApplicationTrackingStatus[keyof typeof VisaApplicationTrackingStatus];
+
+
+export const VisaApplicationTrackingStatus = {
+  received: 'received',
+  under_review: 'under_review',
+  awaiting_documents: 'awaiting_documents',
+  documents_uploaded: 'documents_uploaded',
+  sent_to_embassy: 'sent_to_embassy',
+  processing: 'processing',
+  issued: 'issued',
+  completed: 'completed',
+  rejected: 'rejected',
+  cancelled: 'cancelled',
+} as const;
+
+export interface VisaApplicationTracking {
+  id: number;
+  trackingNumber: string;
+  status: VisaApplicationTrackingStatus;
+  visaType: string;
+  countryAr: string;
+  countryEn: string;
+  fullName: string;
+  /** @nullable */
+  adminNotes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type VisaCategory = typeof VisaCategory[keyof typeof VisaCategory];
 
 
@@ -269,6 +484,8 @@ export const VisaStatus = {
 
 export interface Visa {
   id: number;
+  /** @nullable */
+  countryId?: number | null;
   countryAr: string;
   countryEn: string;
   countryCode?: string;
@@ -468,6 +685,8 @@ export const VisaApplicationGender = {
   female: 'female',
 } as const;
 
+export type VisaApplicationCustomFieldResponses = { [key: string]: unknown };
+
 export type VisaApplicationStatus = typeof VisaApplicationStatus[keyof typeof VisaApplicationStatus];
 
 
@@ -481,10 +700,13 @@ export const VisaApplicationStatus = {
   issued: 'issued',
   completed: 'completed',
   rejected: 'rejected',
+  cancelled: 'cancelled',
 } as const;
 
 export interface VisaApplication {
   id: number;
+  /** @nullable */
+  trackingNumber?: string | null;
   visaId: number;
   /** @nullable */
   userId?: string | null;
@@ -494,14 +716,20 @@ export interface VisaApplication {
   /** @nullable */
   alternativeRegion?: string | null;
   fullName: string;
+  /** @nullable */
+  fullNameEn?: string | null;
   nationality: string;
+  gender: VisaApplicationGender;
+  dateOfBirth: string;
+  /** @nullable */
+  countryOfResidence?: string | null;
+  email: string;
+  phone: string;
   passportNumber: string;
   passportIssueDate: string;
   passportExpiryDate: string;
-  dateOfBirth: string;
-  gender: VisaApplicationGender;
-  email: string;
-  phone: string;
+  /** @nullable */
+  passportIssuingCountry?: string | null;
   /** @nullable */
   passportImageUrl?: string | null;
   /** @nullable */
@@ -516,6 +744,7 @@ export interface VisaApplication {
   alternativeVisaExpiry?: string | null;
   /** @nullable */
   visaImageUrl?: string | null;
+  customFieldResponses?: VisaApplicationCustomFieldResponses;
   agreedToTerms: boolean;
   status: VisaApplicationStatus;
   /** @nullable */
@@ -541,20 +770,25 @@ export const VisaApplicationInputGender = {
   female: 'female',
 } as const;
 
+export type VisaApplicationInputCustomFieldResponses = { [key: string]: unknown };
+
 export interface VisaApplicationInput {
   visaId: number;
-  eligibilityPath: VisaApplicationInputEligibilityPath;
+  eligibilityPath?: VisaApplicationInputEligibilityPath;
   gccCountry?: string;
   alternativeRegion?: string;
   fullName: string;
+  fullNameEn?: string;
   nationality: string;
+  gender: VisaApplicationInputGender;
+  dateOfBirth: string;
+  countryOfResidence?: string;
+  email: string;
+  phone: string;
   passportNumber: string;
   passportIssueDate: string;
   passportExpiryDate: string;
-  dateOfBirth: string;
-  gender: VisaApplicationInputGender;
-  email: string;
-  phone: string;
+  passportIssuingCountry?: string;
   passportImageUrl?: string;
   personalPhotoUrl?: string;
   residencyImageUrl?: string;
@@ -562,6 +796,7 @@ export interface VisaApplicationInput {
   alternativeVisaNumber?: string;
   alternativeVisaExpiry?: string;
   visaImageUrl?: string;
+  customFieldResponses?: VisaApplicationInputCustomFieldResponses;
   agreedToTerms: boolean;
 }
 
@@ -578,6 +813,7 @@ export const VisaApplicationStatusUpdateStatus = {
   issued: 'issued',
   completed: 'completed',
   rejected: 'rejected',
+  cancelled: 'cancelled',
 } as const;
 
 export interface VisaApplicationStatusUpdate {
@@ -1020,6 +1256,45 @@ limit?: number;
 
 export type ListProgramsParams = {
 featured?: boolean;
+};
+
+export type ListVisaCountriesParams = {
+region?: ListVisaCountriesRegion;
+activeOnly?: boolean;
+};
+
+export type ListVisaCountriesRegion = typeof ListVisaCountriesRegion[keyof typeof ListVisaCountriesRegion];
+
+
+export const ListVisaCountriesRegion = {
+  gulf: 'gulf',
+  arab: 'arab',
+  asian: 'asian',
+  european: 'european',
+  african: 'african',
+  american: 'american',
+} as const;
+
+export type ListVisasParams = {
+countryId?: number;
+region?: ListVisasRegion;
+};
+
+export type ListVisasRegion = typeof ListVisasRegion[keyof typeof ListVisasRegion];
+
+
+export const ListVisasRegion = {
+  gulf: 'gulf',
+  arab: 'arab',
+  asian: 'asian',
+  european: 'european',
+  african: 'african',
+  american: 'american',
+} as const;
+
+export type OcrPassportBody = {
+  /** Object storage URL of the passport image */
+  imageUrl: string;
 };
 
 export type ListVisaApplicationsParams = {

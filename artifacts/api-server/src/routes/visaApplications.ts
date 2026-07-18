@@ -1,19 +1,22 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { visaApplicationSubmissionsTable, visasTable, notificationsTable } from "@workspace/db";
+import { visaApplicationSubmissionsTable, visasTable, notificationsTable, visaCustomFieldsTable } from "@workspace/db";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import {
-  CreateVisaApplicationBody,
   ListVisaApplicationsQueryParams,
   GetVisaApplicationParams,
   UpdateVisaApplicationParams,
   UpdateVisaApplicationBody,
 } from "@workspace/api-zod";
 import { requireAuth, requireRole, optionalAuth } from "../middleware/auth";
+import OpenAI from "openai";
 
 const router = Router();
 
-// Arabic/English copy shown to the customer at every stage of the pipeline.
+// ── OCR client ─────────────────────────────────────────────────────────────
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// ── Status notification copy ───────────────────────────────────────────────
 const STATUS_MESSAGES: Record<string, { titleAr: string; titleEn: string; messageAr: string; messageEn: string }> = {
   received: {
     titleAr: "تم استلام طلبك", titleEn: "Application received",
@@ -60,6 +63,11 @@ const STATUS_MESSAGES: Record<string, { titleAr: string; titleEn: string; messag
     messageAr: "نأسف لإعلامك بأن طلبك لم يتم قبوله. يرجى التواصل معنا لمزيد من التفاصيل.",
     messageEn: "We're sorry to inform you that your application was not approved. Please contact us for details.",
   },
+  cancelled: {
+    titleAr: "تم إلغاء الطلب", titleEn: "Application cancelled",
+    messageAr: "تم إلغاء طلبك.",
+    messageEn: "Your application has been cancelled.",
+  },
 };
 
 const toResponse = (r: typeof visaApplicationSubmissionsTable.$inferSelect) => ({
@@ -68,17 +76,112 @@ const toResponse = (r: typeof visaApplicationSubmissionsTable.$inferSelect) => (
   updatedAt: r.updatedAt.toISOString(),
 });
 
-// Normalizes a nationality string for case/whitespace-insensitive comparison
-// against the free-text allow/block lists configured per-visa in the admin panel.
 const normalize = (s: string) => s.trim().toLocaleLowerCase();
 
-// Admins see everything; a logged-in customer only sees their own applications ("My Requests").
+// Generate a unique tracking number: VISA-YYYY-XXXXXX
+function generateTrackingNumber(): string {
+  const year = new Date().getFullYear();
+  const rand = Math.floor(100000 + Math.random() * 900000);
+  return `VISA-${year}-${rand}`;
+}
+
+// ── OCR endpoint ──────────────────────────────────────────────────────────
+router.post("/visa-applications/ocr", async (req, res) => {
+  try {
+    const { imageUrl } = req.body;
+    if (!imageUrl) return res.status(400).json({ error: "imageUrl is required" });
+
+    const prompt = `You are a passport OCR system. Extract the following fields from the passport image and return ONLY a JSON object with these exact keys:
+- fullName (name in Arabic/native script if available)
+- fullNameEn (name in English / Latin script)
+- passportNumber
+- nationality (country name in English)
+- gender (male/female)
+- dateOfBirth (YYYY-MM-DD format)
+- issueDate (YYYY-MM-DD format)
+- expiryDate (YYYY-MM-DD format)
+- issuingCountry (country name in English)
+
+If a field cannot be read or is not visible, use null. Return only valid JSON, no markdown.`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            { type: "image_url", image_url: { url: imageUrl, detail: "high" } },
+          ],
+        },
+      ],
+      max_tokens: 500,
+    });
+
+    const text = response.choices[0]?.message?.content ?? "{}";
+    // Strip markdown code blocks if present
+    const jsonText = text.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
+    const data = JSON.parse(jsonText);
+
+    res.json({ success: true, ...data });
+  } catch (e) {
+    req.log.error(e);
+    res.json({ success: false, error: "Could not extract passport data. Please enter manually." });
+  }
+});
+
+// ── Tracking endpoint (public) ─────────────────────────────────────────────
+router.get("/visa-applications/track/:trackingNumber", async (req, res) => {
+  try {
+    const { trackingNumber } = req.params;
+    const [row] = await db
+      .select({
+        id: visaApplicationSubmissionsTable.id,
+        trackingNumber: visaApplicationSubmissionsTable.trackingNumber,
+        status: visaApplicationSubmissionsTable.status,
+        fullName: visaApplicationSubmissionsTable.fullName,
+        adminNotes: visaApplicationSubmissionsTable.adminNotes,
+        createdAt: visaApplicationSubmissionsTable.createdAt,
+        updatedAt: visaApplicationSubmissionsTable.updatedAt,
+        visaId: visaApplicationSubmissionsTable.visaId,
+      })
+      .from(visaApplicationSubmissionsTable)
+      .where(eq(visaApplicationSubmissionsTable.trackingNumber, trackingNumber));
+
+    if (!row) return res.status(404).json({ error: "Tracking number not found" });
+
+    // Get visa info
+    const [visa] = await db.select({
+      visaType: visasTable.visaType,
+      countryAr: visasTable.countryAr,
+      countryEn: visasTable.countryEn,
+    }).from(visasTable).where(eq(visasTable.id, row.visaId));
+
+    res.json({
+      id: row.id,
+      trackingNumber: row.trackingNumber,
+      status: row.status,
+      fullName: row.fullName,
+      adminNotes: row.adminNotes,
+      visaType: visa?.visaType ?? "",
+      countryAr: visa?.countryAr ?? "",
+      countryEn: visa?.countryEn ?? "",
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    });
+  } catch (e) {
+    req.log.error(e);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── List applications ──────────────────────────────────────────────────────
 router.get("/visa-applications", requireAuth, async (req, res) => {
   try {
     const query = ListVisaApplicationsQueryParams.parse(req.query);
     const conditions = [];
     if (query.visaId) conditions.push(eq(visaApplicationSubmissionsTable.visaId, query.visaId));
-    if (query.status) conditions.push(eq(visaApplicationSubmissionsTable.status, query.status));
+    if (query.status) conditions.push(eq(visaApplicationSubmissionsTable.status, query.status as any));
     const isStaff = ["agent", "admin", "super_admin"].includes(req.user!.role);
     if (!isStaff) conditions.push(eq(visaApplicationSubmissionsTable.userId, req.user!.sub));
     const rows = await db
@@ -93,21 +196,21 @@ router.get("/visa-applications", requireAuth, async (req, res) => {
   }
 });
 
-// Visa applications are accepted from both guests and logged-in users.
-// userId is stored when available (links the application to "My Requests"),
-// but a missing session never blocks submission.
+// ── Submit application ─────────────────────────────────────────────────────
 router.post("/visa-applications", optionalAuth, async (req, res) => {
   try {
-    const body = CreateVisaApplicationBody.parse(req.body);
+    const body = req.body;
+    if (!body.visaId || !body.fullName || !body.nationality || !body.passportNumber
+      || !body.passportIssueDate || !body.passportExpiryDate || !body.dateOfBirth
+      || !body.gender || !body.email || !body.phone) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
 
-    const [visa] = await db
-      .select()
-      .from(visasTable)
-      .where(and(eq(visasTable.id, body.visaId), isNull(visasTable.deletedAt)));
+    const [visa] = await db.select().from(visasTable)
+      .where(and(eq(visasTable.id, Number(body.visaId)), isNull(visasTable.deletedAt)));
     if (!visa) return res.status(404).json({ error: "Visa not found" });
 
-    // Server-side eligibility re-check (defense in depth — the client wizard
-    // already gates the flow, but the same per-visa rules must hold here).
+    // Server-side eligibility re-check
     if (body.eligibilityPath === "gcc" && !visa.acceptsGccResidency) {
       return res.status(422).json({ error: "GCC residency path is not accepted for this visa" });
     }
@@ -123,7 +226,7 @@ router.post("/visa-applications", optionalAuth, async (req, res) => {
         return res.status(422).json({ error: "Selected residency/visa region is not accepted for this visa" });
       }
     }
-    if (body.eligibilityPath === "direct") {
+    if (body.eligibilityPath === "direct" || !body.eligibilityPath) {
       const nationality = normalize(body.nationality);
       const blocked = visa.blockedNationalities.some((n) => normalize(n) === nationality);
       const allowedList = visa.allowedNationalities;
@@ -136,11 +239,53 @@ router.post("/visa-applications", optionalAuth, async (req, res) => {
       }
     }
 
-    const userId = (req as Record<string, unknown> & { user?: { sub?: string } }).user?.sub ?? null;
-    const data: Record<string, unknown> = { ...body, ...(userId ? { userId } : {}) };
-    const [row] = await db.insert(visaApplicationSubmissionsTable).values(data as never).returning();
+    const userId = (req as any).user?.sub ?? null;
 
-    // Notification only makes sense for logged-in users who can view "My Requests"
+    // Generate unique tracking number
+    let trackingNumber = generateTrackingNumber();
+    // Retry on collision (rare)
+    let attempts = 0;
+    while (attempts < 5) {
+      const [existing] = await db.select({ id: visaApplicationSubmissionsTable.id })
+        .from(visaApplicationSubmissionsTable)
+        .where(eq(visaApplicationSubmissionsTable.trackingNumber, trackingNumber));
+      if (!existing) break;
+      trackingNumber = generateTrackingNumber();
+      attempts++;
+    }
+
+    const insertData = {
+      trackingNumber,
+      visaId: Number(body.visaId),
+      eligibilityPath: body.eligibilityPath ?? "direct",
+      gccCountry: body.gccCountry ?? null,
+      alternativeRegion: body.alternativeRegion ?? null,
+      fullName: body.fullName,
+      fullNameEn: body.fullNameEn ?? null,
+      nationality: body.nationality,
+      gender: body.gender,
+      dateOfBirth: body.dateOfBirth,
+      countryOfResidence: body.countryOfResidence ?? null,
+      email: body.email,
+      phone: body.phone,
+      passportNumber: body.passportNumber,
+      passportIssueDate: body.passportIssueDate,
+      passportExpiryDate: body.passportExpiryDate,
+      passportIssuingCountry: body.passportIssuingCountry ?? null,
+      passportImageUrl: body.passportImageUrl ?? null,
+      personalPhotoUrl: body.personalPhotoUrl ?? null,
+      residencyImageUrl: body.residencyImageUrl ?? null,
+      residencyBackImageUrl: body.residencyBackImageUrl ?? null,
+      alternativeVisaNumber: body.alternativeVisaNumber ?? null,
+      alternativeVisaExpiry: body.alternativeVisaExpiry ?? null,
+      visaImageUrl: body.visaImageUrl ?? null,
+      customFieldResponses: body.customFieldResponses ?? {},
+      agreedToTerms: body.agreedToTerms ?? false,
+      ...(userId ? { userId } : {}),
+    };
+
+    const [row] = await db.insert(visaApplicationSubmissionsTable).values(insertData as never).returning();
+
     if (userId) {
       await db.insert(notificationsTable).values({
         userId,
@@ -153,7 +298,6 @@ router.post("/visa-applications", optionalAuth, async (req, res) => {
     res.status(201).json(toResponse(row));
   } catch (e: unknown) {
     req.log.error(e);
-    // Distinguish Zod validation errors (400) from unexpected server errors (500)
     if (e && typeof e === "object" && "name" in e && (e as { name: string }).name === "ZodError") {
       return res.status(400).json({ error: "Invalid input", details: e });
     }
@@ -161,6 +305,7 @@ router.post("/visa-applications", optionalAuth, async (req, res) => {
   }
 });
 
+// ── Get application ────────────────────────────────────────────────────────
 router.get("/visa-applications/:id", requireAuth, async (req, res) => {
   try {
     const { id } = GetVisaApplicationParams.parse({ id: Number(req.params.id) });
@@ -175,8 +320,7 @@ router.get("/visa-applications/:id", requireAuth, async (req, res) => {
   }
 });
 
-// Only staff can change an application's status; every change fires a
-// notification (section 7/9 of the spec: notify the customer at every stage).
+// ── Update application status (staff only) ─────────────────────────────────
 router.patch("/visa-applications/:id", requireAuth, requireRole("agent", "admin", "super_admin"), async (req, res) => {
   try {
     const { id } = UpdateVisaApplicationParams.parse({ id: Number(req.params.id) });

@@ -18,6 +18,10 @@ tags:
     description: Booking management
   - name: visas
     description: Visa information
+  - name: visa-countries
+    description: Visa destination countries
+  - name: visa-custom-fields
+    description: Visa custom application form fields
   - name: programs
     description: Tourist programs
   - name: contact
@@ -326,11 +330,139 @@ paths:
         "204":
           description: Deleted
 
+  /visa-countries:
+    get:
+      operationId: listVisaCountries
+      tags: [visa-countries]
+      summary: List visa destination countries
+      parameters:
+        - name: region
+          in: query
+          schema:
+            type: string
+            enum: [gulf, arab, asian, european, african, american]
+        - name: activeOnly
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: List of countries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VisaCountry"
+    post:
+      operationId: createVisaCountry
+      tags: [visa-countries]
+      summary: Create a visa country
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VisaCountryInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VisaCountry"
+
+  /visa-countries/{id}:
+    get:
+      operationId: getVisaCountry
+      tags: [visa-countries]
+      summary: Get a visa country with its visa count
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Country details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VisaCountry"
+    patch:
+      operationId: updateVisaCountry
+      tags: [visa-countries]
+      summary: Update a visa country
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VisaCountryUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VisaCountry"
+    delete:
+      operationId: deleteVisaCountry
+      tags: [visa-countries]
+      summary: Delete a visa country
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /visa-countries/{id}/visas:
+    get:
+      operationId: listVisasByCountry
+      tags: [visa-countries]
+      summary: List visa types for a specific country
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of visas for this country
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Visa"
+
   /visas:
     get:
       operationId: listVisas
       tags: [visas]
       summary: List visa information by country
+      parameters:
+        - name: countryId
+          in: query
+          schema:
+            type: integer
+        - name: region
+          in: query
+          schema:
+            type: string
+            enum: [gulf, arab, asian, european, african, american]
       responses:
         "200":
           description: List of visa entries
@@ -412,6 +544,133 @@ paths:
       responses:
         "204":
           description: Deleted
+
+  /visas/{id}/custom-fields:
+    get:
+      operationId: listVisaCustomFields
+      tags: [visa-custom-fields]
+      summary: List custom fields for a visa type
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of custom fields
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VisaCustomField"
+    post:
+      operationId: createVisaCustomField
+      tags: [visa-custom-fields]
+      summary: Add a custom field to a visa type
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VisaCustomFieldInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VisaCustomField"
+
+  /visa-custom-fields/{id}:
+    patch:
+      operationId: updateVisaCustomField
+      tags: [visa-custom-fields]
+      summary: Update a custom field
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VisaCustomFieldUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VisaCustomField"
+    delete:
+      operationId: deleteVisaCustomField
+      tags: [visa-custom-fields]
+      summary: Delete a custom field
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /visa-applications/track/{trackingNumber}:
+    get:
+      operationId: trackVisaApplication
+      tags: [visa-applications]
+      summary: Track a visa application by tracking number (public)
+      parameters:
+        - name: trackingNumber
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Application tracking info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VisaApplicationTracking"
+        "404":
+          description: Not found
+
+  /visa-applications/ocr:
+    post:
+      operationId: ocrPassport
+      tags: [visa-applications]
+      summary: Extract passport data from an uploaded image using OCR
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [imageUrl]
+              properties:
+                imageUrl:
+                  type: string
+                  description: Object storage URL of the passport image
+      responses:
+        "200":
+          description: Extracted passport data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OcrResult"
 
   /visa-applications:
     get:
@@ -1288,11 +1547,156 @@ components:
         featured: { type: boolean }
         isActive: { type: boolean }
 
+    VisaCountry:
+      type: object
+      required: [id, nameAr, nameEn, countryCode, region, isActive, sortOrder, createdAt]
+      properties:
+        id: { type: integer }
+        nameAr: { type: string }
+        nameEn: { type: string }
+        countryCode: { type: string }
+        region:
+          type: string
+          enum: [gulf, arab, asian, european, african, american]
+        imageUrl: { type: ["string", "null"] }
+        flagEmoji: { type: ["string", "null"] }
+        descriptionAr: { type: ["string", "null"] }
+        descriptionEn: { type: ["string", "null"] }
+        isActive: { type: boolean }
+        sortOrder: { type: integer }
+        visaCount: { type: integer }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+
+    VisaCountryInput:
+      type: object
+      required: [nameAr, nameEn, countryCode, region]
+      properties:
+        nameAr: { type: string }
+        nameEn: { type: string }
+        countryCode: { type: string }
+        region:
+          type: string
+          enum: [gulf, arab, asian, european, african, american]
+        imageUrl: { type: string }
+        flagEmoji: { type: string }
+        descriptionAr: { type: string }
+        descriptionEn: { type: string }
+        isActive: { type: boolean }
+        sortOrder: { type: integer }
+
+    VisaCountryUpdate:
+      type: object
+      properties:
+        nameAr: { type: string }
+        nameEn: { type: string }
+        countryCode: { type: string }
+        region:
+          type: string
+          enum: [gulf, arab, asian, european, african, american]
+        imageUrl: { type: string }
+        flagEmoji: { type: string }
+        descriptionAr: { type: string }
+        descriptionEn: { type: string }
+        isActive: { type: boolean }
+        sortOrder: { type: integer }
+
+    VisaCustomField:
+      type: object
+      required: [id, visaId, labelAr, labelEn, fieldType, isRequired, isActive, sortOrder, createdAt]
+      properties:
+        id: { type: integer }
+        visaId: { type: integer }
+        labelAr: { type: string }
+        labelEn: { type: string }
+        fieldType:
+          type: string
+          enum: [text, textarea, number, select, boolean, date]
+        isRequired: { type: boolean }
+        options:
+          type: array
+          items: { type: string }
+        placeholderAr: { type: ["string", "null"] }
+        placeholderEn: { type: ["string", "null"] }
+        sortOrder: { type: integer }
+        isActive: { type: boolean }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+
+    VisaCustomFieldInput:
+      type: object
+      required: [labelAr, labelEn, fieldType]
+      properties:
+        labelAr: { type: string }
+        labelEn: { type: string }
+        fieldType:
+          type: string
+          enum: [text, textarea, number, select, boolean, date]
+        isRequired: { type: boolean }
+        options:
+          type: array
+          items: { type: string }
+        placeholderAr: { type: string }
+        placeholderEn: { type: string }
+        sortOrder: { type: integer }
+        isActive: { type: boolean }
+
+    VisaCustomFieldUpdate:
+      type: object
+      properties:
+        labelAr: { type: string }
+        labelEn: { type: string }
+        fieldType:
+          type: string
+          enum: [text, textarea, number, select, boolean, date]
+        isRequired: { type: boolean }
+        options:
+          type: array
+          items: { type: string }
+        placeholderAr: { type: string }
+        placeholderEn: { type: string }
+        sortOrder: { type: integer }
+        isActive: { type: boolean }
+
+    OcrResult:
+      type: object
+      required: [success]
+      properties:
+        success: { type: boolean }
+        fullName: { type: ["string", "null"] }
+        fullNameEn: { type: ["string", "null"] }
+        passportNumber: { type: ["string", "null"] }
+        nationality: { type: ["string", "null"] }
+        gender: { type: ["string", "null"] }
+        dateOfBirth: { type: ["string", "null"] }
+        issueDate: { type: ["string", "null"] }
+        expiryDate: { type: ["string", "null"] }
+        issuingCountry: { type: ["string", "null"] }
+        error: { type: ["string", "null"] }
+
+    VisaApplicationTracking:
+      type: object
+      required: [id, trackingNumber, status, visaType, countryAr, countryEn, fullName, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        trackingNumber: { type: string }
+        status:
+          type: string
+          enum: [received, under_review, awaiting_documents, documents_uploaded, sent_to_embassy, processing, issued, completed, rejected, cancelled]
+        visaType: { type: string }
+        countryAr: { type: string }
+        countryEn: { type: string }
+        fullName: { type: string }
+        adminNotes: { type: ["string", "null"] }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+
     Visa:
       type: object
       required: [id, countryAr, countryEn, visaType, processingDays, fee, currency, entryType, status, isActive, createdAt]
       properties:
         id: { type: integer }
+        countryId: { type: ["integer", "null"] }
         countryAr: { type: string }
         countryEn: { type: string }
         countryCode: { type: string }
@@ -1442,6 +1846,7 @@ components:
       required: [id, visaId, eligibilityPath, fullName, nationality, passportNumber, passportIssueDate, passportExpiryDate, dateOfBirth, gender, email, phone, agreedToTerms, status, createdAt, updatedAt]
       properties:
         id: { type: integer }
+        trackingNumber: { type: ["string", "null"] }
         visaId: { type: integer }
         userId: { type: ["string", "null"] }
         eligibilityPath:
@@ -1450,16 +1855,19 @@ components:
         gccCountry: { type: ["string", "null"] }
         alternativeRegion: { type: ["string", "null"] }
         fullName: { type: string }
+        fullNameEn: { type: ["string", "null"] }
         nationality: { type: string }
-        passportNumber: { type: string }
-        passportIssueDate: { type: string }
-        passportExpiryDate: { type: string }
-        dateOfBirth: { type: string }
         gender:
           type: string
           enum: [male, female]
+        dateOfBirth: { type: string }
+        countryOfResidence: { type: ["string", "null"] }
         email: { type: string }
         phone: { type: string }
+        passportNumber: { type: string }
+        passportIssueDate: { type: string }
+        passportExpiryDate: { type: string }
+        passportIssuingCountry: { type: ["string", "null"] }
         passportImageUrl: { type: ["string", "null"] }
         personalPhotoUrl: { type: ["string", "null"] }
         residencyImageUrl: { type: ["string", "null"] }
@@ -1467,17 +1875,20 @@ components:
         alternativeVisaNumber: { type: ["string", "null"] }
         alternativeVisaExpiry: { type: ["string", "null"] }
         visaImageUrl: { type: ["string", "null"] }
+        customFieldResponses:
+          type: object
+          additionalProperties: true
         agreedToTerms: { type: boolean }
         status:
           type: string
-          enum: [received, under_review, awaiting_documents, documents_uploaded, sent_to_embassy, processing, issued, completed, rejected]
+          enum: [received, under_review, awaiting_documents, documents_uploaded, sent_to_embassy, processing, issued, completed, rejected, cancelled]
         adminNotes: { type: ["string", "null"] }
         createdAt: { type: string }
         updatedAt: { type: string }
 
     VisaApplicationInput:
       type: object
-      required: [visaId, eligibilityPath, fullName, nationality, passportNumber, passportIssueDate, passportExpiryDate, dateOfBirth, gender, email, phone, agreedToTerms]
+      required: [visaId, fullName, nationality, gender, dateOfBirth, email, phone, passportNumber, passportIssueDate, passportExpiryDate, agreedToTerms]
       properties:
         visaId: { type: integer }
         eligibilityPath:
@@ -1486,16 +1897,19 @@ components:
         gccCountry: { type: string }
         alternativeRegion: { type: string }
         fullName: { type: string }
+        fullNameEn: { type: string }
         nationality: { type: string }
-        passportNumber: { type: string }
-        passportIssueDate: { type: string }
-        passportExpiryDate: { type: string }
-        dateOfBirth: { type: string }
         gender:
           type: string
           enum: [male, female]
+        dateOfBirth: { type: string }
+        countryOfResidence: { type: string }
         email: { type: string }
         phone: { type: string }
+        passportNumber: { type: string }
+        passportIssueDate: { type: string }
+        passportExpiryDate: { type: string }
+        passportIssuingCountry: { type: string }
         passportImageUrl: { type: string }
         personalPhotoUrl: { type: string }
         residencyImageUrl: { type: string }
@@ -1503,6 +1917,9 @@ components:
         alternativeVisaNumber: { type: string }
         alternativeVisaExpiry: { type: string }
         visaImageUrl: { type: string }
+        customFieldResponses:
+          type: object
+          additionalProperties: true
         agreedToTerms: { type: boolean }
 
     VisaApplicationStatusUpdate:
@@ -1510,7 +1927,7 @@ components:
       properties:
         status:
           type: string
-          enum: [received, under_review, awaiting_documents, documents_uploaded, sent_to_embassy, processing, issued, completed, rejected]
+          enum: [received, under_review, awaiting_documents, documents_uploaded, sent_to_embassy, processing, issued, completed, rejected, cancelled]
         adminNotes: { type: string }
 
     Booking:

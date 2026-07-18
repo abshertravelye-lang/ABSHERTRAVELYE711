@@ -129,7 +129,7 @@ router.post("/flights/book", optionalAuth, async (req, res) => {
       return res.status(400).json({ error: "providerOfferId and passengers[] are required" });
     }
 
-    const userId = (req as Record<string, unknown> & { user?: { sub?: string } }).user?.sub ?? null;
+    const userId = (req as any).user?.sub ?? null;
     const p0 = passengers[0];
     const clientName = `${p0.givenName ?? ""} ${p0.familyName ?? ""}`.trim() || "—";
 

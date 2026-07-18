@@ -1,3 +1,6 @@
+- [Drizzle-Zod Zod v3 lock](drizzle-zod-compat.md) — drizzle-zod must stay ≤0.5.1; ≥0.8 breaks with Zod v3.
+- [lib tsconfig types-node drop](lib-tsconfig-node-types.md) — lib packages (db, countries) must not declare types:["node"]; tsc --build cannot resolve it in composite mode.
+- [Drizzle decimal as-any inserts](drizzle-decimal-any.md) — db.insert/update with Zod-parsed bodies containing decimal/enum columns needs "as any" to satisfy Drizzle's strict column types.
 - [Visa schema naming collision](absher-travel-visa-schema.md) — a pre-existing unused `visa_applications` table collided with a new feature; renamed to avoid silent data corruption.
 - [Monorepo tsc project references](monorepo-tsc-project-refs.md) — stale `dist/*.d.ts` in referenced lib packages can make tsc report "no exported member" even when src is correct; fix by rebuilding refs, not by re-reading src.
 - [No-auth posture in absher-travel](absher-travel-no-auth.md) — the app has no auth anywhere; new features should match that (deliberately, with tradeoffs flagged) rather than bolting on auth alone.

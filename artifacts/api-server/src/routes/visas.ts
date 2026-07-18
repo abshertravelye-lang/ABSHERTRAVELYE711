@@ -23,10 +23,13 @@ const toResponse = (r: typeof visasTable.$inferSelect) => ({
 
 router.get("/visas", async (req, res) => {
   try {
+    const { countryId, region } = req.query;
+    const conditions = [isNull(visasTable.deletedAt)];
+    if (countryId) conditions.push(eq(visasTable.countryId, Number(countryId)));
     const rows = await db
       .select()
       .from(visasTable)
-      .where(isNull(visasTable.deletedAt))
+      .where(and(...conditions))
       .orderBy(visasTable.countryEn);
     res.json(rows.map(toResponse));
   } catch (e) {

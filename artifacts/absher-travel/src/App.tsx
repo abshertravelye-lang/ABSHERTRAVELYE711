@@ -14,6 +14,11 @@ import DestinationDetail from "@/pages/destination-detail";
 import Offers from "@/pages/offers";
 import Programs from "@/pages/programs";
 import Visas from "@/pages/visas";
+import VisaCountryDetail from "@/pages/visa-country-detail";
+import VisaDetail from "@/pages/visa-detail";
+import VisaApply from "@/pages/visa-apply";
+import VisaSuccess from "@/pages/visa-success";
+import VisaTrack from "@/pages/visa-track";
 import About from "@/pages/about";
 import Contact from "@/pages/contact";
 import Flights from "@/pages/flights";
@@ -32,7 +37,14 @@ function Router() {
       <Route path="/destinations/:id" component={DestinationDetail} />
       <Route path="/offers" component={Offers} />
       <Route path="/programs" component={Programs} />
+      
       <Route path="/visas" component={Visas} />
+      <Route path="/visas/success" component={VisaSuccess} />
+      <Route path="/visas/track" component={VisaTrack} />
+      <Route path="/visas/apply/:visaId" component={VisaApply} />
+      <Route path="/visas/:countryId" component={VisaCountryDetail} />
+      <Route path="/visas/:countryId/:visaId" component={VisaDetail} />
+      
       <Route path="/about" component={About} />
       <Route path="/contact" component={Contact} />
       <Route path="/flights" component={Flights} />

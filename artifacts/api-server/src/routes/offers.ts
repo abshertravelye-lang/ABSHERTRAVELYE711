@@ -38,7 +38,7 @@ router.get("/offers", async (req, res) => {
 router.post("/offers", async (req, res) => {
   try {
     const body = CreateOfferBody.parse(req.body);
-    const [row] = await db.insert(offersTable).values(body).returning();
+    const [row] = await db.insert(offersTable).values(body as any).returning();
     res.status(201).json({ ...row, price: Number(row.price), createdAt: row.createdAt.toISOString() });
   } catch (e) {
     req.log.error(e);
@@ -62,7 +62,7 @@ router.patch("/offers/:id", async (req, res) => {
   try {
     const { id } = UpdateOfferParams.parse({ id: Number(req.params.id) });
     const body = UpdateOfferBody.parse(req.body);
-    const [row] = await db.update(offersTable).set(body).where(eq(offersTable.id, id)).returning();
+    const [row] = await db.update(offersTable).set(body as any).where(eq(offersTable.id, id)).returning();
     if (!row) return res.status(404).json({ error: "Not found" });
     res.json({ ...row, price: Number(row.price), createdAt: row.createdAt.toISOString() });
   } catch (e) {

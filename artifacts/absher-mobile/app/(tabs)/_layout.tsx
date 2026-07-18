@@ -26,7 +26,7 @@ function NativeTabLayout() {
         <Label>الرئيسية</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="flights">
-        <Icon sf={{ default: 'airplane', selected: 'airplane.fill' }} />
+        <Icon sf={{ default: 'airplane', selected: 'paperplane.fill' }} />
         <Label>رحلات</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="visas">
@@ -63,7 +63,7 @@ function ClassicTabLayout() {
     focused: boolean,
   ) =>
     isIOS
-      ? <SymbolView name={sfName} tintColor={color} size={24} />
+      ? <SymbolView name={sfName as Parameters<typeof SymbolView>[0]['name']} tintColor={color} size={24} />
       : <Ionicons name={focused ? filled : outline} size={24} color={color} />;
 
   return (

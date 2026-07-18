@@ -52,7 +52,7 @@ router.post("/bookings", optionalAuth, async (req, res) => {
     const body = CreateBookingBody.parse(req.body);
     // Attach userId if the request is authenticated
     const userId = (req as any).user?.sub ?? null;
-    const [row] = await db.insert(bookingsTable).values({ ...body, userId }).returning();
+    const [row] = await db.insert(bookingsTable).values({ ...body, userId } as any).returning();
     res.status(201).json(formatBooking(row));
   } catch (e) {
     req.log.error(e);
@@ -76,7 +76,7 @@ router.patch("/bookings/:id", async (req, res) => {
   try {
     const { id } = UpdateBookingParams.parse({ id: Number(req.params.id) });
     const body = UpdateBookingBody.parse(req.body);
-    const [row] = await db.update(bookingsTable).set(body).where(eq(bookingsTable.id, id)).returning();
+    const [row] = await db.update(bookingsTable).set(body as any).where(eq(bookingsTable.id, id)).returning();
     if (!row) return res.status(404).json({ error: "Not found" });
     res.json(formatBooking(row));
   } catch (e) {

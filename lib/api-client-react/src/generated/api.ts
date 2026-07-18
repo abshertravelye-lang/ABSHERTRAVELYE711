@@ -43,10 +43,14 @@ import type {
   ListOffersParams,
   ListProgramsParams,
   ListVisaApplicationsParams,
+  ListVisaCountriesParams,
+  ListVisasParams,
   LoginInput,
   LogoutUserBody,
   MarkAllNotificationsRead200,
   Notification,
+  OcrPassportBody,
+  OcrResult,
   Offer,
   OfferInput,
   OfferUpdate,
@@ -66,6 +70,13 @@ import type {
   VisaApplication,
   VisaApplicationInput,
   VisaApplicationStatusUpdate,
+  VisaApplicationTracking,
+  VisaCountry,
+  VisaCountryInput,
+  VisaCountryUpdate,
+  VisaCustomField,
+  VisaCustomFieldInput,
+  VisaCustomFieldUpdate,
   VisaInput,
   VisaUpdate
 } from './api.schemas';
@@ -1283,20 +1294,27 @@ export const useDeleteProgram = <TError = ErrorType<unknown>,
       return useMutation(getDeleteProgramMutationOptions(options));
     }
 
-export const getListVisasUrl = () => {
+export const getListVisaCountriesUrl = (params?: ListVisaCountriesParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/visas`
+  return stringifiedParams.length > 0 ? `/api/visa-countries?${stringifiedParams}` : `/api/visa-countries`
 }
 
 /**
- * @summary List visa information by country
+ * @summary List visa destination countries
  */
-export const listVisas = async ( options?: RequestInit): Promise<Visa[]> => {
+export const listVisaCountries = async (params?: ListVisaCountriesParams, options?: RequestInit): Promise<VisaCountry[]> => {
 
-  return customFetch<Visa[]>(getListVisasUrl(),
+  return customFetch<VisaCountry[]>(getListVisaCountriesUrl(params),
   {
     ...options,
     method: 'GET'
@@ -1309,23 +1327,472 @@ export const listVisas = async ( options?: RequestInit): Promise<Visa[]> => {
 
 
 
-export const getListVisasQueryKey = () => {
+export const getListVisaCountriesQueryKey = (params?: ListVisaCountriesParams,) => {
     return [
-    `/api/visas`
+    `/api/visa-countries`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getListVisasQueryOptions = <TData = Awaited<ReturnType<typeof listVisas>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVisas>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getListVisaCountriesQueryOptions = <TData = Awaited<ReturnType<typeof listVisaCountries>>, TError = ErrorType<unknown>>(params?: ListVisaCountriesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVisaCountries>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListVisasQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getListVisaCountriesQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listVisas>>> = ({ signal }) => listVisas({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listVisaCountries>>> = ({ signal }) => listVisaCountries(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listVisaCountries>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListVisaCountriesQueryResult = NonNullable<Awaited<ReturnType<typeof listVisaCountries>>>
+export type ListVisaCountriesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List visa destination countries
+ */
+
+export function useListVisaCountries<TData = Awaited<ReturnType<typeof listVisaCountries>>, TError = ErrorType<unknown>>(
+ params?: ListVisaCountriesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVisaCountries>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListVisaCountriesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateVisaCountryUrl = () => {
+
+
+
+
+  return `/api/visa-countries`
+}
+
+/**
+ * @summary Create a visa country
+ */
+export const createVisaCountry = async (visaCountryInput: VisaCountryInput, options?: RequestInit): Promise<VisaCountry> => {
+
+  return customFetch<VisaCountry>(getCreateVisaCountryUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(visaCountryInput)
+  }
+);}
+
+
+
+
+export const getCreateVisaCountryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVisaCountry>>, TError,{data: BodyType<VisaCountryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createVisaCountry>>, TError,{data: BodyType<VisaCountryInput>}, TContext> => {
+
+const mutationKey = ['createVisaCountry'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createVisaCountry>>, {data: BodyType<VisaCountryInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createVisaCountry(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateVisaCountryMutationResult = NonNullable<Awaited<ReturnType<typeof createVisaCountry>>>
+    export type CreateVisaCountryMutationBody = BodyType<VisaCountryInput>
+    export type CreateVisaCountryMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a visa country
+ */
+export const useCreateVisaCountry = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVisaCountry>>, TError,{data: BodyType<VisaCountryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createVisaCountry>>,
+        TError,
+        {data: BodyType<VisaCountryInput>},
+        TContext
+      > => {
+      return useMutation(getCreateVisaCountryMutationOptions(options));
+    }
+
+export const getGetVisaCountryUrl = (id: number,) => {
+
+
+
+
+  return `/api/visa-countries/${id}`
+}
+
+/**
+ * @summary Get a visa country with its visa count
+ */
+export const getVisaCountry = async (id: number, options?: RequestInit): Promise<VisaCountry> => {
+
+  return customFetch<VisaCountry>(getGetVisaCountryUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetVisaCountryQueryKey = (id: number,) => {
+    return [
+    `/api/visa-countries/${id}`
+    ] as const;
+    }
+
+
+export const getGetVisaCountryQueryOptions = <TData = Awaited<ReturnType<typeof getVisaCountry>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVisaCountry>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetVisaCountryQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getVisaCountry>>> = ({ signal }) => getVisaCountry(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getVisaCountry>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetVisaCountryQueryResult = NonNullable<Awaited<ReturnType<typeof getVisaCountry>>>
+export type GetVisaCountryQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get a visa country with its visa count
+ */
+
+export function useGetVisaCountry<TData = Awaited<ReturnType<typeof getVisaCountry>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getVisaCountry>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetVisaCountryQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateVisaCountryUrl = (id: number,) => {
+
+
+
+
+  return `/api/visa-countries/${id}`
+}
+
+/**
+ * @summary Update a visa country
+ */
+export const updateVisaCountry = async (id: number,
+    visaCountryUpdate: VisaCountryUpdate, options?: RequestInit): Promise<VisaCountry> => {
+
+  return customFetch<VisaCountry>(getUpdateVisaCountryUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(visaCountryUpdate)
+  }
+);}
+
+
+
+
+export const getUpdateVisaCountryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateVisaCountry>>, TError,{id: number;data: BodyType<VisaCountryUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateVisaCountry>>, TError,{id: number;data: BodyType<VisaCountryUpdate>}, TContext> => {
+
+const mutationKey = ['updateVisaCountry'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateVisaCountry>>, {id: number;data: BodyType<VisaCountryUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateVisaCountry(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateVisaCountryMutationResult = NonNullable<Awaited<ReturnType<typeof updateVisaCountry>>>
+    export type UpdateVisaCountryMutationBody = BodyType<VisaCountryUpdate>
+    export type UpdateVisaCountryMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update a visa country
+ */
+export const useUpdateVisaCountry = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateVisaCountry>>, TError,{id: number;data: BodyType<VisaCountryUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateVisaCountry>>,
+        TError,
+        {id: number;data: BodyType<VisaCountryUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateVisaCountryMutationOptions(options));
+    }
+
+export const getDeleteVisaCountryUrl = (id: number,) => {
+
+
+
+
+  return `/api/visa-countries/${id}`
+}
+
+/**
+ * @summary Delete a visa country
+ */
+export const deleteVisaCountry = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteVisaCountryUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteVisaCountryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteVisaCountry>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteVisaCountry>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteVisaCountry'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteVisaCountry>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteVisaCountry(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteVisaCountryMutationResult = NonNullable<Awaited<ReturnType<typeof deleteVisaCountry>>>
+
+    export type DeleteVisaCountryMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete a visa country
+ */
+export const useDeleteVisaCountry = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteVisaCountry>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteVisaCountry>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteVisaCountryMutationOptions(options));
+    }
+
+export const getListVisasByCountryUrl = (id: number,) => {
+
+
+
+
+  return `/api/visa-countries/${id}/visas`
+}
+
+/**
+ * @summary List visa types for a specific country
+ */
+export const listVisasByCountry = async (id: number, options?: RequestInit): Promise<Visa[]> => {
+
+  return customFetch<Visa[]>(getListVisasByCountryUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListVisasByCountryQueryKey = (id: number,) => {
+    return [
+    `/api/visa-countries/${id}/visas`
+    ] as const;
+    }
+
+
+export const getListVisasByCountryQueryOptions = <TData = Awaited<ReturnType<typeof listVisasByCountry>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVisasByCountry>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListVisasByCountryQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listVisasByCountry>>> = ({ signal }) => listVisasByCountry(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listVisasByCountry>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListVisasByCountryQueryResult = NonNullable<Awaited<ReturnType<typeof listVisasByCountry>>>
+export type ListVisasByCountryQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List visa types for a specific country
+ */
+
+export function useListVisasByCountry<TData = Awaited<ReturnType<typeof listVisasByCountry>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVisasByCountry>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListVisasByCountryQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListVisasUrl = (params?: ListVisasParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/visas?${stringifiedParams}` : `/api/visas`
+}
+
+/**
+ * @summary List visa information by country
+ */
+export const listVisas = async (params?: ListVisasParams, options?: RequestInit): Promise<Visa[]> => {
+
+  return customFetch<Visa[]>(getListVisasUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListVisasQueryKey = (params?: ListVisasParams,) => {
+    return [
+    `/api/visas`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListVisasQueryOptions = <TData = Awaited<ReturnType<typeof listVisas>>, TError = ErrorType<unknown>>(params?: ListVisasParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVisas>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListVisasQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listVisas>>> = ({ signal }) => listVisas(params, { signal, ...requestOptions });
 
 
 
@@ -1343,11 +1810,11 @@ export type ListVisasQueryError = ErrorType<unknown>
  */
 
 export function useListVisas<TData = Awaited<ReturnType<typeof listVisas>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVisas>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: ListVisasParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVisas>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getListVisasQueryOptions(options)
+  const queryOptions = getListVisasQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -1646,6 +2113,442 @@ export const useDeleteVisa = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteVisaMutationOptions(options));
+    }
+
+export const getListVisaCustomFieldsUrl = (id: number,) => {
+
+
+
+
+  return `/api/visas/${id}/custom-fields`
+}
+
+/**
+ * @summary List custom fields for a visa type
+ */
+export const listVisaCustomFields = async (id: number, options?: RequestInit): Promise<VisaCustomField[]> => {
+
+  return customFetch<VisaCustomField[]>(getListVisaCustomFieldsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListVisaCustomFieldsQueryKey = (id: number,) => {
+    return [
+    `/api/visas/${id}/custom-fields`
+    ] as const;
+    }
+
+
+export const getListVisaCustomFieldsQueryOptions = <TData = Awaited<ReturnType<typeof listVisaCustomFields>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVisaCustomFields>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListVisaCustomFieldsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listVisaCustomFields>>> = ({ signal }) => listVisaCustomFields(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listVisaCustomFields>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListVisaCustomFieldsQueryResult = NonNullable<Awaited<ReturnType<typeof listVisaCustomFields>>>
+export type ListVisaCustomFieldsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List custom fields for a visa type
+ */
+
+export function useListVisaCustomFields<TData = Awaited<ReturnType<typeof listVisaCustomFields>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVisaCustomFields>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListVisaCustomFieldsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateVisaCustomFieldUrl = (id: number,) => {
+
+
+
+
+  return `/api/visas/${id}/custom-fields`
+}
+
+/**
+ * @summary Add a custom field to a visa type
+ */
+export const createVisaCustomField = async (id: number,
+    visaCustomFieldInput: VisaCustomFieldInput, options?: RequestInit): Promise<VisaCustomField> => {
+
+  return customFetch<VisaCustomField>(getCreateVisaCustomFieldUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(visaCustomFieldInput)
+  }
+);}
+
+
+
+
+export const getCreateVisaCustomFieldMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVisaCustomField>>, TError,{id: number;data: BodyType<VisaCustomFieldInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createVisaCustomField>>, TError,{id: number;data: BodyType<VisaCustomFieldInput>}, TContext> => {
+
+const mutationKey = ['createVisaCustomField'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createVisaCustomField>>, {id: number;data: BodyType<VisaCustomFieldInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  createVisaCustomField(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateVisaCustomFieldMutationResult = NonNullable<Awaited<ReturnType<typeof createVisaCustomField>>>
+    export type CreateVisaCustomFieldMutationBody = BodyType<VisaCustomFieldInput>
+    export type CreateVisaCustomFieldMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Add a custom field to a visa type
+ */
+export const useCreateVisaCustomField = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVisaCustomField>>, TError,{id: number;data: BodyType<VisaCustomFieldInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createVisaCustomField>>,
+        TError,
+        {id: number;data: BodyType<VisaCustomFieldInput>},
+        TContext
+      > => {
+      return useMutation(getCreateVisaCustomFieldMutationOptions(options));
+    }
+
+export const getUpdateVisaCustomFieldUrl = (id: number,) => {
+
+
+
+
+  return `/api/visa-custom-fields/${id}`
+}
+
+/**
+ * @summary Update a custom field
+ */
+export const updateVisaCustomField = async (id: number,
+    visaCustomFieldUpdate: VisaCustomFieldUpdate, options?: RequestInit): Promise<VisaCustomField> => {
+
+  return customFetch<VisaCustomField>(getUpdateVisaCustomFieldUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(visaCustomFieldUpdate)
+  }
+);}
+
+
+
+
+export const getUpdateVisaCustomFieldMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateVisaCustomField>>, TError,{id: number;data: BodyType<VisaCustomFieldUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateVisaCustomField>>, TError,{id: number;data: BodyType<VisaCustomFieldUpdate>}, TContext> => {
+
+const mutationKey = ['updateVisaCustomField'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateVisaCustomField>>, {id: number;data: BodyType<VisaCustomFieldUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateVisaCustomField(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateVisaCustomFieldMutationResult = NonNullable<Awaited<ReturnType<typeof updateVisaCustomField>>>
+    export type UpdateVisaCustomFieldMutationBody = BodyType<VisaCustomFieldUpdate>
+    export type UpdateVisaCustomFieldMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update a custom field
+ */
+export const useUpdateVisaCustomField = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateVisaCustomField>>, TError,{id: number;data: BodyType<VisaCustomFieldUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateVisaCustomField>>,
+        TError,
+        {id: number;data: BodyType<VisaCustomFieldUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateVisaCustomFieldMutationOptions(options));
+    }
+
+export const getDeleteVisaCustomFieldUrl = (id: number,) => {
+
+
+
+
+  return `/api/visa-custom-fields/${id}`
+}
+
+/**
+ * @summary Delete a custom field
+ */
+export const deleteVisaCustomField = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteVisaCustomFieldUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteVisaCustomFieldMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteVisaCustomField>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteVisaCustomField>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteVisaCustomField'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteVisaCustomField>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteVisaCustomField(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteVisaCustomFieldMutationResult = NonNullable<Awaited<ReturnType<typeof deleteVisaCustomField>>>
+
+    export type DeleteVisaCustomFieldMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete a custom field
+ */
+export const useDeleteVisaCustomField = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteVisaCustomField>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteVisaCustomField>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteVisaCustomFieldMutationOptions(options));
+    }
+
+export const getTrackVisaApplicationUrl = (trackingNumber: string,) => {
+
+
+
+
+  return `/api/visa-applications/track/${trackingNumber}`
+}
+
+/**
+ * @summary Track a visa application by tracking number (public)
+ */
+export const trackVisaApplication = async (trackingNumber: string, options?: RequestInit): Promise<VisaApplicationTracking> => {
+
+  return customFetch<VisaApplicationTracking>(getTrackVisaApplicationUrl(trackingNumber),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getTrackVisaApplicationQueryKey = (trackingNumber: string,) => {
+    return [
+    `/api/visa-applications/track/${trackingNumber}`
+    ] as const;
+    }
+
+
+export const getTrackVisaApplicationQueryOptions = <TData = Awaited<ReturnType<typeof trackVisaApplication>>, TError = ErrorType<void>>(trackingNumber: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof trackVisaApplication>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getTrackVisaApplicationQueryKey(trackingNumber);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof trackVisaApplication>>> = ({ signal }) => trackVisaApplication(trackingNumber, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: trackingNumber !== null && trackingNumber !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof trackVisaApplication>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type TrackVisaApplicationQueryResult = NonNullable<Awaited<ReturnType<typeof trackVisaApplication>>>
+export type TrackVisaApplicationQueryError = ErrorType<void>
+
+
+/**
+ * @summary Track a visa application by tracking number (public)
+ */
+
+export function useTrackVisaApplication<TData = Awaited<ReturnType<typeof trackVisaApplication>>, TError = ErrorType<void>>(
+ trackingNumber: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof trackVisaApplication>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getTrackVisaApplicationQueryOptions(trackingNumber,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getOcrPassportUrl = () => {
+
+
+
+
+  return `/api/visa-applications/ocr`
+}
+
+/**
+ * @summary Extract passport data from an uploaded image using OCR
+ */
+export const ocrPassport = async (ocrPassportBody: OcrPassportBody, options?: RequestInit): Promise<OcrResult> => {
+
+  return customFetch<OcrResult>(getOcrPassportUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(ocrPassportBody)
+  }
+);}
+
+
+
+
+export const getOcrPassportMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ocrPassport>>, TError,{data: BodyType<OcrPassportBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof ocrPassport>>, TError,{data: BodyType<OcrPassportBody>}, TContext> => {
+
+const mutationKey = ['ocrPassport'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof ocrPassport>>, {data: BodyType<OcrPassportBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  ocrPassport(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type OcrPassportMutationResult = NonNullable<Awaited<ReturnType<typeof ocrPassport>>>
+    export type OcrPassportMutationBody = BodyType<OcrPassportBody>
+    export type OcrPassportMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Extract passport data from an uploaded image using OCR
+ */
+export const useOcrPassport = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof ocrPassport>>, TError,{data: BodyType<OcrPassportBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof ocrPassport>>,
+        TError,
+        {data: BodyType<OcrPassportBody>},
+        TContext
+      > => {
+      return useMutation(getOcrPassportMutationOptions(options));
     }
 
 export const getListVisaApplicationsUrl = (params?: ListVisaApplicationsParams,) => {

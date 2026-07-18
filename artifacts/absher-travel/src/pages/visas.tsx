@@ -1,331 +1,146 @@
 import { useState, useMemo } from "react";
+import { Link } from "wouter";
 import { useTranslation } from "@/hooks/use-translation";
-import { useListVisas, Visa } from "@workspace/api-client-react";
-import { VisaApplicationWizard } from "@/components/visa-application-wizard";
-import {
-  Clock, CreditCard, Search, Filter, Globe, Calendar,
-  ArrowRight, CheckCircle, Shield, Zap, Award, ChevronRight,
-  FileCheck, Plane, Building2
-} from "lucide-react";
+import { useListVisaCountries } from "@workspace/api-client-react";
+import { Search, Globe, ChevronRight, Compass } from "lucide-react";
 
-/* ─── Category meta ─── */
-const CATEGORY_META: Record<string, { ar: string; en: string; icon: React.ReactNode; color: string }> = {
-  tourist:  { ar: "سياحية",  en: "Tourist",  icon: <Plane className="w-3.5 h-3.5" />,    color: "bg-sky-100 text-sky-700 border-sky-200" },
-  business: { ar: "تجارية",  en: "Business", icon: <Building2 className="w-3.5 h-3.5" />, color: "bg-violet-100 text-violet-700 border-violet-200" },
-  medical:  { ar: "طبية",    en: "Medical",  icon: <Shield className="w-3.5 h-3.5" />,    color: "bg-rose-100 text-rose-700 border-rose-200" },
-  visit:    { ar: "زيارة",   en: "Visit",    icon: <Globe className="w-3.5 h-3.5" />,     color: "bg-teal-100 text-teal-700 border-teal-200" },
-  study:    { ar: "دراسية",  en: "Study",    icon: <Award className="w-3.5 h-3.5" />,     color: "bg-amber-100 text-amber-700 border-amber-200" },
-  umrah:    { ar: "عمرة",    en: "Umrah",    icon: <CheckCircle className="w-3.5 h-3.5" />,color: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-};
+const REGIONS = [
+  { id: "all", ar: "الكل", en: "All Regions" },
+  { id: "gulf", ar: "الخليج", en: "Gulf" },
+  { id: "arab", ar: "الدول العربية", en: "Arab Countries" },
+  { id: "asian", ar: "آسيا", en: "Asia" },
+  { id: "european", ar: "أوروبا", en: "Europe" },
+  { id: "african", ar: "أفريقيا", en: "Africa" },
+  { id: "american", ar: "الأمريكيتين", en: "Americas" },
+];
 
-const ENTRY_LABELS: Record<string, { ar: string; en: string }> = {
-  single:   { ar: "دخول واحد",   en: "Single" },
-  multiple: { ar: "دخول متعدد",  en: "Multiple" },
-  transit:  { ar: "عبور",        en: "Transit" },
-};
-
-/* ─── Stats bar ─── */
-function StatsBar({ ar }: { ar: boolean }) {
-  const stats = [
-    { icon: <Zap className="w-5 h-5" />,         num: "+50",  ar: "دولة متاحة",           en: "Countries" },
-    { icon: <Clock className="w-5 h-5" />,        num: "48h",  ar: "متوسط وقت المعالجة",   en: "Avg. Processing" },
-    { icon: <CheckCircle className="w-5 h-5" />,  num: "99%",  ar: "نسبة القبول",           en: "Approval Rate" },
-    { icon: <Shield className="w-5 h-5" />,       num: "100%", ar: "معلوماتك آمنة",         en: "Data Secure" },
-  ];
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-      {stats.map((s, i) => (
-        <div key={i} className="bg-white rounded-2xl border border-slate-100 px-5 py-4 flex items-center gap-3 shadow-sm">
-          <div className="w-10 h-10 rounded-xl bg-[#0d2351]/8 flex items-center justify-center text-[#0d2351]">{s.icon}</div>
-          <div>
-            <div className="text-xl font-black text-[#0d2351]">{s.num}</div>
-            <div className="text-xs text-slate-500 font-medium">{ar ? s.ar : s.en}</div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/* ─── Visa card ─── */
-function VisaCard({ visa, ar, onApply }: { visa: Visa; ar: boolean; onApply: () => void }) {
-  const cat = CATEGORY_META[visa.category ?? "tourist"] ?? CATEGORY_META.tourist;
-  const entry = ENTRY_LABELS[visa.entryType] ?? { ar: visa.entryType, en: visa.entryType };
-  const country = ar ? visa.countryAr : visa.countryEn;
-
-  return (
-    <div className="group bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden flex flex-col">
-      {/* Card header */}
-      <div className="relative bg-gradient-to-br from-[#0d2351] to-[#1a3875] px-6 pt-6 pb-10">
-        <div className="flex items-start justify-between">
-          {/* Flag / image */}
-          <div className="w-14 h-14 rounded-2xl overflow-hidden border-2 border-white/20 shadow-lg shrink-0 bg-white/10 flex items-center justify-center">
-            {visa.imageUrl ? (
-              <img src={visa.imageUrl} alt={country} className="w-full h-full object-cover" />
-            ) : visa.countryCode ? (
-              <span className={`fi fi-${visa.countryCode.toLowerCase()} text-3xl`} />
-            ) : (
-              <Globe className="w-7 h-7 text-white/60" />
-            )}
-          </div>
-
-          {/* Category badge */}
-          <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${cat.color}`}>
-            {cat.icon}
-            {ar ? cat.ar : cat.en}
-          </span>
-        </div>
-
-        <div className="mt-4">
-          <h3 className="text-white font-black text-xl leading-tight">{country}</h3>
-          <p className="text-[#c8a84b] text-sm font-semibold mt-0.5">{visa.visaType}</p>
-        </div>
-      </div>
-
-      {/* Metrics strip */}
-      <div className="mx-4 -mt-6 bg-white rounded-xl border border-slate-100 shadow-md grid grid-cols-3 divide-x divide-x-reverse divide-slate-100 text-center">
-        <div className="px-2 py-3">
-          <div className="text-[#0d2351] font-black text-base">{visa.processingDays}</div>
-          <div className="text-slate-400 text-[10px] font-medium leading-tight">{ar ? "أيام\nمعالجة" : "Processing\nDays"}</div>
-        </div>
-        <div className="px-2 py-3">
-          <div className="text-[#0d2351] font-black text-base">{Number(visa.fee).toLocaleString()}</div>
-          <div className="text-slate-400 text-[10px] font-medium">{visa.currency}</div>
-        </div>
-        <div className="px-2 py-3">
-          <div className="text-[#0d2351] font-black text-base">{visa.stayDuration ?? "—"}</div>
-          <div className="text-slate-400 text-[10px] font-medium">{ar ? "يوم إقامة" : "Stay Days"}</div>
-        </div>
-      </div>
-
-      {/* Body */}
-      <div className="px-5 pt-5 pb-4 flex-1 space-y-3">
-        {/* Entry type + validity */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="inline-flex items-center gap-1 text-xs bg-slate-100 text-slate-600 font-medium px-2.5 py-1 rounded-full">
-            <FileCheck className="w-3 h-3" />
-            {ar ? entry.ar : entry.en}
-          </span>
-          {visa.validityDays && (
-            <span className="inline-flex items-center gap-1 text-xs bg-slate-100 text-slate-600 font-medium px-2.5 py-1 rounded-full">
-              <Calendar className="w-3 h-3" />
-              {ar ? `صلاحية ${visa.validityDays} يوم` : `Valid ${visa.validityDays}d`}
-            </span>
-          )}
-          {visa.acceptsGccResidency && (
-            <span className="inline-flex items-center gap-1 text-xs bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium px-2.5 py-1 rounded-full">
-              <CheckCircle className="w-3 h-3" />
-              {ar ? "مقيم خليج" : "GCC OK"}
-            </span>
-          )}
-        </div>
-
-        {/* Description / requirements */}
-        {(visa.descriptionAr || visa.descriptionEn || visa.requirements) && (
-          <p className="text-sm text-slate-500 line-clamp-2 leading-relaxed">
-            {ar
-              ? (visa.descriptionAr || visa.descriptionEn || visa.requirements)
-              : (visa.descriptionEn || visa.descriptionAr || visa.requirements)}
-          </p>
-        )}
-      </div>
-
-      {/* CTA */}
-      <div className="px-5 pb-5">
-        <button
-          onClick={onApply}
-          className="w-full bg-[#0d2351] hover:bg-[#c8a84b] text-white font-bold py-3 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 group-hover:shadow-lg group-hover:shadow-[#0d2351]/20"
-        >
-          {ar ? "قدّم الآن" : "Apply Now"}
-          {ar ? <ArrowRight className="w-4 h-4 rotate-180" /> : <ArrowRight className="w-4 h-4" />}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ─── Skeleton card ─── */
-function SkeletonCard() {
-  return (
-    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden animate-pulse">
-      <div className="h-32 bg-slate-200" />
-      <div className="mx-4 -mt-6 bg-slate-100 rounded-xl h-16" />
-      <div className="px-5 pt-5 pb-4 space-y-3">
-        <div className="h-4 bg-slate-100 rounded-full w-3/4" />
-        <div className="h-3 bg-slate-100 rounded-full w-1/2" />
-      </div>
-      <div className="px-5 pb-5">
-        <div className="h-11 bg-slate-100 rounded-xl" />
-      </div>
-    </div>
-  );
-}
-
-/* ─── Main page ─── */
 export default function Visas() {
   const { language } = useTranslation();
   const ar = language === "ar";
-  const { data: visas, isLoading } = useListVisas();
-  const [selectedVisa, setSelectedVisa] = useState<Visa | null>(null);
+  const { data: countries, isLoading } = useListVisaCountries({ activeOnly: true });
   const [search, setSearch] = useState("");
-  const [activeCategory, setActiveCategory] = useState<string>("all");
+  const [activeRegion, setActiveRegion] = useState("all");
 
-  const categories = useMemo(() => {
-    if (!visas) return [];
-    const seen = new Set<string>();
-    visas.forEach(v => v.category && seen.add(v.category));
-    return Array.from(seen);
-  }, [visas]);
-
-  const filtered = useMemo(() => {
-    if (!visas) return [];
-    return visas.filter(v => {
-      const name = ar ? v.countryAr : v.countryEn;
+  const filteredCountries = useMemo(() => {
+    if (!countries) return [];
+    return countries.filter(c => {
+      const name = ar ? c.nameAr : c.nameEn;
       const matchSearch = !search || name.toLowerCase().includes(search.toLowerCase());
-      const matchCat = activeCategory === "all" || v.category === activeCategory;
-      return matchSearch && matchCat;
+      const matchRegion = activeRegion === "all" || c.region === activeRegion;
+      return matchSearch && matchRegion;
     });
-  }, [visas, search, activeCategory, ar]);
+  }, [countries, search, activeRegion, ar]);
 
   return (
     <div className="min-h-screen bg-slate-50" dir={ar ? "rtl" : "ltr"}>
-      {/* ── Hero ── */}
-      <div className="relative bg-gradient-to-br from-[#0d2351] via-[#162d5e] to-[#0d2351] overflow-hidden">
-        {/* Decorative circles */}
-        <div className="absolute top-0 end-0 w-96 h-96 bg-[#c8a84b]/10 rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-        <div className="absolute bottom-0 start-0 w-64 h-64 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/4 pointer-events-none" />
+      {/* Hero Section */}
+      <div className="relative bg-gradient-to-b from-[#0A2342] to-[#11315c] pt-24 pb-32 overflow-hidden">
+        {/* Abstract Gold Accents */}
+        <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-[radial-gradient(ellipse_at_center,rgba(212,175,55,0.05)_0%,transparent_70%)] -translate-y-1/2 translate-x-1/3 pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.02)_0%,transparent_70%)] translate-y-1/3 -translate-x-1/3 pointer-events-none" />
 
-        <div className="relative container mx-auto px-4 py-16 text-center">
-          <div className="inline-flex items-center gap-2 bg-[#c8a84b]/20 text-[#c8a84b] text-sm font-semibold px-4 py-1.5 rounded-full mb-5 border border-[#c8a84b]/30">
+        <div className="container mx-auto px-4 relative z-10 text-center">
+          <div className="inline-flex items-center gap-2 bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/20 px-4 py-1.5 rounded-full mb-6 text-sm font-semibold tracking-wide uppercase">
             <Globe className="w-4 h-4" />
-            {ar ? "خدمات التأشيرات" : "Visa Services"}
+            {ar ? "بوابة التأشيرات" : "Visa Portal"}
           </div>
-          <h1 className="text-4xl md:text-5xl font-black text-white mb-4 leading-tight">
-            {ar ? "تأشيرتك في أيدٍ أمينة" : "Your Visa, Handled Professionally"}
+          
+          <h1 className="text-4xl md:text-6xl font-black text-white mb-6 leading-tight max-w-4xl mx-auto font-display">
+            {ar ? "رحلتك تبدأ بتأشيرة، ونحن نتكفل بالباقي" : "Your Journey Starts with a Visa. We Handle the Rest."}
           </h1>
-          <p className="text-slate-300 max-w-xl mx-auto text-lg mb-10">
-            {ar
-              ? "نقدّم خدمات استخراج التأشيرات لأكثر من 50 دولة بكل سرعة واحترافية"
-              : "Professional visa processing for 50+ countries with speed and precision"}
+          
+          <p className="text-slate-300 text-lg md:text-xl max-w-2xl mx-auto mb-12 font-medium">
+            {ar 
+              ? "خدمات تأشيرات رسمية وموثوقة لأكثر من 50 وجهة حول العالم. دقة، سرعة، واحترافية تليق بك." 
+              : "Official, trusted visa services for over 50 destinations worldwide. Precision, speed, and professionalism."}
           </p>
 
-          {/* Search */}
-          <div className="max-w-lg mx-auto relative">
-            <Search className={`absolute top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 ${ar ? "right-4" : "left-4"}`} />
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder={ar ? "ابحث عن دولة..." : "Search country..."}
-              className={`w-full ${ar ? "pr-12 pl-5" : "pl-12 pr-5"} py-4 rounded-2xl bg-white/10 backdrop-blur-sm border border-white/20 text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#c8a84b]/50 focus:bg-white/15 transition-all text-base`}
-            />
+          <div className="max-w-2xl mx-auto relative group">
+            <div className="absolute inset-0 bg-[#D4AF37]/20 blur-xl rounded-full transition-all group-hover:bg-[#D4AF37]/30" />
+            <div className="relative bg-white/10 backdrop-blur-md border border-white/20 p-2 rounded-2xl flex items-center shadow-2xl transition-all focus-within:bg-white/15 focus-within:border-white/30">
+              <Search className={`w-6 h-6 text-white/50 mx-4 shrink-0`} />
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder={ar ? "ابحث عن دولة الوجهة..." : "Search for your destination country..."}
+                className="w-full bg-transparent border-none text-white placeholder:text-white/50 focus:outline-none focus:ring-0 text-lg py-3"
+              />
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-10">
-        {/* Stats */}
-        <StatsBar ar={ar} />
-
-        {/* Category filter */}
-        {categories.length > 1 && (
-          <div className="flex gap-2 overflow-x-auto pb-2 mb-8 scrollbar-hide">
+      {/* Main Content */}
+      <div className="container mx-auto px-4 -mt-8 relative z-20 pb-24">
+        {/* Regions Tabs */}
+        <div className="bg-white rounded-2xl shadow-xl border border-slate-100 p-2 flex gap-2 overflow-x-auto scrollbar-hide mb-12 max-w-fit mx-auto">
+          {REGIONS.map(region => (
             <button
-              onClick={() => setActiveCategory("all")}
-              className={`whitespace-nowrap px-5 py-2 rounded-full text-sm font-semibold transition-all border ${activeCategory === "all" ? "bg-[#0d2351] text-white border-[#0d2351] shadow-md" : "bg-white text-slate-600 border-slate-200 hover:border-[#0d2351]/30"}`}
+              key={region.id}
+              onClick={() => setActiveRegion(region.id)}
+              className={`whitespace-nowrap px-6 py-3 rounded-xl text-sm font-bold transition-all ${
+                activeRegion === region.id
+                  ? "bg-[#0A2342] text-white shadow-md"
+                  : "text-slate-500 hover:text-[#0A2342] hover:bg-slate-50"
+              }`}
             >
-              {ar ? "الكل" : "All"}
-              {visas && <span className="ms-1.5 text-xs opacity-70">({visas.length})</span>}
+              {ar ? region.ar : region.en}
             </button>
-            {categories.map(cat => {
-              const meta = CATEGORY_META[cat];
-              const count = visas?.filter(v => v.category === cat).length ?? 0;
-              return (
-                <button
-                  key={cat}
-                  onClick={() => setActiveCategory(cat)}
-                  className={`whitespace-nowrap inline-flex items-center gap-1.5 px-5 py-2 rounded-full text-sm font-semibold transition-all border ${activeCategory === cat ? "bg-[#0d2351] text-white border-[#0d2351] shadow-md" : "bg-white text-slate-600 border-slate-200 hover:border-[#0d2351]/30"}`}
-                >
-                  {meta?.icon}
-                  {ar ? meta?.ar : meta?.en}
-                  <span className="text-xs opacity-70">({count})</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
+          ))}
+        </div>
 
-        {/* Results header */}
-        {!isLoading && (
-          <div className="flex items-center justify-between mb-5">
-            <div className="flex items-center gap-2 text-slate-500 text-sm">
-              <Filter className="w-4 h-4" />
-              <span>
-                {filtered.length} {ar ? "تأشيرة" : "visa(s)"}
-                {search && <span className="text-[#0d2351] font-semibold ms-1">«{search}»</span>}
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* Grid */}
+        {/* Results */}
         {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1,2,3,4,5,6].map(i => <SkeletonCard key={i} />)}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
+              <div key={i} className="bg-white rounded-2xl border border-slate-100 h-32 animate-pulse" />
+            ))}
           </div>
-        ) : filtered.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filtered.map(visa => (
-              <VisaCard key={visa.id} visa={visa} ar={ar} onApply={() => setSelectedVisa(visa)} />
+        ) : filteredCountries.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {filteredCountries.map(country => (
+              <Link key={country.id} href={`/visas/${country.id}`} className="group block">
+                <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-xl hover:border-[#D4AF37]/30 transition-all duration-300 transform hover:-translate-y-1">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 shrink-0 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-3xl shadow-inner overflow-hidden">
+                      {country.flagEmoji ? (
+                        <span>{country.flagEmoji}</span>
+                      ) : country.imageUrl ? (
+                        <img src={country.imageUrl} alt={ar ? country.nameAr : country.nameEn} className="w-full h-full object-cover" />
+                      ) : (
+                        <Globe className="w-6 h-6 text-slate-300" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-bold text-slate-900 text-lg truncate group-hover:text-[#0A2342] transition-colors">
+                        {ar ? country.nameAr : country.nameEn}
+                      </h3>
+                      <p className="text-sm text-slate-500 font-medium mt-0.5 flex items-center gap-1.5">
+                        <Compass className="w-3.5 h-3.5" />
+                        {country.visaCount || 0} {ar ? "أنواع تأشيرات" : "visa types"}
+                      </p>
+                    </div>
+                    <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-[#D4AF37]/10 group-hover:text-[#D4AF37] text-slate-300 transition-colors shrink-0">
+                      <ChevronRight className={`w-5 h-5 ${ar ? "rotate-180" : ""}`} />
+                    </div>
+                  </div>
+                </div>
+              </Link>
             ))}
           </div>
         ) : (
-          <div className="text-center py-24 bg-white rounded-2xl border border-slate-100 shadow-sm">
-            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Search className="w-7 h-7 text-slate-400" />
-            </div>
-            <h3 className="text-lg font-bold text-slate-700 mb-2">{ar ? "لا توجد نتائج" : "No results"}</h3>
-            <p className="text-slate-400 text-sm">{ar ? "جرّب كلمة بحث مختلفة" : "Try a different search term"}</p>
-            <button onClick={() => { setSearch(""); setActiveCategory("all"); }} className="mt-4 text-[#0d2351] text-sm font-semibold hover:underline">
-              {ar ? "إعادة ضبط الفلاتر" : "Reset filters"}
-            </button>
-          </div>
-        )}
-
-        {/* CTA section */}
-        {!isLoading && filtered.length > 0 && (
-          <div className="mt-16 bg-gradient-to-br from-[#0d2351] to-[#1a3875] rounded-3xl p-8 md:p-12 text-center relative overflow-hidden">
-            <div className="absolute inset-0 opacity-5 pointer-events-none" style={{ backgroundImage: "radial-gradient(circle at 2px 2px, white 1px, transparent 0)", backgroundSize: "32px 32px" }} />
-            <div className="relative">
-              <ChevronRight className="w-10 h-10 text-[#c8a84b] mx-auto mb-4 rotate-90" />
-              <h2 className="text-2xl md:text-3xl font-black text-white mb-3">
-                {ar ? "لا تجد ما تبحث عنه؟" : "Can't find what you need?"}
-              </h2>
-              <p className="text-slate-300 mb-6 max-w-md mx-auto">
-                {ar
-                  ? "تواصل مع فريقنا مباشرةً وسنساعدك في استخراج أي تأشيرة لأي دولة"
-                  : "Contact our team and we'll help you get a visa for any destination"}
-              </p>
-              <a
-                href="tel:+967779055511"
-                className="inline-flex items-center gap-2 bg-[#c8a84b] hover:bg-[#b8973b] text-white font-bold px-8 py-3.5 rounded-xl transition-all shadow-lg shadow-amber-900/20"
-              >
-                {ar ? "تواصل معنا الآن" : "Contact Us Now"}
-                <ArrowRight className={`w-4 h-4 ${ar ? "rotate-180" : ""}`} />
-              </a>
-            </div>
+          <div className="text-center py-20 bg-white rounded-3xl border border-slate-100 shadow-sm max-w-2xl mx-auto">
+            <Globe className="w-16 h-16 text-slate-200 mx-auto mb-4" />
+            <h3 className="text-xl font-bold text-slate-700 mb-2">
+              {ar ? "لم نجد أي دول تطابق بحثك" : "No countries found matching your search"}
+            </h3>
+            <p className="text-slate-500">
+              {ar ? "جرب البحث باسم مختلف أو تصفح جميع المناطق" : "Try searching with a different name or browse all regions"}
+            </p>
           </div>
         )}
       </div>
-
-      {/* Wizard */}
-      {selectedVisa && (
-        <VisaApplicationWizard
-          visa={selectedVisa}
-          open={!!selectedVisa}
-          onOpenChange={open => !open && setSelectedVisa(null)}
-        />
-      )}
     </div>
   );
 }

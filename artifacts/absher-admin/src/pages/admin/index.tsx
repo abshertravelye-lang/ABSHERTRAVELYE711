@@ -109,7 +109,7 @@ export default function AdminLayout() {
       </aside>
 
       {/* ── Main ── */}
-      <main className="flex-1 flex flex-col overflow-hidden relative z-10">
+      <main className="flex-1 flex flex-col overflow-hidden relative">
         {/* Header */}
         <header className="h-20 bg-card border-b border-card-border flex items-center px-8 justify-between shrink-0 shadow-sm">
           <h2 className="text-xl font-extrabold text-foreground tracking-tight">

@@ -34,22 +34,24 @@ function DestFormModal({ initial, onSave, onCancel, loading }: {
           <button onClick={onCancel} className="p-2 hover:bg-slate-100 rounded-lg"><X className="w-5 h-5" /></button>
         </div>
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2 sm:col-span-1">
+          <div className="space-y-4">
+            <div>
               <label className="block text-sm font-medium mb-1">{ar ? "الاسم بالعربية" : "Name (Arabic)"} *</label>
               <input className="w-full border rounded-xl px-4 py-2.5 text-sm" value={form.nameAr} onChange={e => set("nameAr", e.target.value)} />
             </div>
-            <div className="col-span-2 sm:col-span-1">
+            <div>
               <label className="block text-sm font-medium mb-1">{ar ? "الاسم بالإنجليزية" : "Name (English)"} *</label>
               <input className="w-full border rounded-xl px-4 py-2.5 text-sm" value={form.nameEn} onChange={e => set("nameEn", e.target.value)} dir="ltr" />
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">{ar ? "الدولة" : "Country"} *</label>
-              <input className="w-full border rounded-xl px-4 py-2.5 text-sm" value={form.country} onChange={e => set("country", e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">{ar ? "رابط الصورة" : "Image URL"}</label>
-              <input className="w-full border rounded-xl px-4 py-2.5 text-sm" value={form.imageUrl} onChange={e => set("imageUrl", e.target.value)} dir="ltr" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">{ar ? "الدولة" : "Country"} *</label>
+                <input className="w-full border rounded-xl px-4 py-2.5 text-sm" value={form.country} onChange={e => set("country", e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">{ar ? "رابط الصورة" : "Image URL"}</label>
+                <input className="w-full border rounded-xl px-4 py-2.5 text-sm" value={form.imageUrl} onChange={e => set("imageUrl", e.target.value)} dir="ltr" />
+              </div>
             </div>
           </div>
           {form.imageUrl && <img src={form.imageUrl} alt="" className="w-full h-36 object-cover rounded-xl border" onError={e => (e.currentTarget.style.display = "none")} />}

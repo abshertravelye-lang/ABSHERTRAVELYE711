@@ -9,10 +9,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateVisaApplication, Visa, VisaApplicationInput } from "@workspace/api-client-react";
 import { CountrySelect } from "@/components/country-select";
+import { COUNTRIES } from "@workspace/countries";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   CheckCircle, X, UploadCloud, AlertCircle, ArrowRight, ArrowLeft,
   User, FileText, Phone, Mail, Globe, Calendar, Shield, CreditCard,
-  Home, Award, Stamp, Info, Eye, Send,
+  Home, Award, Stamp, Info, Eye, Send, ChevronDown,
 } from "lucide-react";
 
 /* ── Types ── */
@@ -32,6 +34,7 @@ interface WizardData {
   gender?: "male" | "female";
   email?: string;
   phone?: string;
+  phoneDialCode?: string;
   agreedToTerms?: boolean;
   passportImageUrl?: string;
   personalPhotoUrl?: string;
@@ -60,17 +63,190 @@ const STEP_META: Record<StepId, { arTitle: string; enTitle: string; icon: React.
   success:            { arTitle: "تم التقديم",        enTitle: "Submitted",        icon: <CheckCircle className="w-4 h-4" /> },
 };
 
+/* ── Comprehensive dial code map for all countries ── */
+const DIAL_CODE_MAP: Record<string, string> = {
+  AC:"+247", AD:"+376", AE:"+971", AF:"+93",  AG:"+1268",AL:"+355",
+  AM:"+374", AO:"+244", AR:"+54",  AS:"+1684",AT:"+43",  AU:"+61",
+  AW:"+297", AZ:"+994", BA:"+387", BB:"+1246",BD:"+880", BE:"+32",
+  BF:"+226", BG:"+359", BH:"+973", BI:"+257", BJ:"+229", BN:"+673",
+  BO:"+591", BR:"+55",  BS:"+1242",BT:"+975", BW:"+267", BY:"+375",
+  BZ:"+501", CA:"+1",   CD:"+243", CF:"+236", CG:"+242", CH:"+41",
+  CI:"+225", CL:"+56",  CM:"+237", CN:"+86",  CO:"+57",  CR:"+506",
+  CU:"+53",  CV:"+238", CY:"+357", CZ:"+420", DE:"+49",  DJ:"+253",
+  DK:"+45",  DM:"+1767",DO:"+1809",DZ:"+213", EC:"+593", EE:"+372",
+  EG:"+20",  ER:"+291", ES:"+34",  ET:"+251", FI:"+358", FJ:"+679",
+  FM:"+691", FR:"+33",  GA:"+241", GB:"+44",  GD:"+1473",GE:"+995",
+  GH:"+233", GM:"+220", GN:"+224", GQ:"+240", GR:"+30",  GT:"+502",
+  GW:"+245", GY:"+592", HN:"+504", HR:"+385", HT:"+509", HU:"+36",
+  ID:"+62",  IE:"+353", IL:"+972", IN:"+91",  IQ:"+964", IR:"+98",
+  IS:"+354", IT:"+39",  JM:"+1876",JO:"+962", JP:"+81",  KE:"+254",
+  KG:"+996", KH:"+855", KI:"+686", KM:"+269", KN:"+1869",KP:"+850",
+  KR:"+82",  KW:"+965", KZ:"+7",   LA:"+856", LB:"+961", LC:"+1758",
+  LI:"+423", LK:"+94",  LR:"+231", LS:"+266", LT:"+370", LU:"+352",
+  LV:"+371", LY:"+218", MA:"+212", MC:"+377", MD:"+373", ME:"+382",
+  MG:"+261", MH:"+692", MK:"+389", ML:"+223", MM:"+95",  MN:"+976",
+  MR:"+222", MT:"+356", MU:"+230", MV:"+960", MW:"+265", MX:"+52",
+  MY:"+60",  MZ:"+258", NA:"+264", NE:"+227", NG:"+234", NI:"+505",
+  NL:"+31",  NO:"+47",  NP:"+977", NR:"+674", NZ:"+64",  OM:"+968",
+  PA:"+507", PE:"+51",  PG:"+675", PH:"+63",  PK:"+92",  PL:"+48",
+  PR:"+1787",PS:"+970", PT:"+351", PW:"+680", PY:"+595", QA:"+974",
+  RO:"+40",  RS:"+381", RU:"+7",   RW:"+250", SA:"+966", SB:"+677",
+  SC:"+248", SD:"+249", SE:"+46",  SG:"+65",  SI:"+386", SK:"+421",
+  SL:"+232", SM:"+378", SN:"+221", SO:"+252", SR:"+597", SS:"+211",
+  ST:"+239", SV:"+503", SY:"+963", SZ:"+268", TD:"+235", TG:"+228",
+  TH:"+66",  TJ:"+992", TL:"+670", TM:"+993", TN:"+216", TO:"+676",
+  TR:"+90",  TT:"+1868",TV:"+688", TZ:"+255", UA:"+380", UG:"+256",
+  US:"+1",   UY:"+598", UZ:"+998", VA:"+39",  VC:"+1784",VE:"+58",
+  VN:"+84",  VU:"+678", WS:"+685", YE:"+967", ZA:"+27",  ZM:"+260",
+  ZW:"+263",
+};
+
+/* ── All countries with dial codes, sorted: Arab/common first, then rest ── */
+const PRIORITY_CODES = ["YE","SA","AE","OM","KW","QA","BH","EG","JO","IQ","SY","LB","MA","DZ","TN","LY","SD","SO","MR","PS","DJ","KM"];
+const ALL_DIAL_COUNTRIES = COUNTRIES.filter(c => DIAL_CODE_MAP[c.code]);
+const DIAL_CODES = [
+  ...PRIORITY_CODES.map(code => ALL_DIAL_COUNTRIES.find(c => c.code === code)).filter(Boolean),
+  ...ALL_DIAL_COUNTRIES.filter(c => !PRIORITY_CODES.includes(c.code)).sort((a, b) => a.nameEn.localeCompare(b.nameEn)),
+] as typeof COUNTRIES;
+
+function PhoneWithDialCode({
+  value, dialCode, onValueChange, onDialChange, ar, className,
+}: {
+  value: string;
+  dialCode: string;
+  onValueChange: (v: string) => void;
+  onDialChange: (v: string) => void;
+  ar: boolean;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = DIAL_CODES.find(c => c.code === dialCode) ?? DIAL_CODES[2];
+
+  return (
+    <div className={`flex border border-slate-200 rounded-xl overflow-hidden bg-slate-50 focus-within:ring-2 focus-within:ring-[#0d2351]/20 focus-within:border-[#0d2351]/40 transition-all ${className ?? ""}`}>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="flex items-center gap-1.5 px-3 py-2.5 border-e border-slate-200 bg-slate-100 hover:bg-slate-200 transition-colors shrink-0 text-sm font-medium text-slate-700"
+          >
+            <span className="text-base leading-none">{selected?.flag}</span>
+            <span className="text-xs text-slate-500 font-mono">{selected ? DIAL_CODE_MAP[selected.code] : ""}</span>
+            <ChevronDown className="h-3 w-3 text-slate-400" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-56 p-1" align={ar ? "end" : "start"}>
+          <div className="max-h-56 overflow-y-auto space-y-0.5">
+            {DIAL_CODES.map(c => (
+              <button
+                key={c.code}
+                type="button"
+                onClick={() => { onDialChange(c.code); setOpen(false); }}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-start ${dialCode === c.code ? "bg-[#0d2351]/10 text-[#0d2351] font-semibold" : "hover:bg-slate-50 text-slate-700"}`}
+              >
+                <span className="text-base leading-none">{c.flag}</span>
+                <span className="font-mono text-xs text-slate-500 w-10 shrink-0">{DIAL_CODE_MAP[c.code]}</span>
+                <span className="truncate">{ar ? c.nameAr : c.nameEn}</span>
+              </button>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+      <input
+        type="tel"
+        value={value}
+        onChange={e => onValueChange(e.target.value)}
+        placeholder={ar ? "7xxxxxxxx" : "7xxxxxxxx"}
+        className="flex-1 px-3 py-2.5 bg-transparent text-sm text-slate-800 focus:outline-none placeholder:text-slate-300"
+        dir="ltr"
+      />
+    </div>
+  );
+}
+
+/* ── 3-Select Date Picker ── */
+const MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+const MONTHS_EN = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+function parseDateParts(iso?: string): { day: string; month: string; year: string } {
+  if (!iso) return { day: "", month: "", year: "" };
+  const [year, month, day] = iso.split("-");
+  return {
+    day: day ? String(parseInt(day, 10)) : "",
+    month: month ? String(parseInt(month, 10)) : "",
+    year: year || "",
+  };
+}
+
+function buildIso(day: string, month: string, year: string): string {
+  if (!day || !month || !year) return "";
+  return `${year}-${String(Number(month)).padStart(2, "0")}-${String(Number(day)).padStart(2, "0")}`;
+}
+
+function DateSelectPicker({
+  value, onChange, ar, minYear, maxYear,
+}: {
+  value?: string;
+  onChange: (iso: string) => void;
+  ar: boolean;
+  minYear: number;
+  maxYear: number;
+}) {
+  const { day, month, year } = parseDateParts(value);
+  const years = Array.from({ length: maxYear - minYear + 1 }, (_, i) => String(maxYear - i));
+  const months = ar ? MONTHS_AR : MONTHS_EN;
+  const daysCount = day && month && year ? new Date(Number(year), Number(month), 0).getDate() : 31;
+  const days = Array.from({ length: daysCount }, (_, i) => String(i + 1));
+
+  const sel = "h-10 border-slate-200 bg-slate-50 rounded-xl text-sm focus:border-[#0d2351]/40 focus:ring-[#0d2351]/15";
+
+  return (
+    <div className="flex gap-2" dir="ltr">
+      <Select value={day} onValueChange={d => onChange(buildIso(d, month, year))}>
+        <SelectTrigger className={`${sel} w-[68px]`}>
+          <SelectValue placeholder={ar ? "يوم" : "Day"} />
+        </SelectTrigger>
+        <SelectContent>
+          {days.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <Select value={month} onValueChange={m => onChange(buildIso(day, m, year))}>
+        <SelectTrigger className={`${sel} flex-1`}>
+          <SelectValue placeholder={ar ? "شهر" : "Month"} />
+        </SelectTrigger>
+        <SelectContent>
+          {months.map((m, i) => <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <Select value={year} onValueChange={y => onChange(buildIso(day, month, y))}>
+        <SelectTrigger className={`${sel} w-[84px]`}>
+          <SelectValue placeholder={ar ? "سنة" : "Year"} />
+        </SelectTrigger>
+        <SelectContent>
+          {years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
 /* ── Upload field ── */
-function FileUploadField({ label, value, onChange, required, language }: {
-  label: string; value?: string; onChange: (val: string) => void; required?: boolean; language: string;
+function FileUploadField({ label, value, onChange, required, language, imageOnly }: {
+  label: string; value?: string; onChange: (val: string) => void; required?: boolean; language: string; imageOnly?: boolean;
 }) {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Show local preview immediately for images
+    if (file.type.startsWith("image/")) {
+      const local = URL.createObjectURL(file);
+      setPreviewUrl(local);
+    }
     setIsUploading(true);
     setError(null);
     setProgress(10);
@@ -90,28 +266,62 @@ function FileUploadField({ label, value, onChange, required, language }: {
       onChange(data.objectPath);
     } catch (err) {
       setError(err instanceof Error ? err.message : "فشل الرفع");
+      setPreviewUrl(null);
     } finally {
       setIsUploading(false);
     }
   };
+
+  const handleRemove = () => {
+    onChange("");
+    setPreviewUrl(null);
+    setError(null);
+  };
+
+  const isImage = imageOnly || (value && /\.(jpg|jpeg|png|gif|webp)$/i.test(value));
+  const displayPreview = previewUrl || (value && isImage ? (() => {
+    const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+    return value.startsWith("/api") ? `${base}${value}` : value;
+  })() : null);
+
   return (
     <div className="space-y-1.5">
       <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider">
         {label} {required && <span className="text-red-400">*</span>}
       </Label>
       {value ? (
-        <div className="flex items-center gap-3 p-3 border border-emerald-200 rounded-xl bg-emerald-50 text-emerald-700">
-          <CheckCircle className="w-5 h-5 shrink-0" />
-          <span className="text-sm flex-1 truncate" dir="ltr">{value.split("/").pop()}</span>
-          <button type="button" onClick={() => onChange("")}
-            className="p-1 hover:bg-emerald-100 rounded-lg transition-colors">
-            <X className="w-4 h-4" />
-          </button>
+        <div className={`border border-emerald-200 rounded-xl bg-emerald-50 overflow-hidden ${displayPreview ? "" : "flex items-center gap-3 p-3 text-emerald-700"}`}>
+          {displayPreview ? (
+            <div className="relative">
+              <img src={displayPreview} alt={label} className="w-full max-h-48 object-cover rounded-xl" />
+              <button type="button" onClick={handleRemove}
+                className="absolute top-2 end-2 p-1.5 bg-red-500 hover:bg-red-600 rounded-full transition-colors shadow-md">
+                <X className="w-3.5 h-3.5 text-white" />
+              </button>
+              <div className="absolute bottom-2 start-2 flex items-center gap-1.5 bg-emerald-600/90 text-white px-2.5 py-1 rounded-full text-[10px] font-bold shadow-sm">
+                <CheckCircle className="w-3 h-3" /> {language === "ar" ? "تم الرفع" : "Uploaded"}
+              </div>
+            </div>
+          ) : (
+            <>
+              <CheckCircle className="w-5 h-5 shrink-0" />
+              <span className="text-sm flex-1 truncate" dir="ltr">{value.split("/").pop()}</span>
+              <button type="button" onClick={handleRemove}
+                className="p-1 hover:bg-emerald-100 rounded-lg transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </>
+          )}
         </div>
       ) : (
         <div className="relative group">
-          <input type="file" onChange={handleFileChange} disabled={isUploading}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10" />
+          <input
+            type="file"
+            onChange={handleFileChange}
+            disabled={isUploading}
+            accept={imageOnly ? "image/*" : "image/*,application/pdf"}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
+          />
           <div className={`flex flex-col items-center justify-center p-5 border-2 border-dashed rounded-xl transition-all
             ${isUploading ? "bg-[#0d2351]/5 border-[#0d2351]/30" : "bg-slate-50 border-slate-200 group-hover:border-[#c8a84b]/60 group-hover:bg-[#c8a84b]/5"}`}>
             {isUploading ? (
@@ -123,7 +333,7 @@ function FileUploadField({ label, value, onChange, required, language }: {
               <div className="flex flex-col items-center gap-2 text-slate-400 group-hover:text-[#c8a84b] transition-colors">
                 <UploadCloud className="w-7 h-7" />
                 <span className="text-sm font-medium">{language === "ar" ? "اختر ملفاً أو اسحبه هنا" : "Click or drag file here"}</span>
-                <span className="text-xs opacity-70">PNG, JPG, PDF</span>
+                <span className="text-xs opacity-70">{imageOnly ? "PNG, JPG" : "PNG, JPG, PDF"}</span>
               </div>
             )}
           </div>
@@ -168,6 +378,7 @@ export function VisaApplicationWizard({
 }: { visa: Visa; open: boolean; onOpenChange: (open: boolean) => void }) {
   const { language } = useTranslation();
   const ar = language === "ar";
+  const currentYear = new Date().getFullYear();
 
   const hasAlternative = !!(
     visa.acceptsSchengenResidency || visa.acceptsUkResidency ||
@@ -182,7 +393,7 @@ export function VisaApplicationWizard({
 
   const [history, setHistory] = useState<StepId[]>([]);
   const [currentStep, setCurrentStep] = useState<StepId>(getInitialStep());
-  const [data, setData] = useState<WizardData>({ gender: "male", agreedToTerms: false });
+  const [data, setData] = useState<WizardData>({ gender: "male", agreedToTerms: false, phoneDialCode: "YE" });
   const [rejectionMessage, setRejectionMessage] = useState("");
   const [applicationId, setApplicationId] = useState<number | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -204,7 +415,6 @@ export function VisaApplicationWizard({
     { id: "australia",ar: "أستراليا", en: "Australia", active: visa.acceptsAustraliaResidency },
   ].filter(r => r.active);
 
-  /* Progress steps for progress bar — only non-terminal steps */
   const progressSteps = useMemo<StepId[]>(() => {
     const steps: StepId[] = [];
     if (visa.acceptsGccResidency) steps.push("gcc_check");
@@ -277,6 +487,7 @@ export function VisaApplicationWizard({
       let eligibilityPath: "gcc" | "alternative" | "direct" = "direct";
       if (data.hasGcc && data.gccCountry) eligibilityPath = "gcc";
       else if (data.hasAlternative && data.alternativeRegion) eligibilityPath = "alternative";
+      const dc = DIAL_CODE_MAP[data.phoneDialCode || "YE"] ?? "+967";
       const payload: VisaApplicationInput = {
         visaId: visa.id,
         eligibilityPath: eligibilityPath as never,
@@ -290,7 +501,7 @@ export function VisaApplicationWizard({
         dateOfBirth: data.dateOfBirth!,
         gender: data.gender as never,
         email: data.email!,
-        phone: data.phone!,
+        phone: `${dc}${data.phone}`,
         passportImageUrl: data.passportImageUrl,
         personalPhotoUrl: data.personalPhotoUrl,
         residencyImageUrl: data.residencyImageUrl,
@@ -328,7 +539,6 @@ export function VisaApplicationWizard({
 
         {/* ── Header ── */}
         <div className="shrink-0">
-          {/* Top bar */}
           <div className="bg-gradient-to-r from-[#0d2351] to-[#1a3875] px-6 py-5">
             <DialogHeader>
               <div className="flex items-center justify-between">
@@ -489,7 +699,13 @@ export function VisaApplicationWizard({
                           placeholder="A12345678" className={`${INPUT} uppercase`} />
                       </Field>
                       <Field label={ar ? "تاريخ انتهاء الصلاحية" : "Expiry Date"} required>
-                        <Input type="date" value={data.alternativeVisaExpiry || ""} onChange={e => updateData({ alternativeVisaExpiry: e.target.value })} className={INPUT} />
+                        <DateSelectPicker
+                          value={data.alternativeVisaExpiry}
+                          onChange={v => updateData({ alternativeVisaExpiry: v })}
+                          ar={ar}
+                          minYear={2015}
+                          maxYear={2035}
+                        />
                       </Field>
                       <div className="md:col-span-2">
                         <FileUploadField language={language}
@@ -544,9 +760,20 @@ export function VisaApplicationWizard({
                     </Field>
                   )}
 
-                  <Field label={ar ? "تاريخ الميلاد" : "Date of Birth"} required>
-                    <Input type="date" value={data.dateOfBirth || ""} onChange={e => updateData({ dateOfBirth: e.target.value })} className={INPUT} />
-                  </Field>
+                  {/* Date of Birth — 3-Select */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5" />
+                      {ar ? "تاريخ الميلاد" : "Date of Birth"}<span className="text-red-400">*</span>
+                    </Label>
+                    <DateSelectPicker
+                      value={data.dateOfBirth}
+                      onChange={v => updateData({ dateOfBirth: v })}
+                      ar={ar}
+                      minYear={1940}
+                      maxYear={currentYear - 5}
+                    />
+                  </div>
 
                   <Field label={ar ? "الجنس" : "Gender"} required>
                     <Select value={data.gender} onValueChange={v => updateData({ gender: v as "male" | "female" })}>
@@ -571,12 +798,16 @@ export function VisaApplicationWizard({
                         className={`${INPUT} ${ar ? "pr-9" : "pl-9"}`} dir="ltr" placeholder="name@email.com" />
                     </div>
                   </Field>
+
+                  {/* Phone with dial code picker */}
                   <Field label={ar ? "رقم الهاتف (دولي)" : "Phone Number (intl.)"} required>
-                    <div className="relative">
-                      <Phone className={`absolute top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 ${ar ? "right-3" : "left-3"}`} />
-                      <Input type="tel" value={data.phone || ""} onChange={e => updateData({ phone: e.target.value })}
-                        className={`${INPUT} ${ar ? "pr-9" : "pl-9"}`} dir="ltr" placeholder="+967xxxxxxxxx" />
-                    </div>
+                    <PhoneWithDialCode
+                      value={data.phone || ""}
+                      dialCode={data.phoneDialCode || "YE"}
+                      onValueChange={v => updateData({ phone: v })}
+                      onDialChange={v => updateData({ phoneDialCode: v })}
+                      ar={ar}
+                    />
                   </Field>
                 </div>
               </div>
@@ -591,12 +822,36 @@ export function VisaApplicationWizard({
                         className={`${INPUT} uppercase`} placeholder="A12345678" />
                     </Field>
                   </div>
-                  <Field label={ar ? "تاريخ الإصدار" : "Issue Date"} required>
-                    <Input type="date" value={data.passportIssueDate || ""} onChange={e => updateData({ passportIssueDate: e.target.value })} className={INPUT} />
-                  </Field>
-                  <Field label={ar ? "تاريخ الانتهاء" : "Expiry Date"} required>
-                    <Input type="date" value={data.passportExpiryDate || ""} onChange={e => updateData({ passportExpiryDate: e.target.value })} className={INPUT} />
-                  </Field>
+
+                  {/* Passport Issue Date — 3-Select */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5" />
+                      {ar ? "تاريخ الإصدار" : "Issue Date"}<span className="text-red-400">*</span>
+                    </Label>
+                    <DateSelectPicker
+                      value={data.passportIssueDate}
+                      onChange={v => updateData({ passportIssueDate: v })}
+                      ar={ar}
+                      minYear={2015}
+                      maxYear={currentYear}
+                    />
+                  </div>
+
+                  {/* Passport Expiry Date — 3-Select */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5" />
+                      {ar ? "تاريخ الانتهاء" : "Expiry Date"}<span className="text-red-400">*</span>
+                    </Label>
+                    <DateSelectPicker
+                      value={data.passportExpiryDate}
+                      onChange={v => updateData({ passportExpiryDate: v })}
+                      ar={ar}
+                      minYear={2015}
+                      maxYear={2035}
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -606,11 +861,11 @@ export function VisaApplicationWizard({
                   <SectionHeader icon={<FileText className="w-4 h-4" />} title={ar ? "المستندات المطلوبة" : "Required Documents"} />
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {visa.requiresPassportImage && (
-                      <FileUploadField required language={language} label={ar ? "صورة جواز السفر" : "Passport Image"}
+                      <FileUploadField required imageOnly language={language} label={ar ? "صورة جواز السفر" : "Passport Image"}
                         value={data.passportImageUrl} onChange={v => updateData({ passportImageUrl: v })} />
                     )}
                     {visa.requiresPersonalPhoto && (
-                      <FileUploadField required language={language} label={ar ? "صورة شخصية" : "Personal Photo"}
+                      <FileUploadField required imageOnly language={language} label={ar ? "صورة شخصية" : "Personal Photo"}
                         value={data.personalPhotoUrl} onChange={v => updateData({ personalPhotoUrl: v })} />
                     )}
                     {visa.requiresResidencyImage && (
@@ -682,20 +937,17 @@ export function VisaApplicationWizard({
           {/* Success */}
           {currentStep === "success" && (
             <div className="flex flex-col items-center py-10 px-6 space-y-6 animate-in zoom-in-95 duration-300">
-              {/* Icon */}
               <div className="w-24 h-24 bg-emerald-50 border-2 border-emerald-200 rounded-full flex items-center justify-center shadow-lg shadow-emerald-100">
                 <CheckCircle className="w-12 h-12 text-emerald-500" />
               </div>
 
-              {/* Title */}
               <div className="text-center space-y-1">
-                <h2 className="text-2xl font-black text-slate-800">{ar ? "تم استلام الطلب ✓" : "Application Submitted ✓"}</h2>
+                <h2 className="text-2xl font-black text-slate-800">{ar ? "تم استلام الطلب" : "Application Submitted"}</h2>
                 <p className="text-slate-400 text-sm">
                   {ar ? `تأشيرة ${visa.countryAr} — ${visa.visaType}` : `${visa.countryEn} Visa — ${visa.visaType}`}
                 </p>
               </div>
 
-              {/* Reference card */}
               <div className="w-full max-w-sm bg-gradient-to-br from-[#0d2351] to-[#1a3875] rounded-2xl p-6 text-center shadow-xl shadow-[#0d2351]/20">
                 <p className="text-white/50 text-xs uppercase tracking-widest font-bold mb-2">
                   {ar ? "رقم الطلب المرجعي" : "Application Reference"}
@@ -709,13 +961,12 @@ export function VisaApplicationWizard({
                 </p>
               </div>
 
-              {/* Steps */}
               <div className="w-full max-w-sm space-y-3">
                 {[
                   { step: "01", ar: "مراجعة طلبك من قِبل فريقنا", en: "Review by our team", icon: <Eye className="w-4 h-4" /> },
                   { step: "02", ar: "التواصل معك خلال 24 ساعة", en: "Contact within 24h", icon: <Phone className="w-4 h-4" /> },
-                  { step: "03", ar: "إرسال الطلب للجهة المختصة", en: "Submit to embassy", icon: <Send className="w-4 h-4" />, icon2: null },
-                  { step: "04", ar: "استلام التأشيرة 🎉", en: "Receive your visa 🎉", icon: <Stamp className="w-4 h-4" /> },
+                  { step: "03", ar: "إرسال الطلب للجهة المختصة", en: "Submit to embassy", icon: <Send className="w-4 h-4" /> },
+                  { step: "04", ar: "استلام التأشيرة", en: "Receive your visa", icon: <Stamp className="w-4 h-4" /> },
                 ].map(s => (
                   <div key={s.step} className="flex items-center gap-3 bg-slate-50 border border-slate-100 rounded-xl px-4 py-3">
                     <div className="w-8 h-8 rounded-full bg-[#0d2351] text-white flex items-center justify-center shrink-0 text-xs font-black">{s.step}</div>
@@ -764,4 +1015,3 @@ export function VisaApplicationWizard({
     </Dialog>
   );
 }
-

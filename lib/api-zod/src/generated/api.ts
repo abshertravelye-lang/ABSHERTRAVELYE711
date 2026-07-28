@@ -1376,6 +1376,8 @@ export const ListMyBookingsResponseItem = zod.object({
   "notes": zod.string().nullish(),
   "status": zod.enum(['pending', 'confirmed', 'cancelled']),
   "totalPrice": zod.number().nullish(),
+  "ticketUrl": zod.string().nullish(),
+  "duffelOrderId": zod.string().nullish(),
   "createdAt": zod.string()
 })
 export const ListMyBookingsResponse = zod.array(ListMyBookingsResponseItem)
@@ -1404,6 +1406,8 @@ export const ListBookingsResponseItem = zod.object({
   "notes": zod.string().nullish(),
   "status": zod.enum(['pending', 'confirmed', 'cancelled']),
   "totalPrice": zod.number().nullish(),
+  "ticketUrl": zod.string().nullish(),
+  "duffelOrderId": zod.string().nullish(),
   "createdAt": zod.string()
 })
 export const ListBookingsResponse = zod.array(ListBookingsResponseItem)
@@ -1441,6 +1445,8 @@ export const CreateBookingResponse = zod.object({
   "notes": zod.string().nullish(),
   "status": zod.enum(['pending', 'confirmed', 'cancelled']),
   "totalPrice": zod.number().nullish(),
+  "ticketUrl": zod.string().nullish(),
+  "duffelOrderId": zod.string().nullish(),
   "createdAt": zod.string()
 })
 
@@ -1467,6 +1473,8 @@ export const GetBookingResponse = zod.object({
   "notes": zod.string().nullish(),
   "status": zod.enum(['pending', 'confirmed', 'cancelled']),
   "totalPrice": zod.number().nullish(),
+  "ticketUrl": zod.string().nullish(),
+  "duffelOrderId": zod.string().nullish(),
   "createdAt": zod.string()
 })
 
@@ -1481,7 +1489,9 @@ export const UpdateBookingParams = zod.object({
 export const UpdateBookingBody = zod.object({
   "status": zod.enum(['pending', 'confirmed', 'cancelled']).optional(),
   "notes": zod.string().optional(),
-  "totalPrice": zod.number().optional()
+  "totalPrice": zod.number().optional(),
+  "ticketUrl": zod.string().optional(),
+  "duffelOrderId": zod.string().optional()
 })
 
 export const UpdateBookingResponse = zod.object({
@@ -1499,6 +1509,8 @@ export const UpdateBookingResponse = zod.object({
   "notes": zod.string().nullish(),
   "status": zod.enum(['pending', 'confirmed', 'cancelled']),
   "totalPrice": zod.number().nullish(),
+  "ticketUrl": zod.string().nullish(),
+  "duffelOrderId": zod.string().nullish(),
   "createdAt": zod.string()
 })
 
@@ -1603,6 +1615,8 @@ export const GetRecentBookingsResponseItem = zod.object({
   "notes": zod.string().nullish(),
   "status": zod.enum(['pending', 'confirmed', 'cancelled']),
   "totalPrice": zod.number().nullish(),
+  "ticketUrl": zod.string().nullish(),
+  "duffelOrderId": zod.string().nullish(),
   "createdAt": zod.string()
 })
 export const GetRecentBookingsResponse = zod.array(GetRecentBookingsResponseItem)

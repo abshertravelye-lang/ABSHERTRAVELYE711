@@ -11,6 +11,8 @@ import { useColors } from '@/hooks/useColors';
 import { useGetVisa, useCreateVisaApplication } from '@workspace/api-client-react';
 import DatePickerModal, { DateField } from '@/components/DatePickerModal';
 import ImageUploader from '@/components/ImageUploader';
+import NationalityPicker from '@/components/NationalityPicker';
+import { Nationality } from '@/constants/nationalities';
 
 const STATUS_LABELS: Record<string, string> = {
   available: 'متاحة', suspended: 'موقوفة', closed: 'مغلقة',

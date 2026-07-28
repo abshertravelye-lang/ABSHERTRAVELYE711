@@ -89,7 +89,17 @@ export default function FlightResultsScreen() {
           <FlatList
             data={data.offers}
             keyExtractor={(o) => o.providerOfferId}
-            renderItem={({ item }) => <FlightCard offer={item} />}
+            renderItem={({ item }) => (
+              <FlightCard
+                offer={item}
+                onPress={() =>
+                  router.push({
+                    pathname: '/flight-booking',
+                    params: { offer: JSON.stringify(item) },
+                  })
+                }
+              />
+            )}
             contentContainerStyle={{ padding: 16, paddingBottom: bottomInset + 20 }}
             showsVerticalScrollIndicator={false}
           />

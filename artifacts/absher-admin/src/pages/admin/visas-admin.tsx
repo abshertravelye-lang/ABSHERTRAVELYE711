@@ -6,8 +6,9 @@ import {
   getListVisaCustomFieldsQueryKey,
 } from "@workspace/api-client-react";
 import { useTranslation } from "@/hooks/use-translation";
-import { Plus, Edit2, Trash2, X, Globe, Settings, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Edit2, Trash2, X, Globe, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 const CATEGORIES = [
   { value: "tourist",  ar: "سياحية",  en: "Tourist" },
@@ -46,20 +47,25 @@ function CustomFieldsPanel({ visaId, ar }: { visaId: number; ar: boolean }) {
   const invalidate = () => qc.invalidateQueries({ queryKey: getListVisaCustomFieldsQueryKey(visaId) });
 
   async function save() {
-    const payload = {
-      ...form,
-      visaId,
-      options: form.options ? form.options.split(",").map(s => s.trim()) : [],
-    };
-    if (editId !== null) {
-      await updateMut.mutateAsync({ id: editId, data: payload as never });
-    } else {
-      await createMut.mutateAsync({ id: visaId, data: payload as never });
+    try {
+      const payload = {
+        ...form,
+        visaId,
+        options: form.options ? form.options.split(",").map(s => s.trim()) : [],
+      };
+      if (editId !== null) {
+        await updateMut.mutateAsync({ id: editId, data: payload as never });
+      } else {
+        await createMut.mutateAsync({ id: visaId, data: payload as never });
+      }
+      await invalidate();
+      setAdding(false);
+      setEditId(null);
+      setForm({ labelAr: "", labelEn: "", fieldType: "text", isRequired: false, options: "", placeholderAr: "", placeholderEn: "", sortOrder: 0 });
+      toast.success(ar ? "تم حفظ الحقل بنجاح" : "Field saved successfully");
+    } catch {
+      toast.error(ar ? "حدث خطأ أثناء الحفظ" : "Error saving field");
     }
-    await invalidate();
-    setAdding(false);
-    setEditId(null);
-    setForm({ labelAr: "", labelEn: "", fieldType: "text", isRequired: false, options: "", placeholderAr: "", placeholderEn: "", sortOrder: 0 });
   }
 
   return (
@@ -88,7 +94,7 @@ function CustomFieldsPanel({ visaId, ar }: { visaId: number; ar: boolean }) {
       )}
       {adding && (
         <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium mb-1">{ar ? "التسمية عربي" : "Label (Arabic)"}</label>
               <input className="w-full border rounded-lg px-3 py-1.5 text-sm" value={form.labelAr} onChange={e => set("labelAr", e.target.value)} />
@@ -108,7 +114,7 @@ function CustomFieldsPanel({ visaId, ar }: { visaId: number; ar: boolean }) {
               <input type="number" className="w-full border rounded-lg px-3 py-1.5 text-sm" value={form.sortOrder} onChange={e => set("sortOrder", Number(e.target.value))} />
             </div>
             {form.fieldType === "select" && (
-              <div className="col-span-2">
+              <div className="col-span-full">
                 <label className="block text-xs font-medium mb-1">{ar ? "الخيارات (مفصولة بفاصلة)" : "Options (comma separated)"}</label>
                 <input className="w-full border rounded-lg px-3 py-1.5 text-sm" value={form.options} onChange={e => set("options", e.target.value)} />
               </div>
@@ -172,129 +178,162 @@ function VisaModal({ initial, onSave, onCancel, loading, ar, countries }: {
     }
   }
 
+  const canSave = !loading && !!form.visaType && !!form.countryAr;
+
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl my-8">
-        <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-xl font-bold">{ar ? "بيانات التأشيرة" : "Visa Details"}</h2>
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-start sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
+      <div className="bg-white w-full sm:rounded-2xl sm:shadow-2xl sm:max-w-3xl sm:my-8 min-h-full sm:min-h-0 flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b sticky top-0 bg-white z-10 sm:rounded-t-2xl">
+          <h2 className="text-lg sm:text-xl font-bold">{ar ? "بيانات التأشيرة" : "Visa Details"}</h2>
           <button onClick={onCancel} className="p-2 hover:bg-slate-100 rounded-lg"><X className="w-5 h-5" /></button>
         </div>
-        <div className="p-6 space-y-5 max-h-[65vh] overflow-y-auto">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium mb-1">{ar ? "الدولة" : "Country"}</label>
-              <select className="w-full border rounded-xl px-4 py-2.5 text-sm bg-white" value={form.countryId} onChange={e => handleCountryChange(e.target.value)}>
-                <option value="">{ar ? "-- اختر دولة --" : "-- Select country --"}</option>
-                {countries.map(c => <option key={c.id} value={c.id}>{ar ? c.nameAr : c.nameEn}</option>)}
-              </select>
-              <div className="grid grid-cols-3 gap-3 mt-2">
+
+        {/* Body — scrolls on mobile */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
+
+          {/* ── Country ── */}
+          <section>
+            <h3 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">{ar ? "معلومات الدولة" : "Country Info"}</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">{ar ? "اختر الدولة من القائمة" : "Select Country"}</label>
+                <select className="w-full border rounded-xl px-4 py-2.5 text-sm bg-white" value={form.countryId} onChange={e => handleCountryChange(e.target.value)}>
+                  <option value="">{ar ? "-- اختر دولة --" : "-- Select country --"}</option>
+                  {countries.map(c => <option key={c.id} value={c.id}>{ar ? c.nameAr : c.nameEn}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs text-muted-foreground mb-1">{ar ? "الاسم عربي" : "Name (AR)"}</label>
-                  <input className="w-full border rounded-lg px-3 py-1.5 text-sm" value={form.countryAr} onChange={e => set("countryAr", e.target.value)} />
+                  <label className="block text-xs text-muted-foreground mb-1">{ar ? "اسم الدولة (عربي)" : "Country Name (AR)"} *</label>
+                  <input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.countryAr} onChange={e => set("countryAr", e.target.value)} placeholder={ar ? "مثال: المملكة العربية السعودية" : "e.g. Saudi Arabia"} />
                 </div>
                 <div>
-                  <label className="block text-xs text-muted-foreground mb-1">{ar ? "الاسم إنجليزي" : "Name (EN)"}</label>
-                  <input className="w-full border rounded-lg px-3 py-1.5 text-sm" value={form.countryEn} onChange={e => set("countryEn", e.target.value)} dir="ltr" />
+                  <label className="block text-xs text-muted-foreground mb-1">{ar ? "اسم الدولة (إنجليزي)" : "Country Name (EN)"}</label>
+                  <input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.countryEn} onChange={e => set("countryEn", e.target.value)} dir="ltr" placeholder="e.g. Saudi Arabia" />
                 </div>
                 <div>
-                  <label className="block text-xs text-muted-foreground mb-1">{ar ? "الرمز" : "Code"}</label>
-                  <input className="w-full border rounded-lg px-3 py-1.5 text-sm" value={form.countryCode} onChange={e => set("countryCode", e.target.value)} dir="ltr" />
+                  <label className="block text-xs text-muted-foreground mb-1">{ar ? "رمز الدولة" : "Country Code"}</label>
+                  <input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.countryCode} onChange={e => set("countryCode", e.target.value)} dir="ltr" placeholder="e.g. SA" />
                 </div>
               </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">{ar ? "نوع التأشيرة" : "Visa Type"} *</label>
-              <input className="w-full border rounded-xl px-4 py-2.5 text-sm" placeholder={ar ? "مثال: تأشيرة سياحية" : "e.g. Tourist Visa"} value={form.visaType} onChange={e => set("visaType", e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">{ar ? "الفئة" : "Category"}</label>
-              <select className="w-full border rounded-xl px-4 py-2.5 text-sm bg-white" value={form.category} onChange={e => set("category", e.target.value)}>
-                {CATEGORIES.map(c => <option key={c.value} value={c.value}>{ar ? c.ar : c.en}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">{ar ? "الرسوم" : "Fee"} *</label>
-              <input type="number" className="w-full border rounded-xl px-4 py-2.5 text-sm" value={form.fee} onChange={e => set("fee", Number(e.target.value))} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">{ar ? "العملة" : "Currency"}</label>
-              <select className="w-full border rounded-xl px-4 py-2.5 text-sm bg-white" value={form.currency} onChange={e => set("currency", e.target.value)}>
-                {["SAR", "USD", "EUR", "AED"].map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">{ar ? "أيام المعالجة" : "Processing Days"}</label>
-              <input type="number" className="w-full border rounded-xl px-4 py-2.5 text-sm" value={form.processingDays} onChange={e => set("processingDays", Number(e.target.value))} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">{ar ? "مدة الإقامة (يوم)" : "Stay Duration (days)"}</label>
-              <input type="number" className="w-full border rounded-xl px-4 py-2.5 text-sm" value={form.stayDuration} onChange={e => set("stayDuration", Number(e.target.value))} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">{ar ? "صلاحية التأشيرة (يوم)" : "Validity (days)"}</label>
-              <input type="number" className="w-full border rounded-xl px-4 py-2.5 text-sm" value={form.validityDays} onChange={e => set("validityDays", Number(e.target.value))} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">{ar ? "نوع الدخول" : "Entry Type"}</label>
-              <select className="w-full border rounded-xl px-4 py-2.5 text-sm bg-white" value={form.entryType} onChange={e => set("entryType", e.target.value)}>
-                {ENTRY_TYPES.map(t => <option key={t.value} value={t.value}>{ar ? t.ar : t.en}</option>)}
-              </select>
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium mb-1">{ar ? "الوصف بالعربية" : "Description (Arabic)"}</label>
-              <textarea rows={2} className="w-full border rounded-xl px-4 py-2.5 text-sm resize-none" value={form.descriptionAr} onChange={e => set("descriptionAr", e.target.value)} />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium mb-1">{ar ? "الوصف بالإنجليزية" : "Description (English)"}</label>
-              <textarea rows={2} className="w-full border rounded-xl px-4 py-2.5 text-sm resize-none" value={form.descriptionEn} onChange={e => set("descriptionEn", e.target.value)} dir="ltr" />
-            </div>
+          </section>
 
-            {/* Document requirements */}
-            <div className="md:col-span-2">
-              <p className="text-sm font-semibold mb-3">{ar ? "المستندات المطلوبة" : "Required Documents"}</p>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { key: "requiresPassportImage", arLabel: "صورة جواز السفر", enLabel: "Passport Image" },
-                  { key: "requiresPersonalPhoto", arLabel: "صورة شخصية", enLabel: "Personal Photo" },
-                  { key: "requiresResidencyImage", arLabel: "الإقامة", enLabel: "Residency Image" },
-                  { key: "requiresVisaImage", arLabel: "تأشيرة بديلة", enLabel: "Alternative Visa" },
-                ].map(item => (
-                  <div key={item.key} className="flex items-center gap-2">
-                    <input type="checkbox" checked={form[item.key as keyof VisaForm] as boolean} onChange={chk(item.key as keyof VisaForm)} className="w-4 h-4" />
-                    <label className="text-sm">{ar ? item.arLabel : item.enLabel}</label>
-                  </div>
-                ))}
+          {/* ── Visa Details ── */}
+          <section>
+            <h3 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">{ar ? "تفاصيل التأشيرة" : "Visa Details"}</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium mb-1">{ar ? "نوع التأشيرة" : "Visa Type"} *</label>
+                <input className="w-full border rounded-xl px-4 py-2.5 text-sm" placeholder={ar ? "مثال: تأشيرة سياحية إلكترونية" : "e.g. Tourist E-Visa"} value={form.visaType} onChange={e => set("visaType", e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">{ar ? "الفئة" : "Category"}</label>
+                <select className="w-full border rounded-xl px-4 py-2.5 text-sm bg-white" value={form.category} onChange={e => set("category", e.target.value)}>
+                  {CATEGORIES.map(c => <option key={c.value} value={c.value}>{ar ? c.ar : c.en}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">{ar ? "نوع الدخول" : "Entry Type"}</label>
+                <select className="w-full border rounded-xl px-4 py-2.5 text-sm bg-white" value={form.entryType} onChange={e => set("entryType", e.target.value)}>
+                  {ENTRY_TYPES.map(t => <option key={t.value} value={t.value}>{ar ? t.ar : t.en}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">{ar ? "الرسوم" : "Fee"} *</label>
+                <input type="number" min="0" className="w-full border rounded-xl px-4 py-2.5 text-sm" value={form.fee} onChange={e => set("fee", Number(e.target.value))} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">{ar ? "العملة" : "Currency"}</label>
+                <select className="w-full border rounded-xl px-4 py-2.5 text-sm bg-white" value={form.currency} onChange={e => set("currency", e.target.value)}>
+                  {["SAR", "USD", "EUR", "AED"].map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">{ar ? "أيام المعالجة" : "Processing Days"}</label>
+                <input type="number" min="0" className="w-full border rounded-xl px-4 py-2.5 text-sm" value={form.processingDays} onChange={e => set("processingDays", Number(e.target.value))} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">{ar ? "مدة الإقامة (يوم)" : "Stay Duration (days)"}</label>
+                <input type="number" min="0" className="w-full border rounded-xl px-4 py-2.5 text-sm" value={form.stayDuration} onChange={e => set("stayDuration", Number(e.target.value))} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">{ar ? "صلاحية التأشيرة (يوم)" : "Validity (days)"}</label>
+                <input type="number" min="0" className="w-full border rounded-xl px-4 py-2.5 text-sm" value={form.validityDays} onChange={e => set("validityDays", Number(e.target.value))} />
               </div>
             </div>
+          </section>
 
-            {/* Residency acceptance */}
-            <div className="md:col-span-2">
-              <p className="text-sm font-semibold mb-3">{ar ? "الإقامات المقبولة" : "Accepted Residencies"}</p>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { key: "acceptsGccResidency", arLabel: "الإقامة الخليجية", enLabel: "GCC Residency" },
-                  { key: "acceptsSchengenResidency", arLabel: "إقامة شنغن", enLabel: "Schengen Residency" },
-                  { key: "acceptsUkResidency", arLabel: "إقامة بريطانيا", enLabel: "UK Residency" },
-                  { key: "acceptsUsVisa", arLabel: "تأشيرة أمريكية", enLabel: "US Visa" },
-                ].map(item => (
-                  <div key={item.key} className="flex items-center gap-2">
-                    <input type="checkbox" checked={form[item.key as keyof VisaForm] as boolean} onChange={chk(item.key as keyof VisaForm)} className="w-4 h-4" />
-                    <label className="text-sm">{ar ? item.arLabel : item.enLabel}</label>
-                  </div>
-                ))}
+          {/* ── Descriptions ── */}
+          <section>
+            <h3 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">{ar ? "الوصف" : "Description"}</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">{ar ? "الوصف بالعربية" : "Description (Arabic)"}</label>
+                <textarea rows={3} className="w-full border rounded-xl px-4 py-2.5 text-sm resize-none" value={form.descriptionAr} onChange={e => set("descriptionAr", e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">{ar ? "الوصف بالإنجليزية" : "Description (English)"}</label>
+                <textarea rows={3} className="w-full border rounded-xl px-4 py-2.5 text-sm resize-none" value={form.descriptionEn} onChange={e => set("descriptionEn", e.target.value)} dir="ltr" />
               </div>
             </div>
+          </section>
 
-            <div className="flex items-center gap-2">
-              <input type="checkbox" id="isActiveV" checked={form.isActive} onChange={chk("isActive")} className="w-4 h-4" />
-              <label htmlFor="isActiveV" className="text-sm font-medium">{ar ? "نشط" : "Active"}</label>
+          {/* ── Documents ── */}
+          <section>
+            <h3 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">{ar ? "المستندات المطلوبة" : "Required Documents"}</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {[
+                { key: "requiresPassportImage", arLabel: "صورة جواز السفر", enLabel: "Passport Image" },
+                { key: "requiresPersonalPhoto", arLabel: "صورة شخصية", enLabel: "Personal Photo" },
+                { key: "requiresResidencyImage", arLabel: "صورة الإقامة", enLabel: "Residency Image" },
+                { key: "requiresVisaImage", arLabel: "صورة تأشيرة بديلة", enLabel: "Alternative Visa Image" },
+              ].map(item => (
+                <label key={item.key} className="flex items-center gap-3 bg-slate-50 rounded-xl px-4 py-3 cursor-pointer hover:bg-slate-100">
+                  <input type="checkbox" checked={form[item.key as keyof VisaForm] as boolean} onChange={chk(item.key as keyof VisaForm)} className="w-4 h-4 accent-primary" />
+                  <span className="text-sm">{ar ? item.arLabel : item.enLabel}</span>
+                </label>
+              ))}
             </div>
-          </div>
+          </section>
+
+          {/* ── Accepted Residencies ── */}
+          <section>
+            <h3 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">{ar ? "الإقامات المقبولة" : "Accepted Residencies"}</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {[
+                { key: "acceptsGccResidency", arLabel: "إقامة خليجية (GCC)", enLabel: "GCC Residency" },
+                { key: "acceptsSchengenResidency", arLabel: "إقامة شنغن", enLabel: "Schengen Residency" },
+                { key: "acceptsUkResidency", arLabel: "إقامة بريطانيا", enLabel: "UK Residency" },
+                { key: "acceptsUsVisa", arLabel: "تأشيرة أمريكية", enLabel: "US Visa" },
+              ].map(item => (
+                <label key={item.key} className="flex items-center gap-3 bg-slate-50 rounded-xl px-4 py-3 cursor-pointer hover:bg-slate-100">
+                  <input type="checkbox" checked={form[item.key as keyof VisaForm] as boolean} onChange={chk(item.key as keyof VisaForm)} className="w-4 h-4 accent-primary" />
+                  <span className="text-sm">{ar ? item.arLabel : item.enLabel}</span>
+                </label>
+              ))}
+            </div>
+          </section>
+
+          {/* ── Status ── */}
+          <label className="flex items-center gap-3 bg-green-50 border border-green-100 rounded-xl px-4 py-3 cursor-pointer">
+            <input type="checkbox" id="isActiveV" checked={form.isActive} onChange={chk("isActive")} className="w-4 h-4 accent-green-600" />
+            <span className="text-sm font-medium text-green-800">{ar ? "نشط (يظهر للعملاء)" : "Active (visible to customers)"}</span>
+          </label>
+
+          {!canSave && (
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+              {ar ? "⚠️ يرجى إدخال اسم الدولة بالعربي ونوع التأشيرة على الأقل" : "⚠️ Country name (Arabic) and Visa Type are required"}
+            </p>
+          )}
         </div>
-        <div className="p-6 border-t flex gap-3 justify-end">
+
+        {/* Footer */}
+        <div className="p-4 sm:p-6 border-t flex gap-3 justify-end sticky bottom-0 bg-white sm:rounded-b-2xl">
           <Button variant="outline" onClick={onCancel}>{ar ? "إلغاء" : "Cancel"}</Button>
-          <Button onClick={() => onSave(form)} disabled={loading || !form.visaType || !form.countryAr}>
-            {loading ? (ar ? "جارٍ الحفظ..." : "Saving...") : (ar ? "حفظ" : "Save")}
+          <Button onClick={() => onSave(form)} disabled={!canSave}>
+            {loading ? (ar ? "جارٍ الحفظ..." : "Saving...") : (ar ? "حفظ التأشيرة" : "Save Visa")}
           </Button>
         </div>
       </div>
@@ -318,21 +357,33 @@ export default function VisasAdmin() {
 
   async function handleSave(form: VisaForm) {
     if (!modal) return;
-    const payload = { ...form, countryId: form.countryId ? Number(form.countryId) : null };
-    const invalidate = () => qc.invalidateQueries({ queryKey: getListVisasQueryKey() });
-    if (modal.mode === "create") {
-      await createMut.mutateAsync(payload as never);
-    } else {
-      await updateMut.mutateAsync({ id: modal.id!, data: payload as never });
+    try {
+      const payload = { ...form, countryId: form.countryId ? Number(form.countryId) : null };
+      const invalidate = () => qc.invalidateQueries({ queryKey: getListVisasQueryKey() });
+      if (modal.mode === "create") {
+        await createMut.mutateAsync(payload as never);
+        toast.success(ar ? "تمت إضافة التأشيرة بنجاح ✓" : "Visa added successfully ✓");
+      } else {
+        await updateMut.mutateAsync({ id: modal.id!, data: payload as never });
+        toast.success(ar ? "تم تحديث التأشيرة بنجاح ✓" : "Visa updated successfully ✓");
+      }
+      await invalidate();
+      setModal(null);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(ar ? `فشل الحفظ: ${msg}` : `Save failed: ${msg}`);
     }
-    await invalidate();
-    setModal(null);
   }
 
   async function handleDelete(id: number) {
-    await deleteMut.mutateAsync({ id });
-    await qc.invalidateQueries({ queryKey: getListVisasQueryKey() });
-    setDeleteConfirm(null);
+    try {
+      await deleteMut.mutateAsync({ id });
+      await qc.invalidateQueries({ queryKey: getListVisasQueryKey() });
+      setDeleteConfirm(null);
+      toast.success(ar ? "تم حذف التأشيرة" : "Visa deleted");
+    } catch {
+      toast.error(ar ? "فشل الحذف" : "Delete failed");
+    }
   }
 
   return (
@@ -371,7 +422,7 @@ export default function VisasAdmin() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                    <span className={`px-2 py-1 rounded-lg text-xs font-medium ${v.isActive ? "bg-green-50 text-green-700" : "bg-slate-100 text-slate-500"}`}>
+                    <span className={`hidden sm:inline px-2 py-1 rounded-lg text-xs font-medium ${v.isActive ? "bg-green-50 text-green-700" : "bg-slate-100 text-slate-500"}`}>
                       {v.isActive ? (ar ? "نشط" : "Active") : (ar ? "معطل" : "Inactive")}
                     </span>
                     <button onClick={() => setModal({ mode: "edit", id: v.id, initial: { countryId: v.countryId ? String(v.countryId) : "", countryAr: v.countryAr, countryEn: v.countryEn, countryCode: v.countryCode ?? "", visaType: v.visaType, category: v.category ?? "tourist", fee: Number(v.fee), currency: v.currency ?? "SAR", processingDays: v.processingDays, stayDuration: v.stayDuration ?? 30, validityDays: v.validityDays ?? 90, entryType: v.entryType, isActive: v.isActive, requiresPassportImage: v.requiresPassportImage ?? false, requiresPersonalPhoto: v.requiresPersonalPhoto ?? false, requiresResidencyImage: v.requiresResidencyImage ?? false, requiresVisaImage: v.requiresVisaImage ?? false, acceptsGccResidency: v.acceptsGccResidency ?? false, acceptsSchengenResidency: v.acceptsSchengenResidency ?? false, acceptsUkResidency: v.acceptsUkResidency ?? false, acceptsUsVisa: v.acceptsUsVisa ?? false, descriptionAr: v.descriptionAr ?? "", descriptionEn: v.descriptionEn ?? "", ineligibleMessageAr: v.ineligibleMessageAr ?? "", ineligibleMessageEn: v.ineligibleMessageEn ?? "" } })} className="p-2 hover:bg-slate-100 rounded-lg"><Edit2 className="w-4 h-4" /></button>
@@ -384,7 +435,7 @@ export default function VisasAdmin() {
                       <div><span className="text-muted-foreground">{ar ? "المعالجة" : "Processing"}</span><div className="font-medium">{v.processingDays} {ar ? "يوم" : "days"}</div></div>
                       <div><span className="text-muted-foreground">{ar ? "مدة الإقامة" : "Stay"}</span><div className="font-medium">{v.stayDuration ?? "—"} {ar ? "يوم" : "days"}</div></div>
                       <div><span className="text-muted-foreground">{ar ? "نوع الدخول" : "Entry"}</span><div className="font-medium">{v.entryType}</div></div>
-                      <div><span className="text-muted-foreground">{ar ? "GCC" : "GCC"}</span><div className="font-medium">{v.acceptsGccResidency ? (ar ? "مقبول" : "Accepted") : (ar ? "غير مقبول" : "Not accepted")}</div></div>
+                      <div><span className="text-muted-foreground">{ar ? "الرسوم" : "Fee"}</span><div className="font-medium">{Number(v.fee).toLocaleString()} {v.currency}</div></div>
                     </div>
                     <CustomFieldsPanel visaId={v.id} ar={ar} />
                   </div>
@@ -407,14 +458,14 @@ export default function VisasAdmin() {
       )}
 
       {deleteConfirm !== null && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full text-center">
             <h3 className="text-lg font-bold mb-2">{ar ? "تأكيد الحذف" : "Confirm Delete"}</h3>
-            <p className="text-muted-foreground text-sm mb-6">{ar ? "سيتم حذف التأشيرة وجميع حقولها المخصصة." : "This visa and all its custom fields will be deleted."}</p>
+            <p className="text-muted-foreground text-sm mb-6">{ar ? "سيتم حذف التأشيرة وجميع حقولها المخصصة نهائياً." : "This visa and all its custom fields will be permanently deleted."}</p>
             <div className="flex gap-3 justify-center">
               <Button variant="outline" onClick={() => setDeleteConfirm(null)}>{ar ? "إلغاء" : "Cancel"}</Button>
               <Button variant="destructive" onClick={() => handleDelete(deleteConfirm)} disabled={deleteMut.isPending}>
-                {deleteMut.isPending ? (ar ? "جارٍ الحذف..." : "Deleting...") : (ar ? "حذف" : "Delete")}
+                {deleteMut.isPending ? (ar ? "جارٍ الحذف..." : "Deleting...") : (ar ? "حذف نهائياً" : "Delete")}
               </Button>
             </div>
           </div>

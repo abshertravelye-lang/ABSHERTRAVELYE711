@@ -18,6 +18,8 @@ export const bookingsTable = pgTable("bookings", {
   notes: text("notes"),
   status: text("status").notNull().default("pending"),
   totalPrice: numeric("total_price", { precision: 10, scale: 2 }),
+  ticketUrl: text("ticket_url"),
+  duffelOrderId: text("duffel_order_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

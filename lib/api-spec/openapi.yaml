@@ -1948,6 +1948,8 @@ components:
         notes: { type: ["string", "null"] }
         status: { type: string, enum: [pending, confirmed, cancelled] }
         totalPrice: { type: ["number", "null"] }
+        ticketUrl: { type: ["string", "null"] }
+        duffelOrderId: { type: ["string", "null"] }
         createdAt: { type: string }
 
     BookingInput:
@@ -1972,6 +1974,8 @@ components:
         status: { type: string, enum: [pending, confirmed, cancelled] }
         notes: { type: string }
         totalPrice: { type: number }
+        ticketUrl: { type: string }
+        duffelOrderId: { type: string }
 
     ContactInput:
       type: object

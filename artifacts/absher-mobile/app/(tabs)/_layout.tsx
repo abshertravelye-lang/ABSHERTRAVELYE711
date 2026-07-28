@@ -33,9 +33,9 @@ function NativeTabLayout() {
         <Icon sf={{ default: 'doc.text', selected: 'doc.text.fill' }} />
         <Label>تأشيرات</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="programs">
-        <Icon sf={{ default: 'globe', selected: 'globe.americas.fill' }} />
-        <Label>البرامج</Label>
+      <NativeTabs.Trigger name="bookings">
+        <Icon sf={{ default: 'calendar', selected: 'calendar.badge.checkmark' }} />
+        <Label>حجوزاتي</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="account">
         <Icon sf={{ default: 'person', selected: 'person.fill' }} />
@@ -101,9 +101,13 @@ function ClassicTabLayout() {
       <Tabs.Screen name="visas"
         options={{ title: 'تأشيرات',
           tabBarIcon: ({ color, focused }) => icon('doc.text', 'document-text-outline', 'document-text', color, focused) }} />
+      <Tabs.Screen name="bookings"
+        options={{ title: 'حجوزاتي',
+          tabBarIcon: ({ color, focused }) => icon('calendar', 'calendar-outline', 'calendar', color, focused) }} />
       <Tabs.Screen name="programs"
         options={{ title: 'البرامج',
-          tabBarIcon: ({ color, focused }) => icon('globe', 'globe-outline', 'globe', color, focused) }} />
+          tabBarIcon: ({ color, focused }) => icon('globe', 'globe-outline', 'globe', color, focused),
+          href: null }} />
       <Tabs.Screen name="account"
         options={{ title: 'حسابي',
           tabBarIcon: ({ color, focused }) => icon('person', 'person-outline', 'person', color, focused) }} />

@@ -3,12 +3,18 @@ import QRCode from 'qrcode';
 import {
   X, Printer, Plane, CheckCircle, Clock, Luggage, ArrowRight,
   User, FileText, Globe, Calendar, ChevronRight, ShieldCheck, AlertCircle,
-  CreditCard,
+  CreditCard, Phone, ChevronDown,
 } from "lucide-react";
 import { type FlightOffer } from "@workspace/api-client-react";
 import { useAuth } from "@/hooks/use-auth";
 import type { Airport } from "@/data/airports";
 import type { PassengerConfig } from "./passenger-selector";
+import { CountrySelect } from "@/components/country-select";
+import { COUNTRIES } from "@workspace/countries";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 /* ─────────────────── types ─────────────────── */
 interface FlightTicketProps {
@@ -28,6 +34,7 @@ interface PassengerInfo {
   dob: string;
   email: string;
   phone: string;
+  phoneDialCode: string;
   passport: string;
   nationality: string;
 }
@@ -83,6 +90,8 @@ function Barcode({ value }: { value: string }) {
     }
     x += 2;
   });
+  // suppress unused var lint
+  void totalBars;
   return (
     <svg width={Math.min(x, 200)} height={40} viewBox={`0 0 ${x} 40`} preserveAspectRatio="none" style={{ width: '100%', maxWidth: 200, height: 40 }}>
       {elements}
@@ -94,12 +103,9 @@ function PrintStyles() {
   return (
     <style dangerouslySetInnerHTML={{ __html: `
       @media print {
-        /* Visibility-isolation: hide everything, then reveal only the ticket */
         * { visibility: hidden !important; }
         .ticket-print-root,
         .ticket-print-root * { visibility: visible !important; }
-
-        /* Stretch ticket to fill the page */
         .ticket-print-root {
           position: fixed !important;
           inset: 0 !important;
@@ -111,11 +117,7 @@ function PrintStyles() {
           overflow: visible !important;
           background: white !important;
         }
-
-        /* Page setup */
         @page { margin: 0; size: A4 portrait; }
-
-        /* Force colors — background fills, gradients, images all preserved */
         * {
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
@@ -125,7 +127,7 @@ function PrintStyles() {
   );
 }
 
-/* ─────────────────── Watermark SVG (inline, print-safe) ─────────────────── */
+/* ─────────────────── Watermark SVG ─────────────────── */
 const WATERMARK_STYLE: React.CSSProperties = {
   position: "absolute",
   inset: 0,
@@ -163,6 +165,142 @@ function Watermark() {
   );
 }
 
+/* ─────────────────── Phone dial codes (top 20) ─────────────────── */
+const DIAL_CODE_MAP: Record<string, string> = {
+  SA:"+966", AE:"+971", YE:"+967", OM:"+968", KW:"+965", QA:"+974",
+  BH:"+973", EG:"+20",  JO:"+962", IQ:"+964", SY:"+963", LB:"+961",
+  MA:"+212", DZ:"+213", TN:"+216", IN:"+91",  PK:"+92",  US:"+1",
+  GB:"+44",  TR:"+90",
+};
+const DIAL_CODES = [
+  "SA", "AE", "YE", "OM", "KW", "QA", "BH", "EG", "JO", "IQ",
+  "SY", "LB", "MA", "DZ", "TN", "IN", "PK", "US", "GB", "TR",
+].map(code => COUNTRIES.find(c => c.code === code)).filter(Boolean) as typeof COUNTRIES;
+
+function PhoneInput({
+  value, dialCode, onValueChange, onDialChange, ar,
+}: {
+  value: string;
+  dialCode: string;
+  onValueChange: (v: string) => void;
+  onDialChange: (v: string) => void;
+  ar: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = DIAL_CODES.find(c => c.code === dialCode) ?? DIAL_CODES[2]; // default YE
+
+  return (
+    <div className="flex w-full border border-slate-200 rounded-xl overflow-hidden bg-slate-50 hover:bg-white focus-within:ring-2 focus-within:ring-[#c8a84b]/30 focus-within:border-[#c8a84b] transition-all">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="flex items-center gap-1.5 px-3 py-2.5 border-e border-slate-200 bg-slate-100 hover:bg-slate-200 transition-colors shrink-0 text-sm font-medium text-slate-700"
+          >
+            <span className="text-base leading-none">{selected?.flag}</span>
+            <span className="text-xs text-slate-500 font-mono">{selected ? DIAL_CODE_MAP[selected.code] : ""}</span>
+            <ChevronDown className="h-3 w-3 text-slate-400" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-56 p-1" align={ar ? "end" : "start"}>
+          <div className="max-h-56 overflow-y-auto space-y-0.5">
+            {DIAL_CODES.map(c => (
+              <button
+                key={c.code}
+                type="button"
+                onClick={() => { onDialChange(c.code); setOpen(false); }}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-start ${dialCode === c.code ? "bg-[#0d2351]/10 text-[#0d2351] font-semibold" : "hover:bg-slate-50 text-slate-700"}`}
+              >
+                <span className="text-base leading-none">{c.flag}</span>
+                <span className="font-mono text-xs text-slate-500 w-10 shrink-0">{DIAL_CODE_MAP[c.code]}</span>
+                <span className="truncate">{ar ? c.nameAr : c.nameEn}</span>
+              </button>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+      <input
+        type="tel"
+        value={value}
+        onChange={e => onValueChange(e.target.value)}
+        placeholder={ar ? "7xxxxxxxx" : "7xxxxxxxx"}
+        className="flex-1 px-3 py-2.5 bg-transparent text-sm text-slate-800 focus:outline-none placeholder:text-slate-300"
+        dir="ltr"
+      />
+    </div>
+  );
+}
+
+/* ─────────────────── 3-Select Date Picker ─────────────────── */
+const MONTHS_AR = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+const MONTHS_EN = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+function parseDateParts(iso: string): { day: string; month: string; year: string } {
+  if (!iso) return { day: "", month: "", year: "" };
+  const [year, month, day] = iso.split("-");
+  return { day: day ? String(parseInt(day, 10)) : "", month: month ? String(parseInt(month, 10)) : "", year: year || "" };
+}
+
+function buildIso(day: string, month: string, year: string): string {
+  if (!day || !month || !year) return "";
+  return `${year}-${String(Number(month)).padStart(2, "0")}-${String(Number(day)).padStart(2, "0")}`;
+}
+
+function DateSelectPicker({
+  value, onChange, ar, minYear, maxYear,
+}: {
+  value: string;
+  onChange: (iso: string) => void;
+  ar: boolean;
+  minYear: number;
+  maxYear: number;
+}) {
+  const { day, month, year } = parseDateParts(value);
+
+  const years = Array.from({ length: maxYear - minYear + 1 }, (_, i) => String(maxYear - i));
+  const months = ar ? MONTHS_AR : MONTHS_EN;
+  const daysCount = day && month && year ? new Date(Number(year), Number(month), 0).getDate() : 31;
+  const days = Array.from({ length: daysCount }, (_, i) => String(i + 1));
+
+  const handleChange = (d: string, m: string, y: string) => {
+    onChange(buildIso(d, m, y));
+  };
+
+  const selectCls = "h-10 border-slate-200 bg-slate-50 rounded-xl text-sm focus:border-[#c8a84b] focus:ring-[#c8a84b]/20";
+
+  return (
+    <div className="flex gap-2" dir="ltr">
+      {/* Day */}
+      <Select value={day} onValueChange={d => handleChange(d, month, year)}>
+        <SelectTrigger className={`${selectCls} w-[72px]`}>
+          <SelectValue placeholder={ar ? "يوم" : "Day"} />
+        </SelectTrigger>
+        <SelectContent>
+          {days.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      {/* Month */}
+      <Select value={month} onValueChange={m => handleChange(day, m, year)}>
+        <SelectTrigger className={`${selectCls} flex-1`}>
+          <SelectValue placeholder={ar ? "شهر" : "Month"} />
+        </SelectTrigger>
+        <SelectContent>
+          {months.map((m, i) => <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      {/* Year */}
+      <Select value={year} onValueChange={y => handleChange(day, month, y)}>
+        <SelectTrigger className={`${selectCls} w-[88px]`}>
+          <SelectValue placeholder={ar ? "سنة" : "Year"} />
+        </SelectTrigger>
+        <SelectContent>
+          {years.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
 /* ─────────────────── Passenger Form ─────────────────── */
 const TITLES: Array<{ value: PassengerInfo["title"]; ar: string; en: string }> = [
   { value: "mr",   ar: "السيد",    en: "Mr." },
@@ -176,10 +314,6 @@ const INPUT_CLS = `w-full ps-10 pe-4 py-2.5 border border-slate-200 rounded-xl t
   focus:outline-none focus:ring-2 focus:ring-[#c8a84b]/30 focus:border-[#c8a84b] transition-all
   placeholder:text-slate-300 bg-slate-50 hover:bg-white`;
 
-const SELECT_CLS = `w-full ps-10 pe-4 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800
-  focus:outline-none focus:ring-2 focus:ring-[#c8a84b]/30 focus:border-[#c8a84b] transition-all
-  bg-slate-50 hover:bg-white appearance-none`;
-
 function PaxField({
   icon, label, required, children,
 }: { icon: React.ReactNode; label: string; required?: boolean; children: React.ReactNode }) {
@@ -189,7 +323,7 @@ function PaxField({
         {label}{required && <span className="text-red-400 ms-0.5">*</span>}
       </label>
       <div className="relative">
-        <div className="absolute inset-y-0 start-3 flex items-center pointer-events-none">{icon}</div>
+        <div className="absolute inset-y-0 start-3 flex items-center pointer-events-none z-10">{icon}</div>
         {children}
       </div>
     </div>
@@ -206,6 +340,7 @@ function PassengerForm({
   onChange: (info: PassengerInfo) => void;
 }) {
   const up = (patch: Partial<PassengerInfo>) => onChange({ ...info, ...patch });
+  const currentYear = new Date().getFullYear();
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
@@ -236,26 +371,54 @@ function PassengerForm({
         </PaxField>
 
         {/* Title */}
-        <PaxField icon={<User className="h-4 w-4 text-[#c8a84b]" />} label={ar ? "اللقب" : "Title"} required>
-          <select value={info.title} onChange={e => up({ title: e.target.value as PassengerInfo["title"] })} className={SELECT_CLS}>
-            <option value="">{ar ? "اختر اللقب" : "Select title"}</option>
-            {TITLES.map(t => <option key={t.value} value={t.value}>{ar ? t.ar : t.en}</option>)}
-          </select>
-        </PaxField>
+        <div>
+          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+            {ar ? "اللقب" : "Title"}<span className="text-red-400 ms-0.5">*</span>
+          </label>
+          <Select value={info.title || ""} onValueChange={v => up({ title: v as PassengerInfo["title"] })}>
+            <SelectTrigger className="w-full h-10 border-slate-200 bg-slate-50 rounded-xl text-sm focus:border-[#c8a84b] focus:ring-[#c8a84b]/20">
+              <SelectValue placeholder={ar ? "اختر اللقب" : "Select title"} />
+            </SelectTrigger>
+            <SelectContent>
+              {TITLES.map(t => (
+                <SelectItem key={t.value} value={t.value}>{ar ? t.ar : t.en}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         {/* Gender */}
-        <PaxField icon={<User className="h-4 w-4 text-[#c8a84b]" />} label={ar ? "الجنس" : "Gender"} required>
-          <select value={info.gender} onChange={e => up({ gender: e.target.value as PassengerInfo["gender"] })} className={SELECT_CLS}>
-            <option value="">{ar ? "اختر الجنس" : "Select gender"}</option>
-            <option value="m">{ar ? "ذكر" : "Male"}</option>
-            <option value="f">{ar ? "أنثى" : "Female"}</option>
-          </select>
-        </PaxField>
+        <div>
+          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+            {ar ? "الجنس" : "Gender"}<span className="text-red-400 ms-0.5">*</span>
+          </label>
+          <Select value={info.gender || ""} onValueChange={v => up({ gender: v as PassengerInfo["gender"] })}>
+            <SelectTrigger className="w-full h-10 border-slate-200 bg-slate-50 rounded-xl text-sm focus:border-[#c8a84b] focus:ring-[#c8a84b]/20">
+              <SelectValue placeholder={ar ? "اختر الجنس" : "Select gender"} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="m">{ar ? "ذكر" : "Male"}</SelectItem>
+              <SelectItem value="f">{ar ? "أنثى" : "Female"}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-        {/* Date of Birth */}
-        <PaxField icon={<Calendar className="h-4 w-4 text-[#c8a84b]" />} label={ar ? "تاريخ الميلاد" : "Date of Birth"} required>
-          <input type="date" value={info.dob} onChange={e => up({ dob: e.target.value })} className={INPUT_CLS} />
-        </PaxField>
+        {/* Date of Birth — 3-Select */}
+        <div className="md:col-span-2">
+          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+            <span className="flex items-center gap-1.5">
+              <Calendar className="h-3.5 w-3.5 text-[#c8a84b]" />
+              {ar ? "تاريخ الميلاد" : "Date of Birth"}<span className="text-red-400">*</span>
+            </span>
+          </label>
+          <DateSelectPicker
+            value={info.dob}
+            onChange={v => up({ dob: v })}
+            ar={ar}
+            minYear={1940}
+            maxYear={currentYear}
+          />
+        </div>
 
         {/* Email */}
         <PaxField icon={<FileText className="h-4 w-4 text-[#c8a84b]" />} label={ar ? "البريد الإلكتروني" : "Email"} required>
@@ -263,23 +426,43 @@ function PassengerForm({
             placeholder="name@email.com" className={INPUT_CLS} dir="ltr" />
         </PaxField>
 
-        {/* Phone */}
-        <PaxField icon={<Globe className="h-4 w-4 text-[#c8a84b]" />} label={ar ? "رقم الهاتف (دولي)" : "Phone (intl.)"} required>
-          <input type="tel" value={info.phone} onChange={e => up({ phone: e.target.value })}
-            placeholder="+967xxxxxxxxx" className={INPUT_CLS} dir="ltr" />
-        </PaxField>
+        {/* Phone with dial code */}
+        <div>
+          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+            <span className="flex items-center gap-1.5">
+              <Phone className="h-3.5 w-3.5 text-[#c8a84b]" />
+              {ar ? "رقم الهاتف" : "Phone Number"}<span className="text-red-400">*</span>
+            </span>
+          </label>
+          <PhoneInput
+            value={info.phone}
+            dialCode={info.phoneDialCode || "YE"}
+            onValueChange={v => up({ phone: v })}
+            onDialChange={v => up({ phoneDialCode: v })}
+            ar={ar}
+          />
+        </div>
 
         {/* Passport */}
         <PaxField icon={<FileText className="h-4 w-4 text-[#c8a84b]" />} label={ar ? "رقم الجواز" : "Passport No."}>
           <input type="text" value={info.passport} onChange={e => up({ passport: e.target.value })}
-            placeholder={ar ? "A12345678" : "A12345678"} className={INPUT_CLS} />
+            placeholder="A12345678" className={INPUT_CLS} dir="ltr" />
         </PaxField>
 
-        {/* Nationality */}
-        <PaxField icon={<Globe className="h-4 w-4 text-[#c8a84b]" />} label={ar ? "الجنسية" : "Nationality"}>
-          <input type="text" value={info.nationality} onChange={e => up({ nationality: e.target.value })}
-            placeholder={ar ? "مثال: يمني / سعودي" : "e.g. Yemeni / Saudi"} className={INPUT_CLS} />
-        </PaxField>
+        {/* Nationality — CountrySelect */}
+        <div>
+          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+            <span className="flex items-center gap-1.5">
+              <Globe className="h-3.5 w-3.5 text-[#c8a84b]" />
+              {ar ? "الجنسية" : "Nationality"}
+            </span>
+          </label>
+          <CountrySelect
+            language={ar ? "ar" : "en"}
+            value={info.nationality}
+            onChange={code => up({ nationality: code })}
+          />
+        </div>
       </div>
     </div>
   );
@@ -548,7 +731,7 @@ function TicketContent({
                   {p.nationality && (
                     <div className="text-slate-500">
                       <span className="text-xs text-slate-400 font-medium">{ar ? "الجنسية: " : "Nationality: "}</span>
-                      {p.nationality}
+                      {COUNTRIES.find(c => c.code === p.nationality)?.[ar ? "nameAr" : "nameEn"] || p.nationality}
                     </div>
                   )}
                   {p.dob && (
@@ -674,7 +857,7 @@ export function FlightTicket({
     Array.from({ length: Math.max(totalPax, 1) }, () => ({
       givenName: "", familyName: "", title: "" as PassengerInfo["title"],
       gender: "" as PassengerInfo["gender"], dob: "", email: "", phone: "",
-      passport: "", nationality: "",
+      phoneDialCode: "YE", passport: "", nationality: "",
     }))
   );
   const [bookingRef] = useState(() => genRef("ABT"));
@@ -701,7 +884,6 @@ export function FlightTicket({
 
   const handlePrint = () => window.print();
 
-  /** Call POST /api/flights/book → real Duffel order, then advance to confirmed step */
   const handleConfirm = async () => {
     if (!hasMinData || isBooking) return;
     setIsBooking(true);
@@ -710,23 +892,27 @@ export function FlightTicket({
     try {
       const headers: HeadersInit = { "Content-Type": "application/json" };
       if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+      const dialCode = DIAL_CODE_MAP[p0?.phoneDialCode || "YE"] ?? "+967";
       const resp = await fetch("/api/flights/book", {
         method: "POST",
         headers,
         body: JSON.stringify({
           providerSlug: offer.providerSlug,
           providerOfferId: offer.providerOfferId,
-          passengers: passengerDetails.map(p => ({
-            givenName: p.givenName,
-            familyName: p.familyName,
-            title: p.title || "mr",
-            gender: p.gender || "m",
-            dob: p.dob,
-            email: p.email,
-            phone: p.phone,
-            passport: p.passport,
-            nationality: p.nationality,
-          })),
+          passengers: passengerDetails.map(p => {
+            const dc = DIAL_CODE_MAP[p.phoneDialCode || "YE"] ?? "+967";
+            return {
+              givenName: p.givenName,
+              familyName: p.familyName,
+              title: p.title || "mr",
+              gender: p.gender || "m",
+              dob: p.dob,
+              email: p.email,
+              phone: `${dc}${p.phone}`,
+              passport: p.passport,
+              nationality: p.nationality,
+            };
+          }),
           adults: passengers.adults,
           children: passengers.children,
           infants: passengers.infants,
@@ -737,6 +923,7 @@ export function FlightTicket({
           travelDate: firstSeg?.departureAt?.slice(0, 10),
         }),
       });
+      void dialCode;
       if (resp.ok) {
         const data = await resp.json() as {
           bookingReference?: string; orderId?: string | null; bookingId?: number;
@@ -751,6 +938,9 @@ export function FlightTicket({
       setStep("confirmed");
     }
   };
+
+  // Suppress unused warning
+  void duffelOrderId;
 
   /* ── Step: Passenger form ── */
   if (step === "passengers") {
@@ -857,7 +1047,6 @@ export function FlightTicket({
 
   /* ── Step: Ticket (provisional or confirmed) ── */
   const isConfirmed = step === "confirmed";
-  // Use real Duffel PNR when available, otherwise use local reference
   const ref = isConfirmed
     ? (duffelBookingRef ?? confirmedRef)
     : bookingRef;
@@ -874,7 +1063,7 @@ export function FlightTicket({
           <div>
             <h2 className="text-white text-xl font-black">
               {isConfirmed
-                ? (ar ? "تذكرة مؤكدة ✓" : "Confirmed Ticket ✓")
+                ? (ar ? "تذكرة مؤكدة" : "Confirmed Ticket")
                 : (ar ? "حجز مؤقت" : "Provisional Booking")}
             </h2>
             <p className="text-white/50 text-sm">

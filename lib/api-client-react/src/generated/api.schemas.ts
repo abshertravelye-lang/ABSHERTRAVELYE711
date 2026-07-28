@@ -862,6 +862,10 @@ export interface Booking {
   status: BookingStatus;
   /** @nullable */
   totalPrice?: number | null;
+  /** @nullable */
+  ticketUrl?: string | null;
+  /** @nullable */
+  duffelOrderId?: string | null;
   createdAt: string;
 }
 
@@ -902,6 +906,8 @@ export interface BookingUpdate {
   status?: BookingUpdateStatus;
   notes?: string;
   totalPrice?: number;
+  ticketUrl?: string;
+  duffelOrderId?: string;
 }
 
 export interface ContactInput {

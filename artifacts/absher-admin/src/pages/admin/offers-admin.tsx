@@ -53,7 +53,7 @@ function OfferFormModal({ initial, onSave, onCancel, loading }: {
               <label className="block text-sm font-medium mb-1">{ar ? "الوصف بالإنجليزية" : "Description (English)"}</label>
               <textarea rows={3} className="w-full border rounded-xl px-4 py-2.5 text-sm resize-none" value={form.descriptionEn} onChange={e => set("descriptionEn", e.target.value)} dir="ltr" />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-1">{ar ? "السعر" : "Price"} *</label>
                 <input type="number" min="0" className="w-full border rounded-xl px-4 py-2.5 text-sm" value={form.price} onChange={e => set("price", Number(e.target.value))} />

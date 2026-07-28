@@ -44,15 +44,15 @@ function Modal({ initial, onSave, onCancel, loading, ar }: {
           <button onClick={onCancel} className="p-2 hover:bg-slate-100 rounded-lg"><X className="w-5 h-5" /></button>
         </div>
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2 sm:col-span-1">
-              <label className="block text-sm font-medium mb-1">{ar ? "الاسم بالعربية" : "Name (Arabic)"} *</label>
-              <input className="w-full border rounded-xl px-4 py-2.5 text-sm" value={form.nameAr} onChange={e => set("nameAr", e.target.value)} placeholder={ar ? "مثال: الإمارات" : "e.g. UAE"} />
-            </div>
-            <div className="col-span-2 sm:col-span-1">
-              <label className="block text-sm font-medium mb-1">{ar ? "الاسم بالإنجليزية" : "Name (English)"} *</label>
-              <input className="w-full border rounded-xl px-4 py-2.5 text-sm" value={form.nameEn} onChange={e => set("nameEn", e.target.value)} dir="ltr" placeholder="e.g. United Arab Emirates" />
-            </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">{ar ? "الاسم بالعربية" : "Name (Arabic)"} *</label>
+            <input className="w-full border rounded-xl px-4 py-2.5 text-sm" value={form.nameAr} onChange={e => set("nameAr", e.target.value)} placeholder={ar ? "مثال: الإمارات" : "e.g. UAE"} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">{ar ? "الاسم بالإنجليزية" : "Name (English)"} *</label>
+            <input className="w-full border rounded-xl px-4 py-2.5 text-sm" value={form.nameEn} onChange={e => set("nameEn", e.target.value)} dir="ltr" placeholder="e.g. United Arab Emirates" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">{ar ? "رمز الدولة (ISO)" : "Country Code (ISO)"} *</label>
               <input className="w-full border rounded-xl px-4 py-2.5 text-sm uppercase" placeholder="AE" value={form.countryCode} onChange={e => set("countryCode", e.target.value.toUpperCase())} dir="ltr" />
@@ -62,15 +62,15 @@ function Modal({ initial, onSave, onCancel, loading, ar }: {
               <input className="w-full border rounded-xl px-4 py-2.5 text-sm" placeholder="🇦🇪" value={form.flagEmoji} onChange={e => set("flagEmoji", e.target.value)} />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">{ar ? "المنطقة" : "Region"} *</label>
-              <select className="w-full border rounded-xl px-4 py-2.5 text-sm bg-white" value={form.region} onChange={e => set("region", e.target.value)}>
-                {REGIONS.map(r => <option key={r.value} value={r.value}>{ar ? r.ar : r.en}</option>)}
-              </select>
-            </div>
-            <div>
               <label className="block text-sm font-medium mb-1">{ar ? "ترتيب العرض" : "Sort Order"}</label>
               <input type="number" className="w-full border rounded-xl px-4 py-2.5 text-sm" value={form.sortOrder} onChange={e => set("sortOrder", Number(e.target.value))} />
             </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">{ar ? "المنطقة" : "Region"} *</label>
+            <select className="w-full border rounded-xl px-4 py-2.5 text-sm bg-white" value={form.region} onChange={e => set("region", e.target.value)}>
+              {REGIONS.map(r => <option key={r.value} value={r.value}>{ar ? r.ar : r.en}</option>)}
+            </select>
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">{ar ? "رابط الصورة" : "Image URL"}</label>

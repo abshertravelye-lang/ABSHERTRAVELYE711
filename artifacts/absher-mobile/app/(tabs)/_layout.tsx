@@ -106,8 +106,7 @@ function ClassicTabLayout() {
           tabBarIcon: ({ color, focused }) => icon('calendar', 'calendar-outline', 'calendar', color, focused) }} />
       <Tabs.Screen name="programs"
         options={{ title: 'البرامج',
-          tabBarIcon: ({ color, focused }) => icon('globe', 'globe-outline', 'globe', color, focused),
-          href: null }} />
+          tabBarIcon: ({ color, focused }) => icon('globe', 'globe-outline', 'globe', color, focused) }} />
       <Tabs.Screen name="account"
         options={{ title: 'حسابي',
           tabBarIcon: ({ color, focused }) => icon('person', 'person-outline', 'person', color, focused) }} />

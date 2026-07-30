@@ -3,6 +3,7 @@ import { useTranslation } from "@/hooks/use-translation";
 import {
   LayoutDashboard, Ticket, Map, MessageSquare, Briefcase, FileText,
   Users, Globe, Wrench, Building2, Languages, Flag,
+  UserCog, CreditCard, BarChart3, Bell, Settings
 } from "lucide-react";
 import { lazy, Suspense } from "react";
 import DashboardOverview from "./dashboard-overview";
@@ -16,6 +17,11 @@ const DestinationsAdmin = lazy(() => import("./destinations-admin"));
 const CustomersAdmin = lazy(() => import("./customers-admin"));
 const MessagesAdmin = lazy(() => import("./messages-admin"));
 const VisaApplicationsAdmin = lazy(() => import("./visa-applications-admin"));
+const EmployeesAdmin = lazy(() => import("./employees-admin"));
+const PaymentsAdmin = lazy(() => import("./payments-admin"));
+const ReportsAdmin = lazy(() => import("./reports-admin"));
+const NotificationsAdmin = lazy(() => import("./notifications-admin"));
+const SettingsAdmin = lazy(() => import("./settings-admin"));
 
 function LoadingSpinner() {
   return (
@@ -44,14 +50,19 @@ export default function AdminLayout() {
   const navItems = [
     { href: "/",                         icon: LayoutDashboard, labelAr: "نظرة عامة",        labelEn: "Overview" },
     { href: "/admin/bookings",           icon: Ticket,          labelAr: "الحجوزات",          labelEn: "Bookings" },
+    { href: "/admin/payments",           icon: CreditCard,      labelAr: "المدفوعات",         labelEn: "Payments" },
+    { href: "/admin/reports",            icon: BarChart3,       labelAr: "التقارير",          labelEn: "Reports" },
     { href: "/admin/visa-applications",  icon: FileText,        labelAr: "طلبات التأشيرة",    labelEn: "Visa Applications" },
     { href: "/admin/visa-countries",     icon: Flag,            labelAr: "دول التأشيرة",      labelEn: "Visa Countries" },
     { href: "/admin/visas",              icon: Globe,           labelAr: "أنواع التأشيرات",   labelEn: "Visa Types" },
     { href: "/admin/programs",           icon: Map,             labelAr: "البرامج السياحية",  labelEn: "Programs" },
     { href: "/admin/offers",             icon: Briefcase,       labelAr: "العروض",            labelEn: "Offers" },
     { href: "/admin/destinations",       icon: Building2,       labelAr: "الوجهات",           labelEn: "Destinations" },
-    { href: "/admin/customers",          icon: Users,           labelAr: "المستخدمون",        labelEn: "Users" },
+    { href: "/admin/customers",          icon: Users,           labelAr: "العملاء",           labelEn: "Customers" },
+    { href: "/admin/employees",          icon: UserCog,         labelAr: "الموظفون",         labelEn: "Employees" },
     { href: "/admin/messages",           icon: MessageSquare,   labelAr: "الرسائل",           labelEn: "Messages" },
+    { href: "/admin/notifications",      icon: Bell,            labelAr: "الإشعارات",         labelEn: "Notifications" },
+    { href: "/admin/settings",           icon: Settings,        labelAr: "الإعدادات",         labelEn: "Settings" },
   ];
 
   const currentItem = navItems.find(i =>
@@ -131,6 +142,8 @@ export default function AdminLayout() {
             <Switch>
               <Route path="/" component={DashboardOverview} />
               <Route path="/admin/bookings" component={BookingsAdmin} />
+              <Route path="/admin/payments" component={PaymentsAdmin} />
+              <Route path="/admin/reports" component={ReportsAdmin} />
               <Route path="/admin/visa-applications" component={VisaApplicationsAdmin} />
               <Route path="/admin/visa-countries" component={VisaCountriesAdmin} />
               <Route path="/admin/visas" component={VisasAdmin} />
@@ -138,7 +151,10 @@ export default function AdminLayout() {
               <Route path="/admin/offers" component={OffersAdmin} />
               <Route path="/admin/destinations" component={DestinationsAdmin} />
               <Route path="/admin/customers" component={CustomersAdmin} />
+              <Route path="/admin/employees" component={EmployeesAdmin} />
               <Route path="/admin/messages" component={MessagesAdmin} />
+              <Route path="/admin/notifications" component={NotificationsAdmin} />
+              <Route path="/admin/settings" component={SettingsAdmin} />
               <Route path="/admin/:rest*">
                 <div className="bg-card rounded-3xl shadow-sm border border-card-border p-20 text-center flex flex-col items-center justify-center min-h-[60vh]">
                   <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mb-6">

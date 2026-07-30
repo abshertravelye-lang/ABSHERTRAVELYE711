@@ -137,7 +137,9 @@ const themeStyles = StyleSheet.create({
 const MENU_ITEMS = [
   { icon: 'calendar-outline' as const, label: 'حجوزاتي', route: '/(tabs)/bookings' },
   { icon: 'document-text-outline' as const, label: 'طلبات التأشيرة', route: null },
+  { icon: 'wallet-outline' as const, label: 'المحفظة', route: '/wallet' },
   { icon: 'notifications-outline' as const, label: 'الإشعارات', route: '/notifications' },
+  { icon: 'settings-outline' as const, label: 'الإعدادات', route: '/settings' },
   { icon: 'help-circle-outline' as const, label: 'تواصل معنا', route: null },
   { icon: 'information-circle-outline' as const, label: 'عن التطبيق', route: null },
 ];

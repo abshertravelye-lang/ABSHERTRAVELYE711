@@ -35,6 +35,7 @@ function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="onboarding" options={{ headerShown: false }} />
       <Stack.Screen name="program/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="visa/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="destination/[id]" options={{ headerShown: false }} />
@@ -43,6 +44,12 @@ function RootLayoutNav() {
       <Stack.Screen name="notifications" options={{ headerShown: false }} />
       <Stack.Screen name="auth/login" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="auth/register" options={{ headerShown: false, presentation: 'modal' }} />
+      <Stack.Screen name="auth/otp" options={{ headerShown: false }} />
+      <Stack.Screen name="auth/forgot-password" options={{ headerShown: false }} />
+      <Stack.Screen name="settings" options={{ headerShown: false }} />
+      <Stack.Screen name="wallet" options={{ headerShown: false }} />
+      <Stack.Screen name="booking/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="visa-tracking/[id]" options={{ headerShown: false }} />
     </Stack>
   );
 }

@@ -1,8 +1,9 @@
 /**
- * Tab bar design rule:
- *   Always navy (#0A2342) background — matches the logo's navy field.
- *   Active icon / label → gold (#D4AF37) — matches the logo's compass star.
- *   Inactive → white 55 % opacity (light) / slate-400 (dark).
+ * Tab bar design rule — ABSHER TRAVEL Premium Brand
+ *   Always deep navy background (#0A2342 light, #071525 dark)
+ *   Active icon / label → gold (#D4AF37) — matches the logo's gold accents
+ *   Inactive → white 50% opacity (light) / slate-400 (dark)
+ *   Subtle gold glow on active tab
  */
 import React from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
@@ -16,6 +17,7 @@ import { SymbolView } from 'expo-symbols';
 
 // ── Navy + Gold tab bar (always branded) ────────────────────────────────────
 const NAVY   = '#0A2342';
+const DARK_NAVY = '#071525';
 const GOLD   = '#D4AF37';
 
 function NativeTabLayout() {
@@ -37,6 +39,10 @@ function NativeTabLayout() {
         <Icon sf={{ default: 'calendar', selected: 'calendar.badge.checkmark' }} />
         <Label>حجوزاتي</Label>
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="programs">
+        <Icon sf={{ default: 'globe', selected: 'globe' }} />
+        <Label>البرامج</Label>
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="account">
         <Icon sf={{ default: 'person', selected: 'person.fill' }} />
         <Label>حسابي</Label>
@@ -52,7 +58,7 @@ function ClassicTabLayout() {
   const isWeb = Platform.OS === 'web';
 
   // Dark mode: slightly deeper navy so the tab bar contrasts with cards
-  const tabBg   = isDark ? '#071525' : NAVY;
+  const tabBg   = isDark ? DARK_NAVY : NAVY;
   const inactive = isDark ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.50)';
 
   const icon = (

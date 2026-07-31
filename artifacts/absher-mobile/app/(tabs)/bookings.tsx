@@ -1,6 +1,6 @@
 /**
- * bookings.tsx — شاشة حجوزاتي
- * عرض جميع حجوزات المستخدم مع تفاصيل وخيارات
+ * bookings.tsx — شاشة حجوزاتي — ABSHER TRAVEL Premium
+ * عرض جميع حجوزات المستخدم مع تصميم فاخر يتماشى مع هوية العلامة
  */
 import React, { useState } from 'react';
 import {
@@ -13,6 +13,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,10 +31,10 @@ const STATUS_CONFIG = {
 };
 
 const TYPE_CONFIG = {
-  flight:  { icon: 'airplane' as const,       label: 'رحلة طيران', color: '#0A2342' },
+  flight:  { icon: 'airplane' as const,       label: 'رحلة طيران', color: '#38BDF8' },
   hotel:   { icon: 'bed-outline' as const,    label: 'فندق',       color: '#7C3AED' },
   program: { icon: 'globe-outline' as const,  label: 'برنامج سياحي', color: '#0891B2' },
-  visa:    { icon: 'card-outline' as const,   label: 'تأشيرة',    color: '#D97706' },
+  visa:    { icon: 'card-outline' as const,   label: 'تأشيرة',    color: '#D4AF37' },
 };
 
 function formatDate(iso: string) {
@@ -50,7 +51,7 @@ function BookingCard({ booking }: { booking: Booking }) {
 
   const shareWhatsApp = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const msg = `حجزي: ${typeConf.label}\nرقم الحجز: #${booking.id}\nالعميل: ${booking.clientName}\nالوجهة: ${booking.destination || '---'}\nتاريخ السفر: ${booking.travelDate ? formatDate(booking.travelDate) : '---'}\nالحالة: ${status.label}`;
+    const msg = `حجزي مع أبشر ترافل:\n${typeConf.label}\nرقم الحجز: #${booking.id}\nالعميل: ${booking.clientName}\nالوجهة: ${booking.destination || '---'}\nتاريخ السفر: ${booking.travelDate ? formatDate(booking.travelDate) : '---'}\nالحالة: ${status.label}`;
     Linking.openURL(`whatsapp://send?text=${encodeURIComponent(msg)}`);
   };
 
@@ -61,7 +62,7 @@ function BookingCard({ booking }: { booking: Booking }) {
         <View style={bc.leftGroup}>
           {/* Status badge */}
           <View style={[bc.statusBadge, { backgroundColor: status.bg }]}>
-            <Ionicons name={status.icon} size={13} color={status.text} />
+            <Ionicons name={status.icon} size={14} color={status.text} />
             <Text style={[bc.statusText, { color: status.text, fontFamily: 'Cairo_600SemiBold' }]}>{status.label}</Text>
           </View>
           <Text style={[bc.bookingId, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>#{booking.id}</Text>
@@ -71,7 +72,7 @@ function BookingCard({ booking }: { booking: Booking }) {
         <View style={bc.typeGroup}>
           <Text style={[bc.typeLabel, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>{typeConf.label}</Text>
           <View style={[bc.typeIcon, { backgroundColor: `${typeConf.color}18` }]}>
-            <Ionicons name={typeConf.icon} size={20} color={typeConf.color} />
+            <Ionicons name={typeConf.icon} size={22} color={typeConf.color} />
           </View>
         </View>
       </View>
@@ -82,16 +83,19 @@ function BookingCard({ booking }: { booking: Booking }) {
           {booking.destination || booking.clientName}
         </Text>
         {booking.travelDate && (
-          <Text style={[bc.dateText, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-            {formatDate(booking.travelDate)}
-          </Text>
+          <View style={bc.dateRow}>
+            <Ionicons name="calendar-outline" size={14} color="#D4AF37" />
+            <Text style={[bc.dateText, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
+              {formatDate(booking.travelDate)}
+            </Text>
+          </View>
         )}
       </View>
 
       {/* Passengers */}
       {(booking.adults ?? 0) > 0 && (
         <View style={bc.passBadge}>
-          <Ionicons name="people-outline" size={14} color={colors.mutedForeground} />
+          <Ionicons name="people-outline" size={15} color="#38BDF8" />
           <Text style={[bc.passText, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
             {booking.adults} {(booking.adults ?? 0) === 1 ? 'مسافر' : 'مسافرون'}
           </Text>
@@ -100,7 +104,7 @@ function BookingCard({ booking }: { booking: Booking }) {
 
       {/* Price */}
       {booking.totalPrice && (
-        <Text style={[bc.price, { color: '#0A2342', fontFamily: 'Cairo_700Bold' }]}>
+        <Text style={[bc.price, { color: '#D4AF37', fontFamily: 'Cairo_700Bold' }]}>
           {booking.totalPrice.toLocaleString('ar-SA')} {booking.type === 'flight' ? 'USD' : 'ر.س'}
         </Text>
       )}
@@ -143,15 +147,15 @@ function BookingCard({ booking }: { booking: Booking }) {
           style={({ pressed }) => [bc.actionBtn, { backgroundColor: colors.muted, opacity: pressed ? 0.7 : 1 }]}
           onPress={shareWhatsApp}
         >
-          <Ionicons name="logo-whatsapp" size={16} color="#16A34A" />
+          <Ionicons name="logo-whatsapp" size={18} color="#16A34A" />
           <Text style={[bc.actionText, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>مشاركة</Text>
         </Pressable>
         <Pressable
-          style={({ pressed }) => [bc.actionBtn, { backgroundColor: expanded ? '#0A234215' : colors.muted, opacity: pressed ? 0.7 : 1 }]}
+          style={({ pressed }) => [bc.actionBtn, { backgroundColor: expanded ? '#D4AF3720' : colors.muted, opacity: pressed ? 0.7 : 1 }]}
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setExpanded(!expanded); }}
         >
-          <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color="#0A2342" />
-          <Text style={[bc.actionText, { color: '#0A2342', fontFamily: 'Cairo_600SemiBold' }]}>تفاصيل</Text>
+          <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color="#D4AF37" />
+          <Text style={[bc.actionText, { color: '#D4AF37', fontFamily: 'Cairo_600SemiBold' }]}>تفاصيل</Text>
         </Pressable>
       </View>
     </View>
@@ -159,31 +163,32 @@ function BookingCard({ booking }: { booking: Booking }) {
 }
 
 const bc = StyleSheet.create({
-  card: { borderRadius: 16, borderLeftWidth: 4, padding: 16, marginBottom: 12, gap: 10, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 8, elevation: 3 },
+  card: { borderRadius: 18, borderLeftWidth: 5, padding: 18, marginBottom: 14, gap: 12, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.09, shadowRadius: 10, elevation: 4 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  leftGroup: { gap: 4, alignItems: 'flex-start' },
-  statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
-  statusText: { fontSize: 12 },
-  bookingId: { fontSize: 11 },
-  typeGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  typeLabel: { fontSize: 15 },
-  typeIcon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  routeRow: { gap: 2 },
-  routeText: { fontSize: 16, textAlign: 'right' },
-  dateText: { fontSize: 12, textAlign: 'right' },
-  passBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  passText: { fontSize: 12 },
-  price: { fontSize: 20, textAlign: 'right' },
-  expandedWrap: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 10, gap: 8 },
+  leftGroup: { gap: 5, alignItems: 'flex-start' },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 22, paddingHorizontal: 12, paddingVertical: 5 },
+  statusText: { fontSize: 13 },
+  bookingId: { fontSize: 12 },
+  typeGroup: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  typeLabel: { fontSize: 16 },
+  typeIcon: { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  routeRow: { gap: 4 },
+  routeText: { fontSize: 17, textAlign: 'right' },
+  dateRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dateText: { fontSize: 13, textAlign: 'right' },
+  passBadge: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  passText: { fontSize: 13 },
+  price: { fontSize: 22, textAlign: 'right' },
+  expandedWrap: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12, gap: 10 },
   detailRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  detailKey: { fontSize: 13 },
-  detailValue: { fontSize: 13, flex: 1, textAlign: 'right', paddingLeft: 8 },
-  notesWrap: { borderRadius: 8, padding: 10 },
-  notesText: { fontSize: 13, textAlign: 'right', lineHeight: 20 },
-  createdAt: { fontSize: 11, textAlign: 'right' },
-  actions: { flexDirection: 'row', gap: 8, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 10 },
-  actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderRadius: 10, paddingVertical: 10 },
-  actionText: { fontSize: 13 },
+  detailKey: { fontSize: 14 },
+  detailValue: { fontSize: 14, flex: 1, textAlign: 'right', paddingLeft: 10 },
+  notesWrap: { borderRadius: 10, padding: 12 },
+  notesText: { fontSize: 14, textAlign: 'right', lineHeight: 22 },
+  createdAt: { fontSize: 12, textAlign: 'right' },
+  actions: { flexDirection: 'row', gap: 10, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 12 },
+  actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderRadius: 12, paddingVertical: 11 },
+  actionText: { fontSize: 14 },
 });
 
 // ── Main Screen ───────────────────────────────────────────────────────────────
@@ -200,12 +205,12 @@ export default function BookingsScreen() {
   return (
     <View style={[s.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={[s.header, { paddingTop: topInset + 12, backgroundColor: '#0A2342' }]}>
+      <LinearGradient colors={['#071525', '#0A2342', '#1E3A5F']} style={[s.header, { paddingTop: topInset + 14 }]}>
         <View style={s.headerRow}>
-          <View style={{ width: 22 }} />
+          <View style={{ width: 24 }} />
           <Text style={[s.headerTitle, { fontFamily: 'Cairo_700Bold' }]}>حجوزاتي</Text>
           <Pressable onPress={() => router.push('/flight-results' as any)} style={{ opacity: 0 }}>
-            <View style={{ width: 22 }} />
+            <View style={{ width: 24 }} />
           </Pressable>
         </View>
         {bookings.length > 0 && (
@@ -213,7 +218,7 @@ export default function BookingsScreen() {
             {bookings.length} {bookings.length === 1 ? 'حجز' : 'حجوزات'}
           </Text>
         )}
-      </View>
+      </LinearGradient>
 
       {error ? (
         <EmptyState
@@ -256,8 +261,8 @@ export default function BookingsScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: 16, paddingBottom: 14 },
+  header: { paddingHorizontal: 16, paddingBottom: 16 },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerTitle: { color: '#FFFFFF', fontSize: 20 },
-  subTitle: { color: 'rgba(255,255,255,0.6)', fontSize: 13, textAlign: 'center', marginTop: 4 },
+  headerTitle: { color: '#D4AF37', fontSize: 22 },
+  subTitle: { color: 'rgba(255,255,255,0.65)', fontSize: 14, textAlign: 'center', marginTop: 6 },
 });

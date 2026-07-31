@@ -14,9 +14,10 @@ import { SkeletonRow } from '@/components/EmptyState';
 import { getImageUrl } from '@/hooks/useImageUrl';
 
 const QUICK_ACTIONS = [
-  { icon: 'airplane-outline' as const, label: 'رحلات', route: '/flights' as const },
-  { icon: 'document-text-outline' as const, label: 'تأشيرات', route: '/visas' as const },
-  { icon: 'globe-outline' as const, label: 'برامج', route: '/programs' as const },
+  { icon: 'airplane' as const, label: 'رحلات', route: '/flights' as const, color: '#38BDF8' },
+  { icon: 'document-text' as const, label: 'تأشيرات', route: '/visas' as const, color: '#D4AF37' },
+  { icon: 'globe' as const, label: 'برامج', route: '/programs' as const, color: '#0A2342' },
+  { icon: 'wallet' as const, label: 'المحفظة', route: '/wallet' as const, color: '#7C3AED' },
 ];
 
 export default function HomeScreen() {
@@ -41,29 +42,36 @@ export default function HomeScreen() {
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={{ paddingBottom: bottomInset + 90 }}
       showsVerticalScrollIndicator={false}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.secondary} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#D4AF37" />}
     >
       {/* Hero */}
-      <LinearGradient colors={['#0A2342', '#1E3A5F', '#2563EB']} style={[styles.hero, { paddingTop: topInset + 10 }]}>
+      <LinearGradient colors={['#071525', '#0A2342', '#1E3A5F']} style={[styles.hero, { paddingTop: topInset + 12 }]}>
         <View style={styles.heroTop}>
-          <Pressable onPress={() => router.push('/account')}>
-            <Ionicons name="person-circle-outline" size={32} color="rgba(255,255,255,0.8)" />
+          <Pressable onPress={() => router.push('/notifications')}>
+            <Ionicons name="notifications-outline" size={26} color="#D4AF37" />
           </Pressable>
           <View style={styles.logoArea}>
-            <Text style={[styles.heroTitle, { fontFamily: 'Cairo_700Bold' }]}>أبشر أعمال</Text>
-            <Text style={[styles.heroSub, { fontFamily: 'Cairo_400Regular' }]}>للسفريات والسياحة</Text>
+            <Image
+              source={require('@/assets/images/absher-travel-logo-nobg.png')}
+              style={styles.logoImage}
+              contentFit="contain"
+            />
+            <View style={styles.brandText}>
+              <Text style={[styles.heroTitle, { fontFamily: 'Cairo_700Bold' }]}>أبشر ترافل</Text>
+              <Text style={[styles.heroTitleEn, { fontFamily: 'Cairo_600SemiBold' }]}>ABSHER TRAVEL</Text>
+            </View>
           </View>
         </View>
 
         <View style={styles.heroCard}>
           <Text style={[styles.heroCardTitle, { fontFamily: 'Cairo_700Bold' }]}>
-            احجز رحلتك الآن
+            رحلتك القادمة تبدأ هنا
           </Text>
           <Text style={[styles.heroCardSub, { fontFamily: 'Cairo_400Regular' }]}>
-            عروض حصرية على الرحلات والتأشيرات
+            عروض حصرية على الرحلات والتأشيرات والبرامج السياحية
           </Text>
           <Pressable style={styles.heroBtn} onPress={() => router.push('/flights')}>
-            <Ionicons name="search" size={16} color="#0A2342" />
+            <Ionicons name="search" size={18} color="#0A2342" />
             <Text style={[styles.heroBtnText, { fontFamily: 'Cairo_600SemiBold' }]}>ابحث عن رحلة</Text>
           </Pressable>
         </View>
@@ -71,10 +79,10 @@ export default function HomeScreen() {
 
       {/* Quick Actions */}
       <View style={[styles.quickActions, { backgroundColor: colors.card, shadowColor: colors.primary }]}>
-        {QUICK_ACTIONS.map(({ icon, label, route }) => (
+        {QUICK_ACTIONS.map(({ icon, label, route, color }) => (
           <Pressable key={label} style={styles.quickAction} onPress={() => router.push(route as any)}>
-            <View style={[styles.quickIcon, { backgroundColor: '#F0F5FF' }]}>
-              <Ionicons name={icon} size={24} color="#0A2342" />
+            <View style={[styles.quickIcon, { backgroundColor: `${color}18` }]}>
+              <Ionicons name={icon} size={26} color={color} />
             </View>
             <Text style={[styles.quickLabel, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{label}</Text>
           </Pressable>
@@ -105,7 +113,7 @@ export default function HomeScreen() {
       <View style={styles.section}>
         <SectionHeader title="وجهات مميزة" />
         {loadingDest ? (
-          <View style={{ paddingHorizontal: 20 }}><SkeletonRow height={120} /></View>
+          <View style={{ paddingHorizontal: 20 }}><SkeletonRow height={130} /></View>
         ) : (
           <FlatList
             horizontal
@@ -125,10 +133,13 @@ export default function HomeScreen() {
                     contentFit="cover"
                   />
                   <LinearGradient
-                    colors={['transparent', 'rgba(10,35,66,0.8)']}
+                    colors={['transparent', 'rgba(10,35,66,0.9)']}
                     style={StyleSheet.absoluteFill}
                   />
                   <Text style={[styles.destName, { fontFamily: 'Cairo_700Bold' }]}>{item.nameAr}</Text>
+                  <View style={styles.destBadge}>
+                    <Ionicons name="location" size={12} color="#D4AF37" />
+                  </View>
                 </Pressable>
               );
             }}
@@ -163,23 +174,26 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  hero: { paddingHorizontal: 20, paddingBottom: 24 },
-  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-  logoArea: { alignItems: 'flex-end' },
-  heroTitle: { fontSize: 22, color: '#FFFFFF' },
-  heroSub: { fontSize: 13, color: 'rgba(255,255,255,0.7)', marginTop: -4 },
-  heroCard: { backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 18, padding: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
-  heroCardTitle: { fontSize: 20, color: '#FFFFFF', textAlign: 'right', marginBottom: 6 },
-  heroCardSub: { fontSize: 13, color: 'rgba(255,255,255,0.75)', textAlign: 'right', marginBottom: 16 },
-  heroBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#D4AF37', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12, gap: 8, alignSelf: 'flex-start' },
-  heroBtnText: { color: '#0A2342', fontSize: 14 },
-  quickActions: { flexDirection: 'row', marginHorizontal: 20, marginTop: -1, borderRadius: 18, padding: 16, justifyContent: 'space-around', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10, elevation: 5, marginBottom: 8 },
-  quickAction: { alignItems: 'center', gap: 8 },
-  quickIcon: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  hero: { paddingHorizontal: 20, paddingBottom: 26 },
+  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 },
+  logoArea: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  logoImage: { width: 52, height: 52 },
+  brandText: { alignItems: 'flex-end' },
+  heroTitle: { fontSize: 18, color: '#D4AF37' },
+  heroTitleEn: { fontSize: 11, color: 'rgba(255,255,255,0.7)', letterSpacing: 0.5, marginTop: -2 },
+  heroCard: { backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 20, padding: 22, borderWidth: 1, borderColor: 'rgba(212,175,55,0.25)' },
+  heroCardTitle: { fontSize: 21, color: '#FFFFFF', textAlign: 'right', marginBottom: 8 },
+  heroCardSub: { fontSize: 14, color: 'rgba(255,255,255,0.75)', textAlign: 'right', marginBottom: 18, lineHeight: 22 },
+  heroBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#D4AF37', borderRadius: 14, paddingHorizontal: 22, paddingVertical: 14, gap: 10, alignSelf: 'flex-start', shadowColor: '#D4AF37', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+  heroBtnText: { color: '#0A2342', fontSize: 15 },
+  quickActions: { flexDirection: 'row', marginHorizontal: 20, marginTop: -1, borderRadius: 20, padding: 18, justifyContent: 'space-around', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 5, marginBottom: 8 },
+  quickAction: { alignItems: 'center', gap: 10 },
+  quickIcon: { width: 58, height: 58, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   quickLabel: { fontSize: 13 },
-  section: { paddingTop: 20 },
+  section: { paddingTop: 22 },
   emptyText: { paddingHorizontal: 20, fontSize: 14 },
-  destCard: { width: 150, height: 110, borderRadius: 14, overflow: 'hidden', marginLeft: 12, justifyContent: 'flex-end' },
+  destCard: { width: 160, height: 130, borderRadius: 16, overflow: 'hidden', marginLeft: 14, justifyContent: 'flex-end', shadowColor: '#0A2342', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 6, elevation: 3 },
   destImage: { ...StyleSheet.absoluteFillObject },
-  destName: { color: '#FFFFFF', fontSize: 13, padding: 10, textAlign: 'right' },
+  destName: { color: '#FFFFFF', fontSize: 14, padding: 12, textAlign: 'right' },
+  destBadge: { position: 'absolute', top: 10, right: 10, width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(10,35,66,0.8)', alignItems: 'center', justifyContent: 'center' },
 });

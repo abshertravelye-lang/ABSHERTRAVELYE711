@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
   transactionsList: { borderRadius: 16, overflow: 'hidden' },
   transactionItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: StyleSheet.hairlineWidth },
   txLeft: { alignItems: 'flex-start', gap: 4 },
-  txAmount: { fontSize: 16, direction: 'ltr' },
+  txAmount: { fontSize: 16, writingDirection: 'ltr' },
   txDate: { fontSize: 12 },
   txRight: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, justifyContent: 'flex-end' },
   txInfo: { alignItems: 'flex-end', gap: 2, flex: 1 },

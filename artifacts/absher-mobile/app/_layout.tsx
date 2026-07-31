@@ -50,6 +50,7 @@ function RootLayoutNav() {
       <Stack.Screen name="wallet" options={{ headerShown: false }} />
       <Stack.Screen name="booking/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="visa-tracking/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="umrah-visa" options={{ headerShown: false }} />
     </Stack>
   );
 }

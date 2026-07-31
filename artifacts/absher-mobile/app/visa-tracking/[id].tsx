@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
   heroCard: { padding: 24, borderRadius: 16, borderWidth: 1, alignItems: 'center', gap: 8 },
   heroIconWrap: { width: 72, height: 72, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
   heroTitle: { fontSize: 22, textAlign: 'center' },
-  refNumber: { fontSize: 14, direction: 'ltr' },
+  refNumber: { fontSize: 14, writingDirection: 'ltr' },
   rejectedBadge: { marginTop: 8, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20 },
   rejectedText: { fontSize: 14 },
 

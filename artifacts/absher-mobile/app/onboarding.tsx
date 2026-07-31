@@ -1,9 +1,10 @@
 import React, { useRef, useState } from 'react';
 import { Animated, Dimensions, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
@@ -13,21 +14,21 @@ const { width, height } = Dimensions.get('window');
 const SLIDES = [
   {
     id: '1',
-    title: 'اكتشف وجهتك المثالية',
-    subtitle: 'نوفر لك خيارات متنوعة من الوجهات السياحية العالمية التي تلبي جميع تطلعاتك.',
-    icon: 'airplane',
+    title: 'أبشر ترافل',
+    subtitle: 'رحلاتك تبدأ هنا - خدمات سفر متكاملة بلمسة واحدة',
+    icon: null,
   },
   {
     id: '2',
-    title: 'احجز تأشيرتك بسهولة',
-    subtitle: 'خدمات متكاملة لاستخراج التأشيرات بسرعة وموثوقية عالية لتستمتع برحلتك.',
-    icon: 'card',
+    title: 'تأشيرات ووثائق',
+    subtitle: 'نسهل عليك استخراج التأشيرات لأكثر من 150 وجهة حول العالم',
+    icon: 'document-text' as const,
   },
   {
     id: '3',
-    title: 'رحلات لا تُنسى',
-    subtitle: 'برامج سياحية متكاملة مصممة خصيصاً لتمنحك ذكريات تدوم مدى الحياة.',
-    icon: 'globe',
+    title: 'رحلات فاخرة',
+    subtitle: 'برامج سياحية حصرية وعروض استثنائية تناسب تطلعاتك',
+    icon: 'airplane' as const,
   },
 ];
 
@@ -96,15 +97,27 @@ export default function OnboardingScreen() {
         })}
         onViewableItemsChanged={viewableItemsChanged}
         viewabilityConfig={viewConfig}
-        renderItem={({ item }) => (
+        renderItem={({ item, index }) => (
           <View style={[styles.slide, { width }]}>
             <LinearGradient
-              colors={['#0A2342', '#0A2342', '#14345B']}
+              colors={['#071525', '#0A2342', '#1E3A5F']}
               style={styles.illustrationArea}
             >
-              <View style={[styles.iconCircle, { backgroundColor: 'rgba(212, 175, 55, 0.15)' }]}>
-                <Ionicons name={item.icon as any} size={80} color="#D4AF37" />
-              </View>
+              {index === 0 ? (
+                <View style={styles.logoWrap}>
+                  <Image
+                    source={require('@/assets/images/absher-travel-logo-nobg.png')}
+                    style={styles.logo}
+                    contentFit="cover"
+                  />
+                  <Text style={[styles.logoTitle, { fontFamily: 'Cairo_700Bold' }]}>ABSHER TRAVEL</Text>
+                  <Text style={[styles.logoSubtitle, { fontFamily: 'Cairo_400Regular' }]}>أبشر ترافل</Text>
+                </View>
+              ) : (
+                <View style={[styles.iconCircle, { backgroundColor: 'rgba(212, 175, 55, 0.15)', borderColor: '#D4AF37' }]}>
+                  <Ionicons name={item.icon as any} size={80} color="#D4AF37" />
+                </View>
+              )}
             </LinearGradient>
             <View style={styles.contentArea}>
               <Text style={[styles.title, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>
@@ -125,7 +138,7 @@ export default function OnboardingScreen() {
             const inputRange = [(i - 1) * width, i * width, (i + 1) * width];
             const dotWidth = scrollX.interpolate({
               inputRange,
-              outputRange: [8, 24, 8],
+              outputRange: [8, 28, 8],
               extrapolate: 'clamp',
             });
             const opacity = scrollX.interpolate({
@@ -148,7 +161,7 @@ export default function OnboardingScreen() {
         {/* Controls */}
         <View style={styles.controls}>
           <Pressable
-            style={[styles.navBtn, { opacity: currentIndex === 0 ? 0 : 1 }]}
+            style={[styles.navBtn, { opacity: currentIndex === 0 ? 0 : 1, backgroundColor: colors.muted }]}
             onPress={scrollToPrev}
             disabled={currentIndex === 0}
           >
@@ -158,15 +171,15 @@ export default function OnboardingScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.primaryBtn,
-              { backgroundColor: '#0A2342', opacity: pressed ? 0.8 : 1 },
+              { backgroundColor: '#D4AF37', opacity: pressed ? 0.9 : 1 },
               currentIndex === SLIDES.length - 1 && styles.primaryBtnExpanded
             ]}
             onPress={scrollToNext}
           >
             {currentIndex === SLIDES.length - 1 ? (
-              <Text style={[styles.primaryBtnText, { fontFamily: 'Cairo_700Bold' }]}>ابدأ الآن</Text>
+              <Text style={[styles.primaryBtnText, { fontFamily: 'Cairo_700Bold' }]}>ابدأ رحلتك</Text>
             ) : (
-              <Ionicons name="arrow-forward" size={24} color="#FFFFFF" />
+              <Ionicons name="arrow-forward" size={24} color="#0A2342" />
             )}
           </Pressable>
         </View>
@@ -188,24 +201,38 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  logoWrap: { alignItems: 'center', gap: 16 },
+  logo: { width: 120, height: 120, borderRadius: 24 },
+  logoTitle: { fontSize: 24, color: '#D4AF37', letterSpacing: 1 },
+  logoSubtitle: { fontSize: 18, color: 'rgba(255,255,255,0.85)' },
   iconCircle: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
+    width: 170,
+    height: 170,
+    borderRadius: 85,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#D4AF37',
+    borderWidth: 3,
   },
-  contentArea: { flex: 1, paddingHorizontal: 32, paddingTop: 40, alignItems: 'center' },
-  title: { fontSize: 26, textAlign: 'center', marginBottom: 16 },
+  contentArea: { flex: 1, paddingHorizontal: 32, paddingTop: 44, alignItems: 'center' },
+  title: { fontSize: 28, textAlign: 'center', marginBottom: 18 },
   subtitle: { fontSize: 16, textAlign: 'center', lineHeight: 26 },
   footer: { paddingHorizontal: 32, paddingBottom: 20 },
-  indicators: { flexDirection: 'row', justifyContent: 'center', marginBottom: 32 },
+  indicators: { flexDirection: 'row', justifyContent: 'center', marginBottom: 36 },
   dot: { height: 8, borderRadius: 4, marginHorizontal: 4 },
   controls: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  navBtn: { width: 50, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(100,116,139,0.1)' },
-  primaryBtn: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center', shadowColor: '#0A2342', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
-  primaryBtnExpanded: { width: '100%' },
-  primaryBtnText: { color: '#FFFFFF', fontSize: 18 },
+  navBtn: { width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center' },
+  primaryBtn: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#D4AF37',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  primaryBtnExpanded: { width: '100%', borderRadius: 20 },
+  primaryBtnText: { color: '#0A2342', fontSize: 18 },
 });

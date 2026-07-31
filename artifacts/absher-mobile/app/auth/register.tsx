@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -63,13 +65,21 @@ export default function RegisterScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { paddingTop: insets.top + 16, backgroundColor: '#0A2342' }]}>
+        <LinearGradient colors={['#071525', '#0A2342', '#1E3A5F']} style={[styles.header, { paddingTop: insets.top + 16 }]}>
           <Pressable onPress={() => router.back()} style={styles.closeBtn}>
-            <Ionicons name="close" size={22} color="#FFFFFF" />
+            <Ionicons name="close" size={24} color="rgba(255,255,255,0.9)" />
           </Pressable>
-          <Text style={[styles.title, { fontFamily: 'Cairo_700Bold' }]}>إنشاء حساب جديد</Text>
-          <Text style={[styles.subtitle, { fontFamily: 'Cairo_400Regular' }]}>انضم إلى أبشر أعمال</Text>
-        </View>
+          <View style={styles.headerContent}>
+            <Image
+              source={require('@/assets/images/absher-travel-logo-nobg.png')}
+              style={styles.logo}
+              contentFit="cover"
+            />
+            <Text style={[styles.brandTitle, { fontFamily: 'Cairo_700Bold' }]}>ABSHER TRAVEL</Text>
+            <Text style={[styles.brandSubtitle, { fontFamily: 'Cairo_600SemiBold' }]}>أبشر ترافل</Text>
+            <Text style={[styles.title, { fontFamily: 'Cairo_700Bold' }]}>إنشاء حساب جديد</Text>
+          </View>
+        </LinearGradient>
 
         <View style={styles.form}>
           <View style={styles.nameRow}>
@@ -86,7 +96,10 @@ export default function RegisterScreen() {
           <Field label="تأكيد كلمة المرور" fkey="confirmPassword" placeholder="أعد إدخال كلمة المرور" secure />
 
           <Pressable
-            style={({ pressed }) => [styles.registerBtn, { backgroundColor: '#0A2342', opacity: pressed || registerMutation.isPending ? 0.8 : 1 }]}
+            style={({ pressed }) => [
+              styles.registerBtn,
+              { backgroundColor: '#D4AF37', opacity: pressed || registerMutation.isPending ? 0.85 : 1 }
+            ]}
             onPress={handleRegister}
             disabled={registerMutation.isPending}
           >
@@ -97,7 +110,7 @@ export default function RegisterScreen() {
 
           <View style={styles.loginRow}>
             <Pressable onPress={() => router.replace('/auth/login')}>
-              <Text style={[styles.loginLink, { color: '#2563EB', fontFamily: 'Cairo_600SemiBold' }]}>تسجيل الدخول</Text>
+              <Text style={[styles.loginLink, { color: '#38BDF8', fontFamily: 'Cairo_600SemiBold' }]}>تسجيل الدخول</Text>
             </Pressable>
             <Text style={[styles.loginHint, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>لديك حساب بالفعل؟</Text>
           </View>
@@ -111,19 +124,22 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: 20, paddingBottom: 28, gap: 6 },
-  closeBtn: { alignSelf: 'flex-end', marginBottom: 12 },
-  title: { fontSize: 24, color: '#FFFFFF', textAlign: 'center' },
-  subtitle: { fontSize: 14, color: 'rgba(255,255,255,0.7)', textAlign: 'center' },
-  form: { padding: 20, gap: 14 },
-  nameRow: { flexDirection: 'row', gap: 10 },
-  field: { gap: 6 },
+  header: { paddingHorizontal: 20, paddingBottom: 36 },
+  closeBtn: { alignSelf: 'flex-end', marginBottom: 14 },
+  headerContent: { alignItems: 'center', gap: 8 },
+  logo: { width: 80, height: 80, borderRadius: 16 },
+  brandTitle: { fontSize: 18, color: '#D4AF37', letterSpacing: 1, marginTop: 6 },
+  brandSubtitle: { fontSize: 15, color: 'rgba(255,255,255,0.85)' },
+  title: { fontSize: 20, color: '#FFFFFF', marginTop: 10 },
+  form: { padding: 20, gap: 16 },
+  nameRow: { flexDirection: 'row', gap: 12 },
+  field: { gap: 7 },
   label: { fontSize: 14, textAlign: 'right' },
-  inputRow: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 14, gap: 10 },
+  inputRow: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 15, gap: 12 },
   input: { flex: 1, fontSize: 15, textAlign: 'right' },
-  registerBtn: { borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
-  registerBtnText: { color: '#FFFFFF', fontSize: 16 },
-  loginRow: { flexDirection: 'row', justifyContent: 'center', gap: 6 },
+  registerBtn: { borderRadius: 16, paddingVertical: 17, alignItems: 'center', marginTop: 14, shadowColor: '#D4AF37', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
+  registerBtnText: { color: '#0A2342', fontSize: 17 },
+  loginRow: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 6 },
   loginHint: { fontSize: 14 },
   loginLink: { fontSize: 14 },
 });

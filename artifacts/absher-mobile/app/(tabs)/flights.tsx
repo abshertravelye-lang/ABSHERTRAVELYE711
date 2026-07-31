@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -85,7 +86,7 @@ export default function FlightsScreen() {
       keyboardShouldPersistTaps="handled"
     >
       {/* ── Header ────────────────────────────────────────────────────────── */}
-      <View style={[styles.header, { paddingTop: topInset + 16, backgroundColor: '#0A2342' }]}>
+      <LinearGradient colors={['#071525', '#0A2342', '#1E3A5F']} style={[styles.header, { paddingTop: topInset + 16 }]}>
         <Text style={[styles.headerTitle, { fontFamily: 'Cairo_700Bold' }]}>البحث عن رحلات</Text>
         <View style={styles.toggle}>
           {(['one_way', 'round_trip'] as const).map((t) => (
@@ -103,7 +104,7 @@ export default function FlightsScreen() {
             </Pressable>
           ))}
         </View>
-      </View>
+      </LinearGradient>
 
       <View style={styles.form}>
         {/* ── From / To ───────────────────────────────────────────────────── */}
@@ -116,8 +117,8 @@ export default function FlightsScreen() {
           />
 
           {/* Swap button */}
-          <Pressable style={[styles.swapBtn, { backgroundColor: '#0A2342' }]} onPress={swap}>
-            <Ionicons name="swap-vertical" size={18} color="#FFFFFF" />
+          <Pressable style={[styles.swapBtn, { backgroundColor: '#38BDF8' }]} onPress={swap}>
+            <Ionicons name="swap-vertical" size={20} color="#FFFFFF" />
           </Pressable>
 
           <AirportSearch
@@ -138,7 +139,7 @@ export default function FlightsScreen() {
           />
           {tripType === 'round_trip' && returnDate !== '' && (
             <View style={styles.returnRow}>
-              <Ionicons name="arrow-back" size={14} color={colors.mutedForeground} />
+              <Ionicons name="arrow-back" size={15} color="#D4AF37" />
               <Text style={[styles.returnLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>العودة:</Text>
               <Text style={[styles.returnDate, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>{returnDate}</Text>
             </View>
@@ -158,14 +159,14 @@ export default function FlightsScreen() {
                 style={[styles.countBtn, { backgroundColor: colors.muted }]}
                 onPress={() => setAdults(Math.max(1, adults - 1))}
               >
-                <Ionicons name="remove" size={18} color={colors.foreground} />
+                <Ionicons name="remove" size={20} color={colors.foreground} />
               </Pressable>
               <Text style={[styles.countNum, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>{adults}</Text>
               <Pressable
-                style={[styles.countBtn, { backgroundColor: '#0A2342' }]}
+                style={[styles.countBtn, { backgroundColor: '#D4AF37' }]}
                 onPress={() => setAdults(Math.min(9, adults + 1))}
               >
-                <Ionicons name="add" size={18} color="#FFFFFF" />
+                <Ionicons name="add" size={20} color="#0A2342" />
               </Pressable>
             </View>
             <Text style={[styles.passLabel, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>عدد المسافرين</Text>
@@ -178,10 +179,16 @@ export default function FlightsScreen() {
               {CABIN_CLASSES.map((c) => (
                 <Pressable
                   key={c.value}
-                  style={[styles.cabinChip, { backgroundColor: cabin === c.value ? '#0A2342' : colors.muted }]}
+                  style={[
+                    styles.cabinChip,
+                    {
+                      backgroundColor: cabin === c.value ? '#D4AF37' : colors.muted,
+                      borderColor: cabin === c.value ? '#D4AF37' : colors.border,
+                    }
+                  ]}
                   onPress={() => setCabin(c.value)}
                 >
-                  <Text style={[styles.cabinText, { color: cabin === c.value ? '#FFFFFF' : colors.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>
+                  <Text style={[styles.cabinText, { color: cabin === c.value ? '#0A2342' : colors.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>
                     {c.label}
                   </Text>
                 </Pressable>
@@ -194,13 +201,17 @@ export default function FlightsScreen() {
         <Pressable
           style={({ pressed }) => [
             styles.searchBtn,
-            { opacity: pressed ? 0.9 : 1, backgroundColor: canSearch ? '#0A2342' : colors.muted },
+            {
+              opacity: pressed ? 0.9 : 1,
+              backgroundColor: canSearch ? '#D4AF37' : colors.muted,
+              shadowColor: canSearch ? '#D4AF37' : 'transparent',
+            },
           ]}
           onPress={search}
           disabled={!canSearch}
         >
-          <Ionicons name="search" size={20} color={canSearch ? '#FFFFFF' : colors.mutedForeground} />
-          <Text style={[styles.searchBtnText, { color: canSearch ? '#FFFFFF' : colors.mutedForeground, fontFamily: 'Cairo_700Bold' }]}>
+          <Ionicons name="search" size={22} color={canSearch ? '#0A2342' : colors.mutedForeground} />
+          <Text style={[styles.searchBtnText, { color: canSearch ? '#0A2342' : colors.mutedForeground, fontFamily: 'Cairo_700Bold' }]}>
             بحث عن رحلات
           </Text>
         </Pressable>
@@ -214,7 +225,9 @@ export default function FlightsScreen() {
               style={[styles.routeChip, { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={() => applyPopularRoute(r)}
             >
-              <Ionicons name="airplane" size={15} color="#0A2342" />
+              <View style={styles.routeIcon}>
+                <Ionicons name="airplane" size={16} color="#38BDF8" />
+              </View>
               <Text style={[styles.routeText, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>
                 {r.fromCity} ← {r.toCity}
               </Text>
@@ -244,34 +257,35 @@ export default function FlightsScreen() {
 
 const styles = StyleSheet.create({
   container:      { flex: 1 },
-  header:         { paddingHorizontal: 20, paddingBottom: 20 },
-  headerTitle:    { fontSize: 22, color: '#FFFFFF', textAlign: 'right', marginBottom: 14 },
-  toggle:         { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10, padding: 3, gap: 3 },
-  toggleBtn:      { flex: 1, borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
+  header:         { paddingHorizontal: 20, paddingBottom: 22 },
+  headerTitle:    { fontSize: 24, color: '#D4AF37', textAlign: 'right', marginBottom: 16 },
+  toggle:         { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 12, padding: 4, gap: 4 },
+  toggleBtn:      { flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
   toggleBtnActive:{ backgroundColor: '#D4AF37' },
-  toggleText:     { fontSize: 13, color: 'rgba(255,255,255,0.7)' },
+  toggleText:     { fontSize: 14, color: 'rgba(255,255,255,0.7)' },
   toggleTextActive:{ color: '#0A2342' },
-  form:           { padding: 16, gap: 12 },
-  card:           { borderRadius: 16, padding: 16, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3, gap: 12 },
-  swapBtn:        { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', alignSelf: 'center' },
-  returnRow:      { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 4 },
-  returnLabel:    { fontSize: 12 },
-  returnDate:     { fontSize: 13 },
-  returnHint:     { fontSize: 11, textAlign: 'right', paddingTop: 4 },
+  form:           { padding: 16, gap: 14 },
+  card:           { borderRadius: 18, padding: 18, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 10, elevation: 4, gap: 14 },
+  swapBtn:        { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', alignSelf: 'center', shadowColor: '#38BDF8', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 2 },
+  returnRow:      { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 4 },
+  returnLabel:    { fontSize: 13 },
+  returnDate:     { fontSize: 14 },
+  returnHint:     { fontSize: 12, textAlign: 'right', paddingTop: 4 },
   passRow:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  passLabel:      { fontSize: 15 },
-  counter:        { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  countBtn:       { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-  countNum:       { fontSize: 18, minWidth: 24, textAlign: 'center' },
+  passLabel:      { fontSize: 16 },
+  counter:        { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  countBtn:       { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+  countNum:       { fontSize: 20, minWidth: 28, textAlign: 'center' },
   divider:        { height: 1 },
-  cabinRow:       { flexDirection: 'row', gap: 8 },
-  cabinChip:      { borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
-  cabinText:      { fontSize: 13 },
-  searchBtn:      { borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, gap: 10 },
-  searchBtnText:  { fontSize: 16 },
-  section:        { marginTop: 8 },
-  sectionTitle:   { fontSize: 16, marginBottom: 10, textAlign: 'right' },
-  routeChip:      { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 12, borderWidth: 1, padding: 14, marginBottom: 8, justifyContent: 'flex-end' },
-  routeText:      { flex: 1, fontSize: 14, textAlign: 'right' },
-  routeCode:      { fontSize: 12 },
+  cabinRow:       { flexDirection: 'row', gap: 10 },
+  cabinChip:      { borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10, borderWidth: 1 },
+  cabinText:      { fontSize: 14 },
+  searchBtn:      { borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 18, gap: 12, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
+  searchBtnText:  { fontSize: 17 },
+  section:        { marginTop: 10 },
+  sectionTitle:   { fontSize: 17, marginBottom: 12, textAlign: 'right' },
+  routeChip:      { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: 14, borderWidth: 1, padding: 16, marginBottom: 10, justifyContent: 'flex-end' },
+  routeIcon:      { width: 34, height: 34, borderRadius: 10, backgroundColor: '#E0F2FE', alignItems: 'center', justifyContent: 'center' },
+  routeText:      { flex: 1, fontSize: 15, textAlign: 'right' },
+  routeCode:      { fontSize: 13 },
 });

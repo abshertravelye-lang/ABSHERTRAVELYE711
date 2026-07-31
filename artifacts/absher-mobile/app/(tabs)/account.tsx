@@ -1,6 +1,7 @@
 import React from 'react';
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -13,7 +14,7 @@ import { getImageUrl } from '@/hooks/useImageUrl';
 type ThemeMode = 'light' | 'dark' | 'system';
 
 const THEME_OPTIONS: { value: ThemeMode; label: string; icon: keyof typeof Ionicons.glyphMap; desc: string }[] = [
-  { value: 'light', label: 'النهاري', icon: 'sunny-outline', desc: 'أبيض وأزرق' },
+  { value: 'light', label: 'النهاري', icon: 'sunny-outline', desc: 'أبيض ونقي' },
   { value: 'dark',  label: 'الليلي',  icon: 'moon-outline',  desc: 'داكن ومريح' },
   { value: 'system',label: 'تلقائي',  icon: 'phone-portrait-outline', desc: 'حسب الجهاز' },
 ];
@@ -32,8 +33,8 @@ function ThemeSection({
     <View style={[themeStyles.card, { backgroundColor: colors.card, shadowColor: colors.primary, marginHorizontal: 16, marginBottom: 12 }]}>
       {/* Header */}
       <View style={themeStyles.header}>
-        <View style={[themeStyles.headerIcon, { backgroundColor: '#FFF7E0' }]}>
-          <Ionicons name="contrast-outline" size={20} color="#D4AF37" />
+        <View style={[themeStyles.headerIcon, { backgroundColor: '#FBF6E4' }]}>
+          <Ionicons name="contrast-outline" size={22} color="#D4AF37" />
         </View>
         <Text style={[themeStyles.headerTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>
           المظهر
@@ -62,7 +63,7 @@ function ThemeSection({
             >
               <Ionicons
                 name={opt.icon}
-                size={22}
+                size={24}
                 color={active ? '#D4AF37' : colors.mutedForeground}
               />
               <Text
@@ -83,7 +84,7 @@ function ThemeSection({
               </Text>
               {active && (
                 <View style={themeStyles.activeDot}>
-                  <Ionicons name="checkmark-circle" size={16} color="#D4AF37" />
+                  <Ionicons name="checkmark-circle" size={18} color="#D4AF37" />
                 </View>
               )}
             </Pressable>
@@ -96,52 +97,52 @@ function ThemeSection({
 
 const themeStyles = StyleSheet.create({
   card: {
-    borderRadius: 16,
-    padding: 16,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
+    borderRadius: 18,
+    padding: 18,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 4,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 14,
+    gap: 12,
+    marginBottom: 16,
     justifyContent: 'flex-end',
   },
   headerIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 11,
+    width: 42,
+    height: 42,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: { fontSize: 16 },
-  optionsRow: { flexDirection: 'row', gap: 8 },
+  headerTitle: { fontSize: 17 },
+  optionsRow: { flexDirection: 'row', gap: 10 },
   option: {
     flex: 1,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    padding: 12,
+    borderRadius: 16,
+    borderWidth: 2,
+    padding: 14,
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     position: 'relative',
   },
-  optionLabel: { fontSize: 13 },
-  optionDesc: { fontSize: 10, textAlign: 'center' },
-  activeDot: { position: 'absolute', top: 6, left: 6 },
+  optionLabel: { fontSize: 14 },
+  optionDesc: { fontSize: 11, textAlign: 'center' },
+  activeDot: { position: 'absolute', top: 8, left: 8 },
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MENU_ITEMS = [
-  { icon: 'calendar-outline' as const, label: 'حجوزاتي', route: '/(tabs)/bookings' },
-  { icon: 'document-text-outline' as const, label: 'طلبات التأشيرة', route: null },
-  { icon: 'wallet-outline' as const, label: 'المحفظة', route: '/wallet' },
-  { icon: 'notifications-outline' as const, label: 'الإشعارات', route: '/notifications' },
-  { icon: 'settings-outline' as const, label: 'الإعدادات', route: '/settings' },
-  { icon: 'help-circle-outline' as const, label: 'تواصل معنا', route: null },
-  { icon: 'information-circle-outline' as const, label: 'عن التطبيق', route: null },
+  { icon: 'calendar-outline' as const, label: 'حجوزاتي', route: '/(tabs)/bookings', color: '#0A2342' },
+  { icon: 'document-text-outline' as const, label: 'طلبات التأشيرة', route: null, color: '#D4AF37' },
+  { icon: 'wallet-outline' as const, label: 'المحفظة', route: '/wallet', color: '#7C3AED' },
+  { icon: 'notifications-outline' as const, label: 'الإشعارات', route: '/notifications', color: '#38BDF8' },
+  { icon: 'settings-outline' as const, label: 'الإعدادات', route: '/settings', color: '#64748B' },
+  { icon: 'help-circle-outline' as const, label: 'تواصل معنا', route: null, color: '#16A34A' },
+  { icon: 'information-circle-outline' as const, label: 'عن التطبيق', route: null, color: '#0891B2' },
 ];
 
 export default function AccountScreen() {
@@ -172,25 +173,25 @@ export default function AccountScreen() {
   if (!user) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.guestHero, { paddingTop: topInset + 20, backgroundColor: '#0A2342' }]}>
-          <View style={[styles.avatarPlaceholder, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
-            <Ionicons name="person" size={48} color="rgba(255,255,255,0.6)" />
+        <LinearGradient colors={['#071525', '#0A2342', '#1E3A5F']} style={[styles.guestHero, { paddingTop: topInset + 20 }]}>
+          <View style={[styles.avatarPlaceholder, { backgroundColor: 'rgba(212,175,55,0.15)', borderColor: '#D4AF37' }]}>
+            <Ionicons name="person" size={52} color="#D4AF37" />
           </View>
           <Text style={[styles.guestTitle, { fontFamily: 'Cairo_700Bold' }]}>مرحباً بك</Text>
           <Text style={[styles.guestSub, { fontFamily: 'Cairo_400Regular' }]}>سجّل دخولك للوصول لحسابك وحجوزاتك</Text>
-        </View>
+        </LinearGradient>
         <View style={styles.authButtons}>
           <Pressable
-            style={({ pressed }) => [styles.loginBtn, { backgroundColor: '#0A2342', opacity: pressed ? 0.9 : 1 }]}
+            style={({ pressed }) => [styles.loginBtn, { backgroundColor: '#D4AF37', opacity: pressed ? 0.9 : 1 }]}
             onPress={() => router.push('/auth/login')}
           >
             <Text style={[styles.loginBtnText, { fontFamily: 'Cairo_700Bold' }]}>تسجيل الدخول</Text>
           </Pressable>
           <Pressable
-            style={({ pressed }) => [styles.registerBtn, { borderColor: '#0A2342', opacity: pressed ? 0.9 : 1 }]}
+            style={({ pressed }) => [styles.registerBtn, { borderColor: '#D4AF37', opacity: pressed ? 0.9 : 1 }]}
             onPress={() => router.push('/auth/register')}
           >
-            <Text style={[styles.registerBtnText, { color: '#0A2342', fontFamily: 'Cairo_600SemiBold' }]}>إنشاء حساب جديد</Text>
+            <Text style={[styles.registerBtnText, { color: '#D4AF37', fontFamily: 'Cairo_600SemiBold' }]}>إنشاء حساب جديد</Text>
           </Pressable>
         </View>
         <View style={styles.guestMenu}>
@@ -198,8 +199,8 @@ export default function AccountScreen() {
             <View key={item.label} style={[styles.menuItem, { borderBottomColor: colors.border }]}>
               <Ionicons name="chevron-back" size={18} color={colors.mutedForeground} />
               <Text style={[styles.menuLabel, { color: colors.foreground, fontFamily: 'Cairo_400Regular' }]}>{item.label}</Text>
-              <View style={[styles.menuIcon, { backgroundColor: colors.muted }]}>
-                <Ionicons name={item.icon} size={20} color="#0A2342" />
+              <View style={[styles.menuIcon, { backgroundColor: `${item.color}18` }]}>
+                <Ionicons name={item.icon} size={22} color={item.color} />
               </View>
             </View>
           ))}
@@ -216,11 +217,14 @@ export default function AccountScreen() {
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={{ paddingBottom: bottomInset + 90 }}>
       {/* Profile Header */}
-      <View style={[styles.profileHero, { paddingTop: topInset + 16, backgroundColor: '#0A2342' }]}>
+      <LinearGradient colors={['#071525', '#0A2342', '#1E3A5F']} style={[styles.profileHero, { paddingTop: topInset + 18 }]}>
         <View style={styles.profileRow}>
           <View>
             <Text style={[styles.profileName, { fontFamily: 'Cairo_700Bold' }]}>{fullName}</Text>
             <Text style={[styles.profileEmail, { fontFamily: 'Cairo_400Regular' }]}>{user.email || user.phone || ''}</Text>
+            <View style={styles.brandBadge}>
+              <Text style={[styles.brandBadgeText, { fontFamily: 'Cairo_600SemiBold' }]}>ABSHER TRAVEL</Text>
+            </View>
           </View>
           {avatarUri ? (
             <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" />
@@ -232,7 +236,7 @@ export default function AccountScreen() {
             </View>
           )}
         </View>
-      </View>
+      </LinearGradient>
 
       {/* Menu */}
       <View style={[styles.menuCard, { backgroundColor: colors.card, shadowColor: colors.primary }]}>
@@ -248,8 +252,8 @@ export default function AccountScreen() {
           >
             <Ionicons name="chevron-back" size={18} color={colors.mutedForeground} />
             <Text style={[styles.menuLabel, { color: colors.foreground, fontFamily: 'Cairo_400Regular' }]}>{item.label}</Text>
-            <View style={[styles.menuIcon, { backgroundColor: '#F0F5FF' }]}>
-              <Ionicons name={item.icon} size={20} color="#0A2342" />
+            <View style={[styles.menuIcon, { backgroundColor: `${item.color}18` }]}>
+              <Ionicons name={item.icon} size={22} color={item.color} />
             </View>
           </Pressable>
         ))}
@@ -263,7 +267,7 @@ export default function AccountScreen() {
         style={({ pressed }) => [styles.logoutBtn, { borderColor: colors.destructive, opacity: pressed ? 0.8 : 1 }]}
         onPress={handleLogout}
       >
-        <Ionicons name="log-out-outline" size={20} color={colors.destructive} />
+        <Ionicons name="log-out-outline" size={22} color={colors.destructive} />
         <Text style={[styles.logoutText, { color: colors.destructive, fontFamily: 'Cairo_600SemiBold' }]}>تسجيل الخروج</Text>
       </Pressable>
     </ScrollView>
@@ -272,27 +276,29 @@ export default function AccountScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  guestHero: { paddingHorizontal: 20, paddingBottom: 32, alignItems: 'center', gap: 10 },
-  avatarPlaceholder: { width: 90, height: 90, borderRadius: 45, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-  guestTitle: { fontSize: 24, color: '#FFFFFF' },
-  guestSub: { fontSize: 14, color: 'rgba(255,255,255,0.7)', textAlign: 'center' },
-  authButtons: { padding: 20, gap: 12 },
-  loginBtn: { borderRadius: 14, paddingVertical: 15, alignItems: 'center' },
-  loginBtnText: { color: '#FFFFFF', fontSize: 16 },
-  registerBtn: { borderRadius: 14, paddingVertical: 15, alignItems: 'center', borderWidth: 2 },
-  registerBtnText: { fontSize: 15 },
+  guestHero: { paddingHorizontal: 20, paddingBottom: 36, alignItems: 'center', gap: 12 },
+  avatarPlaceholder: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center', marginBottom: 10, borderWidth: 2 },
+  guestTitle: { fontSize: 26, color: '#D4AF37' },
+  guestSub: { fontSize: 15, color: 'rgba(255,255,255,0.75)', textAlign: 'center' },
+  authButtons: { padding: 20, gap: 14 },
+  loginBtn: { borderRadius: 16, paddingVertical: 16, alignItems: 'center', shadowColor: '#D4AF37', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
+  loginBtnText: { color: '#0A2342', fontSize: 17 },
+  registerBtn: { borderRadius: 16, paddingVertical: 16, alignItems: 'center', borderWidth: 2 },
+  registerBtnText: { fontSize: 16 },
   guestMenu: { paddingHorizontal: 16 },
-  profileHero: { paddingHorizontal: 20, paddingBottom: 24 },
+  profileHero: { paddingHorizontal: 20, paddingBottom: 28 },
   profileRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  profileName: { fontSize: 20, color: '#FFFFFF' },
-  profileEmail: { fontSize: 13, color: 'rgba(255,255,255,0.7)', marginTop: 4 },
-  avatar: { width: 60, height: 60, borderRadius: 30, borderWidth: 2, borderColor: '#D4AF37' },
-  avatarFallback: { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
-  avatarLetter: { fontSize: 24, color: '#0A2342' },
-  menuCard: { margin: 16, borderRadius: 16, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3 },
-  menuItem: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, gap: 12 },
-  menuIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  menuLabel: { flex: 1, fontSize: 15, textAlign: 'right' },
-  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginHorizontal: 16, marginTop: 4, borderRadius: 14, borderWidth: 1.5, paddingVertical: 14, gap: 8 },
-  logoutText: { fontSize: 15 },
+  profileName: { fontSize: 22, color: '#FFFFFF' },
+  profileEmail: { fontSize: 14, color: 'rgba(255,255,255,0.7)', marginTop: 5 },
+  brandBadge: { backgroundColor: 'rgba(212,175,55,0.2)', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, marginTop: 8, alignSelf: 'flex-start' },
+  brandBadgeText: { fontSize: 10, color: '#D4AF37', letterSpacing: 0.5 },
+  avatar: { width: 70, height: 70, borderRadius: 35, borderWidth: 3, borderColor: '#D4AF37' },
+  avatarFallback: { width: 70, height: 70, borderRadius: 35, alignItems: 'center', justifyContent: 'center' },
+  avatarLetter: { fontSize: 28, color: '#0A2342' },
+  menuCard: { margin: 16, borderRadius: 18, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 10, elevation: 4 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', padding: 18, borderBottomWidth: 1, gap: 14 },
+  menuIcon: { width: 44, height: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  menuLabel: { flex: 1, fontSize: 16, textAlign: 'right' },
+  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginHorizontal: 16, marginTop: 4, borderRadius: 16, borderWidth: 2, paddingVertical: 16, gap: 10 },
+  logoutText: { fontSize: 16 },
 });

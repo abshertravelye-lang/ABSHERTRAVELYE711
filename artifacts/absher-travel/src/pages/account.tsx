@@ -11,7 +11,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 /* ── PDF Ticket Generator ── */
 function generateFlightTicketHTML(booking: Booking, ar: boolean): string {
-  const logo = "أبشر أعمال";
+  const logo = "ABSHER TRAVEL";
   const date = new Date(booking.createdAt).toLocaleDateString(ar ? "ar-SA" : "en-US", { year: "numeric", month: "long", day: "numeric" });
   const ref = `ABR-${String(booking.id).padStart(6, "0")}`;
 
@@ -79,7 +79,7 @@ function generateFlightTicketHTML(booking: Booking, ar: boolean): string {
   </div>
   <div class="footer">
     <span>${ar ? "تاريخ الإصدار:" : "Issued:"} ${date}</span>
-    <span class="company">${ar ? "أبشر أعمال للسفريات والسياحة" : "Absher Travel & Tourism"}</span>
+    <span class="company">ABSHER TRAVEL</span>
   </div>
 </div>
 <script>window.onload=function(){window.print();setTimeout(function(){window.close();},1500);};</script>

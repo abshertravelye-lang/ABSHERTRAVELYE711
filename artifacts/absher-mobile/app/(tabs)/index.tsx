@@ -52,12 +52,11 @@ export default function HomeScreen() {
           </Pressable>
           <View style={styles.logoArea}>
             <Image
-              source={require('@/assets/images/absher-travel-logo-nobg.png')}
+              source={require('@/assets/images/absher-logo-transparent.png')}
               style={styles.logoImage}
               contentFit="contain"
             />
             <View style={styles.brandText}>
-              <Text style={[styles.heroTitle, { fontFamily: 'Cairo_700Bold' }]}>أبشر ترافل</Text>
               <Text style={[styles.heroTitleEn, { fontFamily: 'Cairo_600SemiBold' }]}>ABSHER TRAVEL</Text>
             </View>
           </View>

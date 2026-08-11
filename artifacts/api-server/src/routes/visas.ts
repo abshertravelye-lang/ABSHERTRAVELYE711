@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { visasTable } from "@workspace/db";
+import { visasTable, notificationsTable, usersTable } from "@workspace/db";
 import { eq, and, isNull } from "drizzle-orm";
 import {
   CreateVisaBody,
@@ -21,9 +21,49 @@ const toResponse = (r: typeof visasTable.$inferSelect) => ({
   blockedNationalities: r.blockedNationalities ?? [],
 });
 
+/** Broadcast an in-app notification to every active user. Fire-and-forget. */
+async function notifyAllUsers(
+  log: { error: (e: unknown) => void },
+  titleAr: string,
+  titleEn: string,
+  messageAr: string,
+  messageEn: string,
+  relatedEntityType: string,
+  relatedEntityId: string,
+) {
+  try {
+    const users = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(and(eq(usersTable.isActive, true), isNull(usersTable.deletedAt)));
+
+    if (users.length === 0) return;
+
+    const rows = users.map((u) => ({
+      userId: u.id,
+      titleAr,
+      titleEn,
+      messageAr,
+      messageEn,
+      channel: "in_app" as const,
+      relatedEntityType,
+      relatedEntityId,
+      isRead: false,
+    }));
+
+    // Insert in chunks of 100 to stay within DB param limits
+    const CHUNK = 100;
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      await db.insert(notificationsTable).values(rows.slice(i, i + CHUNK) as never);
+    }
+  } catch (e) {
+    log.error(e);
+  }
+}
+
 router.get("/visas", async (req, res) => {
   try {
-    const { countryId, region } = req.query;
+    const { countryId } = req.query;
     const conditions = [isNull(visasTable.deletedAt)];
     if (countryId) conditions.push(eq(visasTable.countryId, Number(countryId)));
     const rows = await db
@@ -45,6 +85,18 @@ router.post("/visas", async (req, res) => {
     if (typeof data.fee === "number") data.fee = String(data.fee);
     const [row] = await db.insert(visasTable).values(data as never).returning();
     res.status(201).json(toResponse(row));
+
+    // Fire-and-forget: notify all active users about the new visa type
+    const country = row.countryAr || row.countryEn || "جديدة";
+    notifyAllUsers(
+      req.log,
+      `تأشيرة جديدة متاحة — ${row.countryAr || row.countryEn}`,
+      `New visa available — ${row.countryEn || row.countryAr}`,
+      `تم إضافة تأشيرة ${country} إلى منصة ABSHER TRAVEL. استكشف التفاصيل والمتطلبات الآن.`,
+      `A new visa for ${row.countryEn || row.countryAr} has been added to ABSHER TRAVEL. Explore the details and requirements now.`,
+      "visa",
+      String(row.id),
+    );
   } catch (e) {
     req.log.error(e);
     res.status(400).json({ error: "Invalid input" });

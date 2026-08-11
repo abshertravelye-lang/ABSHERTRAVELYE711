@@ -106,12 +106,11 @@ export default function OnboardingScreen() {
               {index === 0 ? (
                 <View style={styles.logoWrap}>
                   <Image
-                    source={require('@/assets/images/absher-travel-logo-nobg.png')}
+                    source={require('@/assets/images/absher-logo-transparent.png')}
                     style={styles.logo}
                     contentFit="cover"
                   />
                   <Text style={[styles.logoTitle, { fontFamily: 'Cairo_700Bold' }]}>ABSHER TRAVEL</Text>
-                  <Text style={[styles.logoSubtitle, { fontFamily: 'Cairo_400Regular' }]}>أبشر ترافل</Text>
                 </View>
               ) : (
                 <View style={[styles.iconCircle, { backgroundColor: 'rgba(212, 175, 55, 0.15)', borderColor: '#D4AF37' }]}>

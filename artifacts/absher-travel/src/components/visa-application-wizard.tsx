@@ -906,7 +906,7 @@ export function VisaApplicationWizard({
                 <div className="text-sm text-slate-600 leading-relaxed">
                   <span className="font-bold text-slate-800">{ar ? "أقر وأوافق — " : "I confirm & agree — "}</span>
                   {ar
-                    ? "جميع البيانات والمستندات المقدمة صحيحة ودقيقة، وأوافق على الشروط والأحكام المتعلقة باستخراج التأشيرة عبر أبشر أعمال."
+                    ? "جميع البيانات والمستندات المقدمة صحيحة ودقيقة، وأوافق على الشروط والأحكام المتعلقة باستخراج التأشيرة عبر ABSHER TRAVEL."
                     : "All submitted information and documents are accurate and correct. I agree to the terms and conditions for visa processing through Absher Travel."}
                   <span className="flex items-center gap-1 text-slate-400 text-xs mt-1.5">
                     <Info className="w-3 h-3" />

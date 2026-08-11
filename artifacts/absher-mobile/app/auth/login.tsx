@@ -50,12 +50,11 @@ export default function LoginScreen() {
           </Pressable>
           <View style={styles.headerContent}>
             <Image
-              source={require('@/assets/images/absher-travel-logo-nobg.png')}
+              source={require('@/assets/images/absher-logo-transparent.png')}
               style={styles.logo}
               contentFit="cover"
             />
             <Text style={[styles.brandTitle, { fontFamily: 'Cairo_700Bold' }]}>ABSHER TRAVEL</Text>
-            <Text style={[styles.brandSubtitle, { fontFamily: 'Cairo_600SemiBold' }]}>أبشر ترافل</Text>
             <Text style={[styles.title, { fontFamily: 'Cairo_700Bold' }]}>تسجيل الدخول</Text>
           </View>
         </LinearGradient>

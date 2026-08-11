@@ -156,7 +156,7 @@ function Watermark() {
               fill="#0d2351"
               transform={`rotate(-38, ${col * 220 + 100}, ${row * 120 + 60})`}
             >
-              أبشر أعمال
+              ABSHER TRAVEL
             </text>
           );
         })}
@@ -510,9 +510,8 @@ function TicketContent({
             </svg>
           </div>
           <div>
-            <div className="text-white font-black text-lg leading-tight">أبشر أعمال</div>
-            <div className="text-[#c8a84b] text-xs font-semibold">للسفريات والسياحة</div>
-            <div className="text-white/40 text-xs">Absher Travel & Tourism</div>
+            <div className="text-white font-black text-lg leading-tight">ABSHER TRAVEL</div>
+            <div className="text-white/40 text-xs">للسفريات والسياحة</div>
           </div>
         </div>
 
@@ -812,7 +811,7 @@ function TicketContent({
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
           <div className="text-xs text-slate-500 space-y-0.5">
             <div className="font-bold text-[#0d2351]">
-              {ar ? "أبشر أعمال للسفريات والسياحة" : "Absher Travel & Tourism"}
+              ABSHER TRAVEL
             </div>
             <div className="text-slate-400">
               {ar

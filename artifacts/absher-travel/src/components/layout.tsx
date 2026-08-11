@@ -87,7 +87,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <header className="bg-white border-b sticky top-0 z-50">
         <div className="container mx-auto px-4 h-20 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <img src={logo} alt="Absher Travel Logo" className="h-14 object-contain" />
+            <img src={logo} alt="Absher Travel Logo" className="h-16 w-52 object-contain" />
           </Link>
 
           {/* Desktop Nav */}
@@ -160,7 +160,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <footer className="bg-primary text-primary-foreground pt-16 pb-8">
         <div className="container mx-auto px-4 grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
           <div className="space-y-4">
-            <img src={logo} alt="Absher Travel Logo" className="h-16 object-contain bg-white/10 p-2 rounded" />
+            <img src={logo} alt="Absher Travel Logo" className="h-16 w-52 object-contain" />
             <p className="text-sm text-slate-300">
               {t("heroSub")}
             </p>

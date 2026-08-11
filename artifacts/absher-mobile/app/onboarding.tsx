@@ -201,7 +201,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   logoWrap: { alignItems: 'center', gap: 16 },
-  logo: { width: 120, height: 120, borderRadius: 24 },
+  logo: { width: 200, height: 80, borderRadius: 0 },
   logoTitle: { fontSize: 24, color: '#D4AF37', letterSpacing: 1 },
   logoSubtitle: { fontSize: 18, color: 'rgba(255,255,255,0.85)' },
   iconCircle: {

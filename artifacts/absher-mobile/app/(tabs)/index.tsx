@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
   hero: { paddingHorizontal: 20, paddingBottom: 26 },
   heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 },
   logoArea: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  logoImage: { width: 52, height: 52 },
+  logoImage: { width: 100, height: 40 },
   brandText: { alignItems: 'flex-end' },
   heroTitle: { fontSize: 18, color: '#D4AF37' },
   heroTitleEn: { fontSize: 11, color: 'rgba(255,255,255,0.7)', letterSpacing: 0.5, marginTop: -2 },

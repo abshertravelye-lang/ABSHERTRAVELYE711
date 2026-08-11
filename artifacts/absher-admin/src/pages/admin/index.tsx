@@ -74,10 +74,14 @@ export default function AdminLayout() {
       {/* ── Sidebar ── */}
       <aside className="w-64 bg-sidebar text-sidebar-foreground flex flex-col shrink-0 shadow-xl z-20">
         {/* Logo */}
-        <div className="h-20 flex items-center justify-center border-b border-sidebar-border px-6">
-          <div className="text-center">
-            <div className="font-extrabold text-lg text-white tracking-wide">أبشر للسفريات</div>
-            <div className="text-xs text-sidebar-primary mt-1 font-medium">
+        <div className="h-20 flex items-center justify-center border-b border-sidebar-border px-4">
+          <div className="flex flex-col items-center gap-1">
+            <img
+              src={`${BASE}/absher-logo.png`}
+              alt="ABSHER TRAVEL"
+              className="h-12 w-44 object-contain"
+            />
+            <div className="text-xs text-sidebar-primary font-medium">
               {ar ? "لوحة التحكم" : "Admin Panel"}
             </div>
           </div>

@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 20, paddingBottom: 40 },
   closeBtn: { alignSelf: 'flex-end', marginBottom: 16 },
   headerContent: { alignItems: 'center', gap: 10 },
-  logo: { width: 90, height: 90, borderRadius: 18 },
+  logo: { width: 160, height: 64, borderRadius: 0 },
   brandTitle: { fontSize: 20, color: '#D4AF37', letterSpacing: 1, marginTop: 8 },
   brandSubtitle: { fontSize: 16, color: 'rgba(255,255,255,0.85)' },
   title: { fontSize: 22, color: '#FFFFFF', marginTop: 12 },

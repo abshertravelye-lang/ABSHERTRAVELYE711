@@ -12,7 +12,7 @@ export default function SettingsAdmin() {
   const ar = language === "ar";
 
   const [settings, setSettings] = useState({
-    companyName: "أبشر للسفريات",
+    companyName: "ABSHER TRAVEL",
     companyEmail: "info@absher.travel",
     companyPhone: "+966 50 000 0000",
     websiteUrl: "https://absher.travel",

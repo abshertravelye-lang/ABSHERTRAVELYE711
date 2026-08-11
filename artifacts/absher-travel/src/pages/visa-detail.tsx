@@ -15,13 +15,14 @@ export default function VisaDetail() {
   const { data: visa, isLoading: isLoadingVisa } = useGetVisa(visaId, { query: { enabled: !!visaId, queryKey: ["visa", visaId] } });
   const { data: customFields } = useListVisaCustomFields(visaId, { query: { enabled: !!visaId, queryKey: ["visa-custom-fields", visaId] } });
 
-  if (isLoadingCountry || isLoadingVisa) {
+  if (isLoadingVisa || (isLoadingCountry && !!countryId)) {
     return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><div className="w-10 h-10 border-4 border-[#0A2342] border-t-transparent rounded-full animate-spin" /></div>;
   }
 
-  if (!country || !visa) return null;
+  if (!visa) return null;
 
-  const countryName = ar ? country.nameAr : country.nameEn;
+  // Fall back to visa's own country fields when countryId is 0 or country not found
+  const countryName = country ? (ar ? country.nameAr : country.nameEn) : (ar ? visa.countryAr : visa.countryEn);
   const description = ar ? visa.descriptionAr : visa.descriptionEn;
   const ineligibility = ar ? visa.ineligibleMessageAr : visa.ineligibleMessageEn;
 
@@ -34,7 +35,11 @@ export default function VisaDetail() {
           <div className="flex items-center gap-3 text-sm font-medium text-slate-400 mb-8">
             <Link href="/visas" className="hover:text-white transition-colors">{ar ? "التأشيرات" : "Visas"}</Link>
             <ChevronRight className={`w-4 h-4 ${ar ? "rotate-180" : ""}`} />
-            <Link href={`/visas/${countryId}`} className="hover:text-white transition-colors">{countryName}</Link>
+            {countryId ? (
+              <Link href={`/visas/${countryId}`} className="hover:text-white transition-colors">{countryName}</Link>
+            ) : (
+              <span className="text-slate-300">{countryName}</span>
+            )}
             <ChevronRight className={`w-4 h-4 ${ar ? "rotate-180" : ""}`} />
             <span className="text-white">{visa.visaType}</span>
           </div>

@@ -2,14 +2,16 @@
  * Visa detail page that works with just a visaId (no countryId needed).
  * Used when countryId is null in the visas table.
  */
+import { useState } from "react";
 import { useTranslation } from "@/hooks/use-translation";
-import { useGetVisa, useListVisaCustomFields } from "@workspace/api-client-react";
+import { useGetVisa, useListVisaCustomFields, useGetCurrentUser, getGetCurrentUserQueryKey } from "@workspace/api-client-react";
 import { Link, useParams, useLocation } from "wouter";
 import {
   ArrowRight, ChevronRight, Clock, CalendarDays, Shield,
   FileText, Briefcase, Building2, CheckCircle2, Globe, Plane,
-  AlertCircle, Zap, Star,
+  AlertCircle, Zap, Star, Loader2, UserCheck, Lock,
 } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 
 const CATEGORY_LABELS: Record<string, { ar: string; en: string }> = {
   tourist:  { ar: "تأشيرة سياحية",  en: "Tourist Visa" },
@@ -53,12 +55,24 @@ function countryImage(code: string): string {
   return DEFAULTS[(code || "").toUpperCase()] || "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=1600";
 }
 
+const GCC_COUNTRIES = ["Saudi Arabia","UAE","Kuwait","Qatar","Bahrain","Oman"];
+
+function isProfileComplete(user: any): boolean {
+  if (!user) return false;
+  return !!(user.firstName && user.lastName && user.phone && user.nationality &&
+    user.dateOfBirth && user.profilePhotoUrl && user.passportNumber && user.passportExpiryDate);
+}
+
 export default function VisaView() {
   const { language } = useTranslation();
   const ar = language === "ar";
   const params = useParams();
   const [, setLocation] = useLocation();
   const visaId = Number(params.visaId);
+  const { isAuthenticated } = useAuth();
+
+  const [eligibilityState, setEligibilityState] = useState<"idle" | "checking" | "ineligible">("idle");
+  const [ineligibleReason, setIneligibleReason] = useState<string>("");
 
   const { data: visa, isLoading } = useGetVisa(visaId, {
     query: { enabled: !!visaId, queryKey: ["visa", visaId] },
@@ -66,6 +80,39 @@ export default function VisaView() {
   const { data: customFields } = useListVisaCustomFields(visaId, {
     query: { enabled: !!visaId, queryKey: ["visa-custom-fields", visaId] },
   });
+  const { data: currentUser } = useGetCurrentUser({
+    query: { staleTime: 60000, queryKey: getGetCurrentUserQueryKey(), enabled: isAuthenticated },
+  });
+
+  const handleApply = async () => {
+    if (!isAuthenticated) {
+      setLocation(`/login?redirect=/visas/apply/${visaId}`);
+      return;
+    }
+    if (!isProfileComplete(currentUser)) {
+      setLocation(`/account`);
+      return;
+    }
+    // Pre-check eligibility
+    setEligibilityState("checking");
+    try {
+      const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+      const token = localStorage.getItem("accessToken");
+      const res = await fetch(`${BASE_URL}/api/visa-applications/eligibility/${visaId}`, {
+        headers: { Authorization: `Bearer ${token}`, "x-lang": language },
+      });
+      const data = await res.json();
+      if (data.eligible === false) {
+        setIneligibleReason(data.reason || (ar ? "غير مؤهل" : "Not eligible"));
+        setEligibilityState("ineligible");
+        return;
+      }
+    } catch {
+      // On error, proceed anyway — server will enforce
+    }
+    setEligibilityState("idle");
+    setLocation(`/visas/apply/${visaId}`);
+  };
 
   if (isLoading) {
     return (
@@ -205,15 +252,40 @@ export default function VisaView() {
 
                 {isAvailable ? (
                   <button
-                    onClick={() => setLocation(`/visas/apply/${visa.id}`)}
-                    className="w-full bg-[#D4AF37] hover:bg-[#b8973b] text-[#0A2342] font-black py-4 rounded-xl transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 text-base"
+                    onClick={handleApply}
+                    disabled={eligibilityState === "checking"}
+                    className="w-full bg-[#D4AF37] hover:bg-[#b8973b] disabled:opacity-70 text-[#0A2342] font-black py-4 rounded-xl transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 text-base"
                   >
-                    {ar ? "قدم طلبك الآن" : "Apply Now"}
-                    <ArrowRight className={`w-5 h-5 ${ar ? "rotate-180" : ""}`} />
+                    {eligibilityState === "checking" ? (
+                      <><Loader2 className="w-5 h-5 animate-spin" />{ar ? "جاري التحقق..." : "Checking..."}</>
+                    ) : !isAuthenticated ? (
+                      <><Lock className="w-4 h-4" />{ar ? "سجل دخولك للتقديم" : "Login to Apply"}</>
+                    ) : !isProfileComplete(currentUser) ? (
+                      <><UserCheck className="w-4 h-4" />{ar ? "أكمل ملفك للتقديم" : "Complete Profile to Apply"}</>
+                    ) : (
+                      <>{ar ? "قدم طلبك الآن" : "Apply Now"}<ArrowRight className={`w-5 h-5 ${ar ? "rotate-180" : ""}`} /></>
+                    )}
                   </button>
                 ) : (
                   <div className="w-full bg-slate-100 text-slate-400 font-bold py-4 rounded-xl text-center">
                     {ar ? "التأشيرة غير متاحة حالياً" : "Not Available"}
+                  </div>
+                )}
+
+                {/* Ineligible notice */}
+                {eligibilityState === "ineligible" && (
+                  <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-500" />
+                    <div>
+                      <div className="font-bold mb-0.5">{ar ? "غير مؤهل" : "Not Eligible"}</div>
+                      <div>{ineligibleReason}</div>
+                      <button
+                        onClick={() => setEligibilityState("idle")}
+                        className="mt-2 text-xs text-red-500 underline"
+                      >
+                        {ar ? "إغلاق" : "Dismiss"}
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -405,10 +477,17 @@ export default function VisaView() {
       {isAvailable && (
         <div className="fixed bottom-0 inset-x-0 z-50 bg-white/95 backdrop-blur-lg border-t border-slate-200 p-4 shadow-2xl lg:hidden">
           <button
-            onClick={() => setLocation(`/visas/apply/${visa.id}`)}
-            className="w-full bg-[#D4AF37] text-[#0A2342] font-black py-4 rounded-xl flex items-center justify-center gap-2 text-base"
+            onClick={handleApply}
+            disabled={eligibilityState === "checking"}
+            className="w-full bg-[#D4AF37] text-[#0A2342] font-black py-4 rounded-xl flex items-center justify-center gap-2 text-base disabled:opacity-70"
           >
-            {ar ? "قدم طلبك الآن" : "Apply Now"} — {Number(visa.fee).toLocaleString()} {visa.currency}
+            {eligibilityState === "checking" ? (
+              <><Loader2 className="w-5 h-5 animate-spin" />{ar ? "جاري التحقق..." : "Checking..."}</>
+            ) : !isAuthenticated ? (
+              <><Lock className="w-4 h-4" />{ar ? "سجل دخولك للتقديم" : "Login to Apply"}</>
+            ) : (
+              <>{ar ? "قدم طلبك الآن" : "Apply Now"} — {Number(visa.fee).toLocaleString()} {visa.currency}</>
+            )}
           </button>
         </div>
       )}

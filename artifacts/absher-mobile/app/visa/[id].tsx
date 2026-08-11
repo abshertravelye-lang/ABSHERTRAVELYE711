@@ -13,6 +13,7 @@ import DatePickerModal, { DateField } from '@/components/DatePickerModal';
 import ImageUploader from '@/components/ImageUploader';
 import NationalityPicker from '@/components/NationalityPicker';
 import { Nationality } from '@/constants/nationalities';
+import { useAuth } from '@/context/AuthContext';
 
 const STATUS_LABELS: Record<string, string> = {
   available: 'متاحة', suspended: 'موقوفة', closed: 'مغلقة',
@@ -32,6 +33,7 @@ export default function VisaDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { user: authUser } = useAuth();
 
   const { data: visa, isLoading } = useGetVisa(Number(id));
   const createApp = useCreateVisaApplication();
@@ -222,10 +224,42 @@ export default function VisaDetailScreen() {
         <View style={[s.footer, { paddingBottom: insets.bottom + 16, backgroundColor: colors.card, borderTopColor: colors.border }]}>
           <Pressable
             style={({ pressed }) => [s.applyBtn, { backgroundColor: '#0A2342', opacity: pressed ? 0.9 : 1 }]}
-            onPress={() => setShowForm(true)}
+            onPress={() => {
+              if (!authUser) {
+                Alert.alert(
+                  'تسجيل الدخول مطلوب',
+                  'يجب تسجيل الدخول للتقديم على التأشيرة',
+                  [
+                    { text: 'إلغاء', style: 'cancel' },
+                    { text: 'تسجيل الدخول', onPress: () => router.push('/auth/login') },
+                  ]
+                );
+                return;
+              }
+              // Check profile completeness
+              const profileComplete = !!(
+                authUser.firstName && authUser.lastName && authUser.phone &&
+                authUser.nationality && authUser.dateOfBirth &&
+                authUser.profilePhotoUrl && authUser.passportNumber && authUser.passportExpiryDate
+              );
+              if (!profileComplete) {
+                Alert.alert(
+                  'الملف الشخصي غير مكتمل',
+                  'يرجى إكمال بياناتك الشخصية قبل التقديم على التأشيرة',
+                  [
+                    { text: 'إلغاء', style: 'cancel' },
+                    { text: 'إكمال الملف', onPress: () => router.push('/(tabs)/account') },
+                  ]
+                );
+                return;
+              }
+              setShowForm(true);
+            }}
           >
             <Ionicons name="document-text-outline" size={20} color="#FFFFFF" />
-            <Text style={[s.applyBtnText, { fontFamily: 'Cairo_700Bold' }]}>تقديم طلب تأشيرة</Text>
+            <Text style={[s.applyBtnText, { fontFamily: 'Cairo_700Bold' }]}>
+              {!authUser ? 'سجل دخولك للتقديم' : 'تقديم طلب تأشيرة'}
+            </Text>
           </Pressable>
         </View>
       )}

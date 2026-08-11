@@ -2153,10 +2153,14 @@ components:
         gccResidenceExpiry: { type: string, format: date }
         gccResidenceFrontUrl: { type: string }
         gccResidenceBackUrl: { type: string }
+        isEuropeanResident: { type: boolean }
+        europeanDocumentType: { type: string }
+        europeanDocumentUrl: { type: string }
+        europeanDocumentExpiry: { type: string, format: date }
 
     SafeUser:
       type: object
-      required: [id, role, isActive, createdAt, updatedAt]
+      required: [id, role, isActive, isGccResident, isEuropeanResident, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
         email: { type: ["string", "null"] }
@@ -2188,6 +2192,12 @@ components:
         gccResidenceExpiry: { type: ["string", "null"] }
         gccResidenceFrontUrl: { type: ["string", "null"] }
         gccResidenceBackUrl: { type: ["string", "null"] }
+        isEuropeanResident: { type: boolean }
+        europeanDocumentType: { type: ["string", "null"] }
+        europeanDocumentUrl: { type: ["string", "null"] }
+        europeanDocumentExpiry: { type: ["string", "null"] }
+        profileCompletedAt: { type: ["string", "null"] }
+        isProfileComplete: { type: boolean }
 
     AuthResponse:
       type: object

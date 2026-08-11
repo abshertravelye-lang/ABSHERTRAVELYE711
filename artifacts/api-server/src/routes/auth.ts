@@ -2,7 +2,7 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { db } from "@workspace/db";
 import { usersTable, userSessionsTable } from "@workspace/db";
-import { eq, and, isNull, or } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../lib/jwt";
 import { createHash } from "crypto";
 import { z } from "zod";
@@ -31,6 +31,32 @@ function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
+/** Compute whether a user profile is "100% complete" per business rules. */
+export function isProfileComplete(user: typeof usersTable.$inferSelect): boolean {
+  // Core personal info
+  if (!user.firstName && !user.lastName) return false;
+  if (!user.nationality) return false;
+  if (!user.dateOfBirth) return false;
+  if (!user.gender) return false;
+  if (!user.phone) return false;
+  // Photo
+  if (!user.profilePhotoUrl) return false;
+  // Passport
+  if (!user.passportNumber) return false;
+  if (!user.passportExpiryDate) return false;
+  if (!user.passportImageUrl) return false;
+  // GCC — if resident, must have country and front image
+  if (user.isGccResident) {
+    if (!user.gccResidenceCountry) return false;
+    if (!user.gccResidenceFrontUrl) return false;
+  }
+  // European — if resident/holder, must have document URL
+  if (user.isEuropeanResident) {
+    if (!user.europeanDocumentUrl) return false;
+  }
+  return true;
+}
+
 function safeUser(user: typeof usersTable.$inferSelect) {
   const {
     passwordHash: _,
@@ -40,7 +66,7 @@ function safeUser(user: typeof usersTable.$inferSelect) {
     phoneOtpExpiresAt: _____,
     ...safe
   } = user;
-  return safe;
+  return { ...safe, isProfileComplete: isProfileComplete(user) };
 }
 
 // POST /api/auth/register
@@ -248,6 +274,11 @@ const profileUpdateSchema = z.object({
   gccResidenceExpiry: z.string().optional(),
   gccResidenceFrontUrl: z.string().optional(),
   gccResidenceBackUrl: z.string().optional(),
+  // European / Schengen
+  isEuropeanResident: z.boolean().optional(),
+  europeanDocumentType: z.string().optional(),
+  europeanDocumentUrl: z.string().optional(),
+  europeanDocumentExpiry: z.string().optional(),
 });
 
 router.patch("/auth/profile", requireAuth, async (req, res) => {
@@ -270,6 +301,15 @@ router.patch("/auth/profile", requireAuth, async (req, res) => {
       .returning();
 
     if (!updated) return res.status(404).json({ error: "User not found" });
+
+    // Mark profile as completed if now complete
+    if (isProfileComplete(updated) && !updated.profileCompletedAt) {
+      await db.update(usersTable)
+        .set({ profileCompletedAt: new Date() })
+        .where(eq(usersTable.id, updated.id));
+      updated.profileCompletedAt = new Date();
+    }
+
     res.json(safeUser(updated));
   } catch (e) {
     req.log.error(e);

@@ -47,6 +47,15 @@ export const usersTable = pgTable("users", {
   gccResidenceExpiry: date("gcc_residence_expiry"),
   gccResidenceFrontUrl: text("gcc_residence_front_url"),
   gccResidenceBackUrl: text("gcc_residence_back_url"),
+
+  // European / Schengen residency (optional)
+  isEuropeanResident: boolean("is_european_resident").notNull().default(false),
+  europeanDocumentType: text("european_document_type"), // 'residence' | 'schengen_visa'
+  europeanDocumentUrl: text("european_document_url"),
+  europeanDocumentExpiry: date("european_document_expiry"),
+
+  // Profile completion flag (computed & cached on save)
+  profileCompletedAt: timestamp("profile_completed_at", { withTimezone: true }),
 });
 
 export const userSessionsTable = pgTable("user_sessions", {

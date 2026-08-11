@@ -1118,6 +1118,10 @@ export interface ProfileUpdate {
   gccResidenceExpiry?: string;
   gccResidenceFrontUrl?: string;
   gccResidenceBackUrl?: string;
+  isEuropeanResident?: boolean;
+  europeanDocumentType?: string;
+  europeanDocumentUrl?: string;
+  europeanDocumentExpiry?: string;
 }
 
 export type SafeUserRole = typeof SafeUserRole[keyof typeof SafeUserRole];
@@ -1185,6 +1189,16 @@ export interface SafeUser {
   gccResidenceFrontUrl?: string | null;
   /** @nullable */
   gccResidenceBackUrl?: string | null;
+  isEuropeanResident?: boolean;
+  /** @nullable */
+  europeanDocumentType?: string | null;
+  /** @nullable */
+  europeanDocumentUrl?: string | null;
+  /** @nullable */
+  europeanDocumentExpiry?: string | null;
+  /** @nullable */
+  profileCompletedAt?: string | null;
+  isProfileComplete?: boolean;
 }
 
 export interface AuthResponse {

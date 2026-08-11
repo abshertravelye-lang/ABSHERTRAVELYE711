@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/use-auth";
 import {
   useListVisaApplications, useListNotifications, useMarkNotificationRead, useMarkAllNotificationsRead,
   useListMyBookings, useUpdateProfile, useGetCurrentUser, getGetCurrentUserQueryKey,
-  VisaApplication, Notification as ApiNotification, Booking
+  VisaApplication, Notification as ApiNotification, Booking, useOcrPassport,
 } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -515,6 +515,10 @@ export default function Account() {
         gccResidenceFrontUrl: authUser.gccResidenceFrontUrl || "",
         gccResidenceBackUrl: authUser.gccResidenceBackUrl || "",
         profilePhotoUrl: authUser.profilePhotoUrl || "",
+        isEuropeanResident: (authUser as any).isEuropeanResident || false,
+        europeanDocumentType: (authUser as any).europeanDocumentType || "",
+        europeanDocumentUrl: (authUser as any).europeanDocumentUrl || "",
+        europeanDocumentExpiry: (authUser as any).europeanDocumentExpiry || "",
       });
     }
   }, [authUser]);
@@ -533,14 +537,53 @@ export default function Account() {
   });
 
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isOcrRunning, setIsOcrRunning] = useState(false);
+  const ocrMutation = useOcrPassport();
 
   const handleSaveProfile = () => {
     updateProfileMutation.mutate({ data: profile });
   };
 
+  /** Upload passport image → auto-run OCR → prefill passport fields */
+  const handlePassportImageUpload = async (file: File) => {
+    setIsOcrRunning(true);
+    try {
+      const r = await uploadFileDirect(file);
+      if (!r) { setIsOcrRunning(false); return; }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setProfile((p: any) => ({ ...p, passportImageUrl: r.objectPath }));
+      // Trigger OCR
+      try {
+        const ocr = await ocrMutation.mutateAsync({ data: { imageUrl: r.objectPath } });
+        if (ocr.success) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          setProfile((p: any) => ({
+            ...p,
+            passportImageUrl: r.objectPath,
+            ...(ocr.fullName && !p.firstName ? { firstName: ocr.fullName.split(" ")[0] } : {}),
+            ...(ocr.fullNameEn && !p.lastName ? { lastName: ocr.fullNameEn.split(" ").slice(1).join(" ") } : {}),
+            ...(ocr.passportNumber ? { passportNumber: ocr.passportNumber } : {}),
+            ...(ocr.nationality ? { nationality: ocr.nationality } : {}),
+            ...(ocr.dateOfBirth ? { dateOfBirth: ocr.dateOfBirth } : {}),
+            ...(ocr.issueDate ? { passportIssueDate: ocr.issueDate } : {}),
+            ...(ocr.expiryDate ? { passportExpiryDate: ocr.expiryDate } : {}),
+            ...(ocr.issuingCountry ? { passportIssueCountry: ocr.issuingCountry } : {}),
+            ...(ocr.gender ? { gender: ocr.gender === "M" || ocr.gender?.toLowerCase() === "male" ? "male" : "female" } : {}),
+          }));
+          toast({ title: ar ? "تم استخراج بيانات الجواز" : "Passport Data Extracted", description: ar ? "يرجى مراجعة البيانات المستخرجة وتصحيحها إذا لزم" : "Please review and correct the extracted data if needed." });
+        }
+      } catch {
+        // OCR failed silently — photo is still uploaded
+      }
+    } finally {
+      setIsOcrRunning(false);
+    }
+  };
+
   const keyFields = ["firstName", "lastName", "phone", "nationality", "dateOfBirth", "passportNumber", "passportExpiryDate", "profilePhotoUrl"];
   const completedKeyFields = keyFields.filter(k => !!profile[k]).length;
   const completionPercentage = Math.round((completedKeyFields / keyFields.length) * 100);
+  const isProfileFull = completionPercentage === 100;
 
   const unreadCount = notifications?.filter((n) => !n.isRead).length ?? 0;
 
@@ -675,28 +718,43 @@ export default function Account() {
           {/* ── Profile tab ── */}
           <TabsContent value="profile" className="space-y-6">
             {/* Completion card */}
-            <Card className="border border-slate-200 shadow-sm bg-gradient-to-br from-slate-50 to-white">
-              <CardContent className="p-6">
-                <div className="flex justify-between items-end mb-3">
-                  <div>
-                    <h4 className="font-bold text-slate-800">{ar ? "اكتمال الملف الشخصي" : "Profile Completion"}</h4>
-                    {completionPercentage < 100 && (
+            {isProfileFull ? (
+              <Card className="border border-emerald-200 shadow-sm bg-gradient-to-br from-emerald-50 to-white">
+                <CardContent className="p-6 flex items-center gap-5">
+                  <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                    <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-black text-emerald-800 text-lg">{ar ? "✓ ملفك الشخصي مكتمل 100%" : "✓ Profile 100% Complete"}</h4>
+                    <p className="text-sm text-emerald-600 mt-0.5">
+                      {ar ? "يمكنك التقديم على التأشيرات مباشرةً. بياناتك محفوظة وجاهزة." : "You can apply for visas directly. Your data is saved and ready."}
+                    </p>
+                  </div>
+                  <div className="hidden md:block text-4xl font-black text-emerald-700">100%</div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="border border-slate-200 shadow-sm bg-gradient-to-br from-slate-50 to-white">
+                <CardContent className="p-6">
+                  <div className="flex justify-between items-end mb-3">
+                    <div>
+                      <h4 className="font-bold text-slate-800">{ar ? "اكتمال الملف الشخصي" : "Profile Completion"}</h4>
                       <p className="text-xs text-amber-600 mt-1 flex items-center gap-1.5 font-medium">
                         <AlertCircle className="w-3.5 h-3.5" />
-                        {ar ? "يرجى إكمال البيانات الأساسية لضمان سرعة معالجة طلباتك." : "Please complete key details for faster processing."}
+                        {ar ? "يجب إكمال ملفك قبل التقديم على أي تأشيرة." : "You must complete your profile before applying for any visa."}
                       </p>
-                    )}
+                    </div>
+                    <div className="text-right rtl:text-left">
+                      <span className="text-2xl font-black text-[#0d2351]">{completionPercentage}%</span>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{completedKeyFields}/8 {ar ? "حقول مكتملة" : "completed"}</div>
+                    </div>
                   </div>
-                  <div className="text-right rtl:text-left">
-                    <span className="text-2xl font-black text-[#0d2351]">{completionPercentage}%</span>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{completedKeyFields}/8 {ar ? "حقول مكتملة" : "completed"}</div>
+                  <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                    <div className="bg-[#0d2351] h-full transition-all duration-700 rounded-full" style={{ width: `${completionPercentage}%` }} />
                   </div>
-                </div>
-                <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                  <div className="bg-[#0d2351] h-full transition-all duration-700 rounded-full" style={{ width: `${completionPercentage}%` }} />
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
 
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               {/* Avatar */}
@@ -803,7 +861,30 @@ export default function Account() {
                     <Input type="date" className="bg-slate-50 focus:bg-white" value={profile.passportExpiryDate?.split('T')[0] || ""} onChange={e => setProfile({...profile, passportExpiryDate: e.target.value})} />
                   </div>
                   <div className="space-y-2 md:col-span-2 mt-2">
-                    <ProfileFileUpload label={ar ? "صورة الجواز (الصفحة الأولى)" : "Passport Image (Bio Page)"} value={profile.passportImageUrl} onChange={v => setProfile({...profile, passportImageUrl: v})} />
+                    <Label className="text-sm font-semibold">{ar ? "صورة الجواز (الصفحة الأولى)" : "Passport Image (Bio Page)"}</Label>
+                    <p className="text-xs text-[#0d2351] font-medium flex items-center gap-1.5">
+                      <span>✨</span>
+                      {ar ? "رفع الجواز سيقوم باستخراج بياناتك تلقائياً بالذكاء الاصطناعي" : "Uploading will auto-extract your data using AI OCR"}
+                    </p>
+                    {profile.passportImageUrl ? (
+                      <div className="flex items-center gap-3 mt-2 bg-slate-50 p-2 rounded-xl border border-slate-100">
+                        <img src={getDisplayUrl(profile.passportImageUrl)} className="h-16 w-16 object-cover rounded-lg border bg-white" />
+                        <div className="flex-1 min-w-0"><p className="text-xs text-slate-400 truncate" dir="ltr">{profile.passportImageUrl.split('/').pop()}</p></div>
+                        <Button variant="outline" size="sm" onClick={() => setProfile({...profile, passportImageUrl: ""})}>إزالة</Button>
+                      </div>
+                    ) : (
+                      <label className="mt-2 flex items-center justify-center gap-2 px-4 py-6 border-2 border-dashed rounded-xl cursor-pointer bg-[#0d2351]/3 hover:bg-[#0d2351]/8 hover:border-[#0d2351]/50 border-[#0d2351]/20 transition-colors text-sm text-[#0d2351]">
+                        <input type="file" className="hidden" accept="image/*" onChange={async e => {
+                          const f = e.target.files?.[0]; if (!f) return;
+                          await handlePassportImageUpload(f);
+                        }} disabled={isOcrRunning} />
+                        {isOcrRunning ? (
+                          <><Loader2 className="h-4 w-4 animate-spin" /><span className="font-medium">{ar ? "جاري الاستخراج بالذكاء الاصطناعي..." : "AI extracting data..."}</span></>
+                        ) : (
+                          <><Camera className="h-5 w-5" /><span className="font-medium">{ar ? "ارفع صورة الجواز (OCR تلقائي)" : "Upload Passport (Auto OCR)"}</span></>
+                        )}
+                      </label>
+                    )}
                   </div>
                 </div>
               </div>
@@ -819,7 +900,17 @@ export default function Account() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5 animate-in fade-in zoom-in-95 duration-200">
                     <div className="space-y-2">
                       <Label className="font-semibold">{ar ? "دولة الإقامة" : "Residence Country"}</Label>
-                      <Input className="bg-white focus:bg-white" value={profile.gccResidenceCountry} onChange={e => setProfile({...profile, gccResidenceCountry: e.target.value})} />
+                      <Select value={profile.gccResidenceCountry} onValueChange={v => setProfile({...profile, gccResidenceCountry: v})}>
+                        <SelectTrigger className="bg-white focus:bg-white"><SelectValue placeholder={ar ? "اختر الدولة" : "Select country"} /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Saudi Arabia">{ar ? "المملكة العربية السعودية" : "Saudi Arabia"}</SelectItem>
+                          <SelectItem value="UAE">{ar ? "الإمارات العربية المتحدة" : "United Arab Emirates"}</SelectItem>
+                          <SelectItem value="Kuwait">{ar ? "الكويت" : "Kuwait"}</SelectItem>
+                          <SelectItem value="Qatar">{ar ? "قطر" : "Qatar"}</SelectItem>
+                          <SelectItem value="Bahrain">{ar ? "البحرين" : "Bahrain"}</SelectItem>
+                          <SelectItem value="Oman">{ar ? "عُمان" : "Oman"}</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="space-y-2">
                       <Label className="font-semibold">{ar ? "رقم الإقامة" : "Residence Number"}</Label>
@@ -834,6 +925,41 @@ export default function Account() {
                     </div>
                     <div className="space-y-2">
                       <ProfileFileUpload label={ar ? "الوجه الخلفي للإقامة" : "Residence Back Image"} value={profile.gccResidenceBackUrl} onChange={v => setProfile({...profile, gccResidenceBackUrl: v})} />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* European / Schengen */}
+              <div className="border-t border-slate-100 p-6 bg-purple-50/20">
+                <label className="flex items-center gap-3 cursor-pointer p-4 rounded-xl border border-purple-100 bg-white hover:border-purple-300 transition-colors mb-6 shadow-sm">
+                  <Checkbox checked={profile.isEuropeanResident} onCheckedChange={(c) => setProfile({...profile, isEuropeanResident: !!c})} className="scale-110" />
+                  <div>
+                    <div className="font-bold text-slate-800">{ar ? "لديّ تأشيرة شنغن أو إقامة أوروبية سارية" : "I have a valid Schengen visa or European residency"}</div>
+                    <div className="text-xs text-slate-500 mt-0.5">{ar ? "قد يؤهلك هذا للتقدم على تأشيرات معينة" : "This may qualify you for certain visas"}</div>
+                  </div>
+                </label>
+
+                {profile.isEuropeanResident && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="space-y-2">
+                      <Label className="font-semibold">{ar ? "نوع الوثيقة" : "Document Type"}</Label>
+                      <Select value={profile.europeanDocumentType} onValueChange={v => setProfile({...profile, europeanDocumentType: v})}>
+                        <SelectTrigger className="bg-white focus:bg-white"><SelectValue placeholder={ar ? "اختر النوع" : "Select type"} /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="schengen_visa">{ar ? "تأشيرة شنغن" : "Schengen Visa"}</SelectItem>
+                          <SelectItem value="uk_visa">{ar ? "تأشيرة بريطانية" : "UK Visa"}</SelectItem>
+                          <SelectItem value="eu_residency">{ar ? "إقامة أوروبية" : "EU Residency Permit"}</SelectItem>
+                          <SelectItem value="uk_residency">{ar ? "إقامة بريطانية" : "UK Residency Permit"}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-semibold">{ar ? "تاريخ انتهاء الصلاحية" : "Expiry Date"}</Label>
+                      <Input type="date" className="bg-white focus:bg-white" value={profile.europeanDocumentExpiry?.split('T')[0] || ""} onChange={e => setProfile({...profile, europeanDocumentExpiry: e.target.value})} />
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <ProfileFileUpload label={ar ? "صورة الوثيقة الأوروبية / الشنغن" : "European / Schengen Document Image"} value={profile.europeanDocumentUrl} onChange={v => setProfile({...profile, europeanDocumentUrl: v})} />
                     </div>
                   </div>
                 )}

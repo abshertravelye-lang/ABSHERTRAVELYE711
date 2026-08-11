@@ -23,6 +23,7 @@ import VisaTrack from "@/pages/visa-track";
 import About from "@/pages/about";
 import Contact from "@/pages/contact";
 import Flights from "@/pages/flights";
+import Hotels from "@/pages/hotels";
 import Login from "@/pages/login";
 import Register from "@/pages/register";
 import Account from "@/pages/account";
@@ -50,6 +51,7 @@ function Router() {
       <Route path="/about" component={About} />
       <Route path="/contact" component={Contact} />
       <Route path="/flights" component={Flights} />
+      <Route path="/hotels" component={Hotels} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
       <Route path="/account" nest>

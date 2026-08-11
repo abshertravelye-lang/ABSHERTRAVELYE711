@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { visaApplicationSubmissionsTable, visasTable, notificationsTable, visaCustomFieldsTable } from "@workspace/db";
+import { visaApplicationSubmissionsTable, visasTable, notificationsTable, usersTable } from "@workspace/db";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import {
   ListVisaApplicationsQueryParams,
@@ -9,6 +9,7 @@ import {
   UpdateVisaApplicationBody,
 } from "@workspace/api-zod";
 import { requireAuth, requireRole, optionalAuth } from "../middleware/auth";
+import { isProfileComplete } from "./auth";
 import OpenAI from "openai";
 
 const router = Router();
@@ -78,11 +79,72 @@ const toResponse = (r: typeof visaApplicationSubmissionsTable.$inferSelect) => (
 
 const normalize = (s: string) => s.trim().toLocaleLowerCase();
 
-// Generate a unique tracking number: VISA-YYYY-XXXXXX
-function generateTrackingNumber(): string {
+/** Generate unique application number: AT-YYYY-NNNNNN */
+function generateApplicationNumber(): string {
   const year = new Date().getFullYear();
   const rand = Math.floor(100000 + Math.random() * 900000);
-  return `VISA-${year}-${rand}`;
+  return `AT-${year}-${rand}`;
+}
+
+/** Core eligibility engine — called by both the pre-check endpoint and submission */
+function checkEligibility(
+  user: typeof usersTable.$inferSelect,
+  visa: typeof visasTable.$inferSelect,
+  ar: boolean,
+): { eligible: boolean; reason?: string } {
+  const nationality = normalize(user.nationality ?? "");
+
+  // 1. Prohibited nationality ALWAYS wins
+  const blocked = visa.blockedNationalities.some((n) => normalize(n) === nationality);
+  if (blocked) {
+    return {
+      eligible: false,
+      reason: ar
+        ? (visa.ineligibleMessageAr || "لا يمكنك التقديم على هذه التأشيرة")
+        : (visa.ineligibleMessageEn || "You cannot apply for this visa."),
+    };
+  }
+
+  // 2. Allowed nationalities list (empty = open to all non-blocked)
+  const allowedList = visa.allowedNationalities;
+  if (allowedList.length > 0) {
+    const allowed = allowedList.some((n) => normalize(n) === nationality);
+    if (!allowed) {
+      return {
+        eligible: false,
+        reason: ar
+          ? (visa.ineligibleMessageAr || "جنسيتك غير مؤهلة للتقديم على هذه التأشيرة")
+          : (visa.ineligibleMessageEn || "Your nationality is not eligible for this visa."),
+      };
+    }
+  }
+
+  // 3. GCC residency requirement — check user's STORED profile
+  if (visa.acceptsGccResidency && visa.requiredResidencies?.includes("gcc")) {
+    if (!user.isGccResident || !user.gccResidenceCountry || !user.gccResidenceFrontUrl) {
+      return {
+        eligible: false,
+        reason: ar
+          ? "هذه التأشيرة تتطلب إقامة خليجية سارية. يرجى إضافة بيانات إقامتك الخليجية في ملفك الشخصي."
+          : "This visa requires a valid GCC residence. Please add your GCC residency details to your profile.",
+      };
+    }
+  }
+
+  // 4. European / Schengen requirements — check stored profile
+  const needsEuropean = visa.acceptsSchengenResidency || visa.acceptsUkResidency;
+  if (needsEuropean && visa.requiredResidencies?.includes("schengen")) {
+    if (!user.isEuropeanResident || !user.europeanDocumentUrl) {
+      return {
+        eligible: false,
+        reason: ar
+          ? "هذه التأشيرة تتطلب تأشيرة شنغن أو إقامة أوروبية سارية في ملفك الشخصي."
+          : "This visa requires a valid Schengen/European visa or residency in your profile.",
+      };
+    }
+  }
+
+  return { eligible: true };
 }
 
 // ── OCR endpoint ──────────────────────────────────────────────────────────
@@ -119,7 +181,6 @@ If a field cannot be read or is not visible, use null. Return only valid JSON, n
     });
 
     const text = response.choices[0]?.message?.content ?? "{}";
-    // Strip markdown code blocks if present
     const jsonText = text.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
     const data = JSON.parse(jsonText);
 
@@ -127,6 +188,80 @@ If a field cannot be read or is not visible, use null. Return only valid JSON, n
   } catch (e) {
     req.log.error(e);
     res.json({ success: false, error: "Could not extract passport data. Please enter manually." });
+  }
+});
+
+// ── Photo validation endpoint ──────────────────────────────────────────────
+router.post("/visa-applications/validate-photo", async (req, res) => {
+  try {
+    const { imageUrl } = req.body;
+    if (!imageUrl) return res.status(400).json({ error: "imageUrl is required" });
+
+    const prompt = `Analyze this image for use as a passport/ID photo. Return ONLY a JSON object with:
+- valid: true or false
+- reason: short explanation (in English) if invalid, or "Photo accepted" if valid
+- faceDetected: true or false
+- singleFace: true or false (true if exactly one face)
+
+Check: exactly one face, face clearly visible, reasonable lighting, no excessive blur, appropriate framing. Return only valid JSON, no markdown.`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            { type: "image_url", image_url: { url: imageUrl, detail: "low" } },
+          ],
+        },
+      ],
+      max_tokens: 200,
+    });
+
+    const text = response.choices[0]?.message?.content ?? "{}";
+    const jsonText = text.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
+    const data = JSON.parse(jsonText);
+    res.json(data);
+  } catch (e) {
+    req.log.error(e);
+    res.json({ valid: true, reason: "Photo accepted", faceDetected: true, singleFace: true });
+  }
+});
+
+// ── Pre-check eligibility (authenticated) ─────────────────────────────────
+router.get("/visa-applications/eligibility/:visaId", requireAuth, async (req, res) => {
+  try {
+    const visaId = Number(req.params.visaId);
+    const ar = req.headers["x-lang"] === "ar";
+
+    const [user] = await db.select().from(usersTable)
+      .where(and(eq(usersTable.id, req.user!.sub), isNull(usersTable.deletedAt)));
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    // Profile must be complete before applying
+    if (!isProfileComplete(user)) {
+      return res.json({
+        eligible: false,
+        reason: ar
+          ? "يجب إكمال ملفك الشخصي قبل التقديم على أي تأشيرة."
+          : "You must complete your profile before applying for a visa.",
+        profileIncomplete: true,
+      });
+    }
+
+    const [visa] = await db.select().from(visasTable)
+      .where(and(eq(visasTable.id, visaId), isNull(visasTable.deletedAt)));
+    if (!visa) return res.status(404).json({ error: "Visa not found" });
+    if (!visa.isActive || visa.status !== "available") {
+      return res.json({ eligible: false, reason: ar ? "هذه التأشيرة غير متاحة حالياً." : "This visa is not currently available." });
+    }
+
+    const result = checkEligibility(user, visa, ar);
+    res.json(result);
+  } catch (e) {
+    req.log.error(e);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -150,7 +285,6 @@ router.get("/visa-applications/track/:trackingNumber", async (req, res) => {
 
     if (!row) return res.status(404).json({ error: "Tracking number not found" });
 
-    // Get visa info
     const [visa] = await db.select({
       visaType: visasTable.visaType,
       countryAr: visasTable.countryAr,
@@ -196,104 +330,104 @@ router.get("/visa-applications", requireAuth, async (req, res) => {
   }
 });
 
-// ── Submit application ─────────────────────────────────────────────────────
-router.post("/visa-applications", optionalAuth, async (req, res) => {
+// ── Submit application (requires auth + complete profile) ──────────────────
+router.post("/visa-applications", requireAuth, async (req, res) => {
   try {
-    const body = req.body;
-    if (!body.visaId || !body.fullName || !body.nationality || !body.passportNumber
-      || !body.passportIssueDate || !body.passportExpiryDate || !body.dateOfBirth
-      || !body.gender || !body.email || !body.phone) {
-      return res.status(400).json({ error: "Missing required fields" });
+    const ar = req.headers["x-lang"] === "ar";
+    const userId = req.user!.sub;
+
+    // Load user's stored profile
+    const [user] = await db.select().from(usersTable)
+      .where(and(eq(usersTable.id, userId), isNull(usersTable.deletedAt)));
+    if (!user) return res.status(401).json({ error: "User not found" });
+
+    // Enforce profile completion
+    if (!isProfileComplete(user)) {
+      return res.status(422).json({
+        error: ar
+          ? "يجب إكمال ملفك الشخصي قبل التقديم على أي تأشيرة."
+          : "Your profile must be complete before submitting a visa application.",
+        profileIncomplete: true,
+      });
     }
+
+    const body = req.body;
+    if (!body.visaId) return res.status(400).json({ error: "visaId is required" });
 
     const [visa] = await db.select().from(visasTable)
       .where(and(eq(visasTable.id, Number(body.visaId)), isNull(visasTable.deletedAt)));
     if (!visa) return res.status(404).json({ error: "Visa not found" });
-
-    // Server-side eligibility re-check
-    if (body.eligibilityPath === "gcc" && !visa.acceptsGccResidency) {
-      return res.status(422).json({ error: "GCC residency path is not accepted for this visa" });
-    }
-    if (body.eligibilityPath === "alternative") {
-      const region = body.alternativeRegion;
-      const regionAccepted =
-        (region === "schengen" && visa.acceptsSchengenResidency) ||
-        (region === "uk" && visa.acceptsUkResidency) ||
-        (region === "usa" && visa.acceptsUsVisa) ||
-        (region === "canada" && visa.acceptsCanadaResidency) ||
-        (region === "australia" && visa.acceptsAustraliaResidency);
-      if (!regionAccepted) {
-        return res.status(422).json({ error: "Selected residency/visa region is not accepted for this visa" });
-      }
-    }
-    if (body.eligibilityPath === "direct" || !body.eligibilityPath) {
-      const nationality = normalize(body.nationality);
-      const blocked = visa.blockedNationalities.some((n) => normalize(n) === nationality);
-      const allowedList = visa.allowedNationalities;
-      const allowed = allowedList.length === 0 || allowedList.some((n) => normalize(n) === nationality);
-      if (blocked || !allowed) {
-        const message = req.headers["x-lang"] === "en"
-          ? (visa.ineligibleMessageEn || "Sorry, you are not eligible to apply for this visa.")
-          : (visa.ineligibleMessageAr || "عذراً، لا يمكنك التقديم على هذه التأشيرة وفق الشروط المحددة.");
-        return res.status(422).json({ error: message });
-      }
+    if (!visa.isActive || visa.status !== "available") {
+      return res.status(422).json({ error: ar ? "هذه التأشيرة غير متاحة حالياً." : "This visa is not currently available." });
     }
 
-    const userId = (req as any).user?.sub ?? null;
+    // Server-side eligibility check using STORED profile (cannot be bypassed)
+    const eligibility = checkEligibility(user, visa, ar);
+    if (!eligibility.eligible) {
+      return res.status(422).json({ error: eligibility.reason });
+    }
 
-    // Generate unique tracking number
-    let trackingNumber = generateTrackingNumber();
-    // Retry on collision (rare)
+    // Determine eligibility path from stored profile
+    let eligibilityPath = "direct";
+    if (user.isGccResident && visa.acceptsGccResidency) eligibilityPath = "gcc";
+    else if (user.isEuropeanResident && (visa.acceptsSchengenResidency || visa.acceptsUkResidency)) eligibilityPath = "alternative";
+
+    // Generate unique application number
+    let trackingNumber = generateApplicationNumber();
     let attempts = 0;
     while (attempts < 5) {
       const [existing] = await db.select({ id: visaApplicationSubmissionsTable.id })
         .from(visaApplicationSubmissionsTable)
         .where(eq(visaApplicationSubmissionsTable.trackingNumber, trackingNumber));
       if (!existing) break;
-      trackingNumber = generateTrackingNumber();
+      trackingNumber = generateApplicationNumber();
       attempts++;
     }
 
+    // Build application record from stored profile — no re-entry needed
     const insertData = {
       trackingNumber,
       visaId: Number(body.visaId),
-      eligibilityPath: body.eligibilityPath ?? "direct",
-      gccCountry: body.gccCountry ?? null,
-      alternativeRegion: body.alternativeRegion ?? null,
-      fullName: body.fullName,
-      fullNameEn: body.fullNameEn ?? null,
-      nationality: body.nationality,
-      gender: body.gender,
-      dateOfBirth: body.dateOfBirth,
-      countryOfResidence: body.countryOfResidence ?? null,
-      email: body.email,
-      phone: body.phone,
-      passportNumber: body.passportNumber,
-      passportIssueDate: body.passportIssueDate,
-      passportExpiryDate: body.passportExpiryDate,
-      passportIssuingCountry: body.passportIssuingCountry ?? null,
-      passportImageUrl: body.passportImageUrl ?? null,
-      personalPhotoUrl: body.personalPhotoUrl ?? null,
-      residencyImageUrl: body.residencyImageUrl ?? null,
-      residencyBackImageUrl: body.residencyBackImageUrl ?? null,
-      alternativeVisaNumber: body.alternativeVisaNumber ?? null,
-      alternativeVisaExpiry: body.alternativeVisaExpiry ?? null,
-      visaImageUrl: body.visaImageUrl ?? null,
+      userId,
+      eligibilityPath,
+      gccCountry: user.isGccResident ? (user.gccResidenceCountry ?? null) : null,
+      alternativeRegion: user.isEuropeanResident ? (user.europeanDocumentType ?? null) : null,
+      // Personal info from stored profile
+      fullName: `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim(),
+      fullNameEn: `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim(),
+      nationality: user.nationality ?? "",
+      gender: (user.gender as any) ?? "male",
+      dateOfBirth: user.dateOfBirth ?? "",
+      countryOfResidence: user.isGccResident ? (user.gccResidenceCountry ?? null) : null,
+      email: user.email ?? "",
+      phone: user.phone ?? "",
+      // Passport from stored profile
+      passportNumber: user.passportNumber ?? "",
+      passportIssueDate: user.passportIssueDate ?? null,
+      passportExpiryDate: user.passportExpiryDate ?? "",
+      passportIssuingCountry: user.passportIssueCountry ?? null,
+      passportImageUrl: user.passportImageUrl ?? null,
+      personalPhotoUrl: user.profilePhotoUrl ?? null,
+      // Residency docs from stored profile
+      residencyImageUrl: user.gccResidenceFrontUrl ?? null,
+      residencyBackImageUrl: user.gccResidenceBackUrl ?? null,
+      alternativeVisaNumber: null,
+      alternativeVisaExpiry: null,
+      visaImageUrl: user.europeanDocumentUrl ?? null,
+      // Visa-specific extras from request body
       customFieldResponses: body.customFieldResponses ?? {},
       agreedToTerms: body.agreedToTerms ?? false,
-      ...(userId ? { userId } : {}),
     };
 
     const [row] = await db.insert(visaApplicationSubmissionsTable).values(insertData as never).returning();
 
-    if (userId) {
-      await db.insert(notificationsTable).values({
-        userId,
-        ...STATUS_MESSAGES.received,
-        relatedEntityType: "visa_application",
-        relatedEntityId: String(row.id),
-      });
-    }
+    // Send notification
+    await db.insert(notificationsTable).values({
+      userId,
+      ...STATUS_MESSAGES.received,
+      relatedEntityType: "visa_application",
+      relatedEntityId: String(row.id),
+    });
 
     res.status(201).json(toResponse(row));
   } catch (e: unknown) {

@@ -1,33 +1,51 @@
-import { useState, useRef, useEffect } from "react";
+/**
+ * Visa Application Page — Auth-gated, profile-driven.
+ * The backend uses the user's stored profile for all eligibility checks.
+ * This page only collects: custom visa fields + agreement.
+ */
+import { useState, useEffect } from "react";
 import { useTranslation } from "@/hooks/use-translation";
-import { Link, useLocation, useParams } from "wouter";
-import { 
-  useGetVisa, 
-  useListVisaCustomFields, 
-  useCreateVisaApplication, 
-  useOcrPassport,
-  useRequestUploadUrl 
+import { Link, useParams, useLocation } from "wouter";
+import {
+  useGetVisa,
+  useListVisaCustomFields,
+  useCreateVisaApplication,
+  useGetCurrentUser,
+  getGetCurrentUserQueryKey,
 } from "@workspace/api-client-react";
-import { 
-  User, Flag, UploadCloud, CheckCircle2, ChevronRight, 
-  ArrowRight, ArrowLeft, Shield, FileText, AlertCircle 
+import {
+  CheckCircle2, ChevronRight, Shield, FileText, User,
+  AlertCircle, Loader2, ArrowRight, ArrowLeft, Globe,
+  Phone, Mail, Flag, Calendar, Hash
 } from "lucide-react";
-import { useForm, Controller } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
+import { useAuth } from "@/hooks/use-auth";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CountrySelect } from "@/components/country-select";
 import { Checkbox } from "@/components/ui/checkbox";
 
-const WIZARD_STEPS = [
-  { id: "personal", ar: "البيانات الشخصية", en: "Personal Info", icon: User },
-  { id: "passport", ar: "جواز السفر", en: "Passport", icon: Flag },
-  { id: "documents", ar: "المرفقات", en: "Documents", icon: UploadCloud },
-  { id: "review", ar: "المراجعة", en: "Review", icon: CheckCircle2 }
-];
+const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+
+function getDisplayUrl(url?: string | null) {
+  if (!url) return "";
+  if (url.startsWith("/api")) return `${BASE_URL}${url}`;
+  return url;
+}
+
+/** Profile completeness — mirrors the backend `isProfileComplete()` */
+function checkProfileComplete(user: any): { complete: boolean; missing: string[] } {
+  const required = [
+    { key: "firstName", label: "الاسم الأول / First Name" },
+    { key: "lastName", label: "اسم العائلة / Last Name" },
+    { key: "phone", label: "رقم الهاتف / Phone" },
+    { key: "nationality", label: "الجنسية / Nationality" },
+    { key: "dateOfBirth", label: "تاريخ الميلاد / Date of Birth" },
+    { key: "profilePhotoUrl", label: "الصورة الشخصية / Profile Photo" },
+    { key: "passportNumber", label: "رقم الجواز / Passport Number" },
+    { key: "passportExpiryDate", label: "انتهاء الجواز / Passport Expiry" },
+  ];
+  const missing = required.filter(r => !user[r.key]).map(r => r.label);
+  return { complete: missing.length === 0, missing };
+}
 
 export default function VisaApply() {
   const { language } = useTranslation();
@@ -35,152 +53,150 @@ export default function VisaApply() {
   const params = useParams();
   const visaId = Number(params.visaId);
   const [, setLocation] = useLocation();
+  const { user: authUser, isAuthenticated } = useAuth();
 
-  const [currentStep, setCurrentStep] = useState(0);
+  // Custom field state
+  const [customResponses, setCustomResponses] = useState<Record<string, string>>({});
+  const [agreed, setAgreed] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState<string | null>(null); // tracking number
 
   // APIs
-  const { data: visa, isLoading: isLoadingVisa } = useGetVisa(visaId, { 
-    query: { enabled: !!visaId, queryKey: ["visa", visaId] } 
+  const { data: visa, isLoading: isLoadingVisa } = useGetVisa(visaId, {
+    query: { enabled: !!visaId, queryKey: ["visa", visaId] },
   });
-  const { data: customFields } = useListVisaCustomFields(visaId, { 
-    query: { enabled: !!visaId, queryKey: ["visa-custom-fields", visaId] } 
+  const { data: customFields } = useListVisaCustomFields(visaId, {
+    query: { enabled: !!visaId, queryKey: ["visa-custom-fields", visaId] },
+  });
+  const { data: currentUser, isLoading: isLoadingUser } = useGetCurrentUser({
+    query: { staleTime: 0, queryKey: getGetCurrentUserQueryKey(), enabled: isAuthenticated },
   });
 
-  const uploadMutation = useRequestUploadUrl();
-  const ocrMutation = useOcrPassport();
   const submitMutation = useCreateVisaApplication();
 
-  // Form
-  const formSchema = z.object({
-    fullName: z.string().min(3),
-    fullNameEn: z.string().optional(),
-    nationality: z.string().min(2),
-    gender: z.enum(["male", "female"]),
-    dateOfBirth: z.string().min(4),
-    countryOfResidence: z.string().optional(),
-    email: z.string().email(),
-    phone: z.string().min(5),
-    
-    passportNumber: z.string().min(3),
-    passportIssueDate: z.string().min(4),
-    passportExpiryDate: z.string().min(4),
-    passportIssuingCountry: z.string().optional(),
-    
-    passportImageUrl: z.string().optional(),
-    personalPhotoUrl: z.string().optional(),
-    residencyImageUrl: z.string().optional(),
-    visaImageUrl: z.string().optional(),
-    
-    customFieldResponses: z.record(z.any()).optional(),
-    agreedToTerms: z.literal(true, { errorMap: () => ({ message: ar ? "يجب الموافقة على الشروط" : "Must agree to terms" }) }),
-  });
-
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      gender: "male",
-      customFieldResponses: {}
+  // Auth gate: redirect to login if not authenticated
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setLocation(`/login?redirect=/visas/apply/${visaId}`);
     }
-  });
+  }, [isAuthenticated, visaId, setLocation]);
 
-  // Handle file upload
-  const [uploadingField, setUploadingField] = useState<string | null>(null);
-  const handleUpload = async (file: File, fieldName: string) => {
-    setUploadingField(fieldName);
+  const user = currentUser || authUser;
+  const profileCheck = user ? checkProfileComplete(user) : { complete: false, missing: [] };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!agreed) return;
+    setServerError(null);
     try {
-      const { uploadURL, objectPath } = await uploadMutation.mutateAsync({
-        data: {
-          name: file.name,
-          size: file.size,
-          contentType: file.type
-        }
-      });
-
-      await fetch(uploadURL, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type }
-      });
-
-      form.setValue(fieldName as any, objectPath, { shouldValidate: true });
-
-      // If it's the passport image, trigger OCR
-      if (fieldName === "passportImageUrl") {
-        try {
-          const ocr = await ocrMutation.mutateAsync({ data: { imageUrl: objectPath } });
-          if (ocr.success) {
-            if (ocr.fullName) form.setValue("fullName", ocr.fullName);
-            if (ocr.fullNameEn) form.setValue("fullNameEn", ocr.fullNameEn);
-            if (ocr.passportNumber) form.setValue("passportNumber", ocr.passportNumber);
-            if (ocr.nationality) form.setValue("nationality", ocr.nationality.toLowerCase());
-            if (ocr.dateOfBirth) form.setValue("dateOfBirth", ocr.dateOfBirth);
-            if (ocr.issueDate) form.setValue("passportIssueDate", ocr.issueDate);
-            if (ocr.expiryDate) form.setValue("passportExpiryDate", ocr.expiryDate);
-            if (ocr.issuingCountry) form.setValue("passportIssuingCountry", ocr.issuingCountry.toLowerCase());
-            if (ocr.gender) form.setValue("gender", ocr.gender === "M" || ocr.gender === "MALE" ? "male" : "female");
-          }
-        } catch (e) {
-          console.error("OCR failed", e);
-        }
-      }
-    } catch (e) {
-      console.error("Upload failed", e);
-    } finally {
-      setUploadingField(null);
-    }
-  };
-
-  const nextStep = async () => {
-    let isValid = false;
-    if (currentStep === 0) {
-      isValid = await form.trigger(["fullName", "nationality", "gender", "dateOfBirth", "email", "phone"]);
-    } else if (currentStep === 1) {
-      isValid = await form.trigger(["passportNumber", "passportIssueDate", "passportExpiryDate"]);
-    } else if (currentStep === 2) {
-      // Manual check for required documents
-      isValid = true;
-      if (visa?.requiresPassportImage && !form.getValues("passportImageUrl")) isValid = false;
-      if (visa?.requiresPersonalPhoto && !form.getValues("personalPhotoUrl")) isValid = false;
-      if (visa?.requiresResidencyImage && !form.getValues("residencyImageUrl")) isValid = false;
-      if (!isValid) {
-        form.trigger(["passportImageUrl", "personalPhotoUrl", "residencyImageUrl"]);
-      }
-    }
-
-    if (isValid) {
-      setCurrentStep(s => Math.min(WIZARD_STEPS.length - 1, s + 1));
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
-
-  const prevStep = () => {
-    setCurrentStep(s => Math.max(0, s - 1));
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const onSubmit = async (data: z.infer<typeof formSchema>) => {
-    try {
-      setServerError(null);
       const res = await submitMutation.mutateAsync({
         data: {
           visaId,
-          eligibilityPath: "direct",
-          ...data
-        }
+          customFieldResponses: customResponses,
+          agreedToTerms: true,
+        } as any,
       });
-      setLocation(`/visas/success?tracking=${res.trackingNumber}`);
+      setSubmitted(res.trackingNumber ?? null);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e: any) {
-      setServerError(e?.data?.error || e?.message || "An error occurred");
+      setServerError(e?.data?.error || e?.message || (ar ? "حدث خطأ، يرجى المحاولة مرة أخرى" : "An error occurred. Please try again."));
     }
   };
 
-  if (isLoadingVisa) {
-    return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><div className="w-10 h-10 border-4 border-[#0A2342] border-t-transparent rounded-full animate-spin" /></div>;
+  // ── Loading ──────────────────────────────────────────────────────────────
+  if (isLoadingVisa || isLoadingUser) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="w-10 h-10 border-4 border-[#0A2342] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   }
 
   if (!visa) return null;
 
+  // ── Success screen ────────────────────────────────────────────────────────
+  if (submitted) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6" dir={ar ? "rtl" : "ltr"}>
+        <div className="max-w-lg w-full bg-white rounded-3xl shadow-xl border border-slate-100 p-10 text-center">
+          <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-6">
+            <CheckCircle2 className="w-10 h-10 text-emerald-600" />
+          </div>
+          <h1 className="text-2xl font-black text-slate-800 mb-3">
+            {ar ? "تم تقديم طلبك بنجاح!" : "Application Submitted!"}
+          </h1>
+          <p className="text-slate-500 mb-6">
+            {ar
+              ? "تم استلام طلب التأشيرة الخاص بك. يمكنك متابعة حالته باستخدام رقم التتبع."
+              : "Your visa application has been received. Track it using the reference number below."}
+          </p>
+          <div className="bg-[#0A2342]/5 border border-[#0A2342]/10 rounded-2xl p-4 mb-8">
+            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+              {ar ? "رقم المرجع" : "Reference Number"}
+            </div>
+            <div className="text-2xl font-black text-[#0A2342] tracking-widest" dir="ltr">
+              {submitted}
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Link href="/account">
+              <button className="px-6 py-3 bg-[#0A2342] text-white rounded-xl font-bold hover:bg-[#0A2342]/90 transition-colors">
+                {ar ? "متابعة الطلب" : "Track Application"}
+              </button>
+            </Link>
+            <Link href="/visas">
+              <button className="px-6 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200 transition-colors">
+                {ar ? "تصفح تأشيرات أخرى" : "Browse More Visas"}
+              </button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Profile incomplete guard ──────────────────────────────────────────────
+  if (!profileCheck.complete) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6" dir={ar ? "rtl" : "ltr"}>
+        <div className="max-w-lg w-full bg-white rounded-3xl shadow-xl border border-amber-100 p-10 text-center">
+          <div className="w-20 h-20 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-6">
+            <AlertCircle className="w-10 h-10 text-amber-500" />
+          </div>
+          <h1 className="text-2xl font-black text-slate-800 mb-3">
+            {ar ? "يجب إكمال ملفك الشخصي أولاً" : "Complete Your Profile First"}
+          </h1>
+          <p className="text-slate-500 mb-4">
+            {ar
+              ? "يجب إكمال جميع البيانات الأساسية في ملفك الشخصي قبل التقديم على أي تأشيرة."
+              : "You must complete all required profile fields before applying for a visa."}
+          </p>
+          {profileCheck.missing.length > 0 && (
+            <div className="text-start mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4">
+              <div className="text-xs font-bold text-amber-700 mb-2 uppercase tracking-wide">
+                {ar ? "البيانات الناقصة:" : "Missing fields:"}
+              </div>
+              <ul className="space-y-1">
+                {profileCheck.missing.map(m => (
+                  <li key={m} className="text-sm text-amber-800 flex items-center gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                    {m}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <Link href="/account">
+            <button className="w-full px-6 py-3 bg-[#0A2342] text-white rounded-xl font-bold hover:bg-[#0A2342]/90 transition-colors">
+              {ar ? "إكمال الملف الشخصي" : "Complete Profile"}
+            </button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Main apply form ───────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-slate-50 pb-24" dir={ar ? "rtl" : "ltr"}>
       {/* Header */}
@@ -189,8 +205,6 @@ export default function VisaApply() {
         <div className="container mx-auto px-4 relative z-10">
           <div className="flex items-center gap-3 text-sm font-medium text-slate-400 mb-6">
             <Link href="/visas" className="hover:text-white transition-colors">{ar ? "التأشيرات" : "Visas"}</Link>
-            <ChevronRight className={`w-4 h-4 ${ar ? "rotate-180" : ""}`} />
-            <Link href={`/visas/${visa.countryId}`} className="hover:text-white transition-colors">{ar ? visa.countryAr : visa.countryEn}</Link>
             <ChevronRight className={`w-4 h-4 ${ar ? "rotate-180" : ""}`} />
             <span className="text-white">{ar ? "تقديم طلب" : "Apply"}</span>
           </div>
@@ -204,452 +218,225 @@ export default function VisaApply() {
       </div>
 
       <div className="container mx-auto px-4 -mt-10 relative z-20">
-        <div className="bg-white rounded-3xl shadow-xl border border-slate-100 max-w-4xl mx-auto overflow-hidden">
-          
-          {/* Progress Steps */}
-          <div className="bg-slate-50 border-b border-slate-100 flex items-center overflow-x-auto scrollbar-hide">
-            {WIZARD_STEPS.map((step, idx) => {
-              const StepIcon = step.icon;
-              const isActive = idx === currentStep;
-              const isPast = idx < currentStep;
-              
-              return (
-                <div 
-                  key={step.id} 
-                  className={`flex-1 min-w-[120px] p-4 border-b-2 transition-colors flex flex-col items-center justify-center gap-2 ${
-                    isActive ? "border-[#0A2342] text-[#0A2342] bg-white" : 
-                    isPast ? "border-[#D4AF37] text-[#D4AF37]" : 
-                    "border-transparent text-slate-400"
-                  }`}
-                >
-                  <StepIcon className={`w-5 h-5 ${isPast ? "text-[#D4AF37]" : isActive ? "text-[#0A2342]" : ""}`} />
-                  <span className="text-xs font-bold whitespace-nowrap">{ar ? step.ar : step.en}</span>
-                </div>
-              );
-            })}
-          </div>
+        <div className="max-w-3xl mx-auto space-y-6">
 
-          <div className="p-8 md:p-12">
-            {serverError && (
-              <div className="mb-8 p-4 bg-red-50 border border-red-100 rounded-xl flex items-start gap-3 text-red-800">
-                <AlertCircle className="w-5 h-5 shrink-0 text-red-500 mt-0.5" />
-                <p className="text-sm font-medium">{serverError}</p>
+          {/* Profile summary card */}
+          <div className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
+            <div className="bg-gradient-to-r from-[#0A2342] to-[#1E3A5F] px-8 py-5 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
+                <User className="w-5 h-5 text-white" />
               </div>
-            )}
+              <div>
+                <h2 className="text-lg font-black text-white">
+                  {ar ? "بياناتك الشخصية (من ملفك الشخصي)" : "Your Profile Data (Auto-Filled)"}
+                </h2>
+                <p className="text-slate-300 text-xs mt-0.5">
+                  {ar
+                    ? "يتم استخدام بياناتك المحفوظة تلقائياً. لتعديلها، اذهب إلى الملف الشخصي."
+                    : "Your saved profile data is used automatically. Edit in your profile."}
+                </p>
+              </div>
+            </div>
 
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              
-              {/* Step 1: Personal */}
-              {currentStep === 0 && (
-                <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                  <h2 className="text-2xl font-black text-slate-800 mb-6">{ar ? "البيانات الشخصية" : "Personal Information"}</h2>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2 md:col-span-2">
-                      <Label className="text-sm font-bold text-slate-700">{ar ? "الاسم الكامل (كما في الجواز)" : "Full Name (as in passport)"} *</Label>
-                      <Input {...form.register("fullName")} className="h-12 bg-slate-50 border-slate-200 focus:bg-white" />
-                      {form.formState.errors.fullName && <p className="text-xs text-red-500">{form.formState.errors.fullName.message}</p>}
+            <div className="p-8">
+              {user?.profilePhotoUrl && (
+                <div className="flex items-center gap-4 mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <img
+                    src={getDisplayUrl(user.profilePhotoUrl)}
+                    className="w-16 h-16 rounded-xl object-cover border-2 border-white shadow-sm"
+                  />
+                  <div>
+                    <div className="font-bold text-slate-800 text-lg">
+                      {user.firstName} {user.lastName}
                     </div>
-
-                    <div className="space-y-2">
-                      <Label className="text-sm font-bold text-slate-700">{ar ? "الجنسية" : "Nationality"} *</Label>
-                      <Controller
-                        control={form.control}
-                        name="nationality"
-                        render={({ field }) => (
-                          <CountrySelect language={language as "ar"|"en"} value={field.value} onChange={field.onChange} />
-                        )}
-                      />
-                      {form.formState.errors.nationality && <p className="text-xs text-red-500">{form.formState.errors.nationality.message}</p>}
+                    <div className="text-sm text-slate-500">
+                      {user.nationality} · {user.gender === "male" ? (ar ? "ذكر" : "Male") : (ar ? "أنثى" : "Female")}
                     </div>
-
-                    <div className="space-y-2">
-                      <Label className="text-sm font-bold text-slate-700">{ar ? "تاريخ الميلاد" : "Date of Birth"} *</Label>
-                      <Input type="date" {...form.register("dateOfBirth")} className="h-12 bg-slate-50 border-slate-200 focus:bg-white" />
-                      {form.formState.errors.dateOfBirth && <p className="text-xs text-red-500">{form.formState.errors.dateOfBirth.message}</p>}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className="text-sm font-bold text-slate-700">{ar ? "الجنس" : "Gender"} *</Label>
-                      <Controller
-                        control={form.control}
-                        name="gender"
-                        render={({ field }) => (
-                          <Select value={field.value} onValueChange={field.onChange}>
-                            <SelectTrigger className="h-12 bg-slate-50 border-slate-200 focus:bg-white">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="male">{ar ? "ذكر" : "Male"}</SelectItem>
-                              <SelectItem value="female">{ar ? "أنثى" : "Female"}</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        )}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className="text-sm font-bold text-slate-700">{ar ? "دولة الإقامة" : "Country of Residence"}</Label>
-                      <Controller
-                        control={form.control}
-                        name="countryOfResidence"
-                        render={({ field }) => (
-                          <CountrySelect language={language as "ar"|"en"} value={field.value || ""} onChange={field.onChange} />
-                        )}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className="text-sm font-bold text-slate-700">{ar ? "البريد الإلكتروني" : "Email Address"} *</Label>
-                      <Input type="email" {...form.register("email")} className="h-12 bg-slate-50 border-slate-200 focus:bg-white" dir="ltr" />
-                      {form.formState.errors.email && <p className="text-xs text-red-500">{form.formState.errors.email.message}</p>}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className="text-sm font-bold text-slate-700">{ar ? "رقم الهاتف" : "Phone Number"} *</Label>
-                      <Input type="tel" {...form.register("phone")} className="h-12 bg-slate-50 border-slate-200 focus:bg-white tabular-nums" dir="ltr" />
-                      {form.formState.errors.phone && <p className="text-xs text-red-500">{form.formState.errors.phone.message}</p>}
+                  </div>
+                  <div className="ms-auto">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-full text-xs font-bold">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      {ar ? "ملف مكتمل" : "Profile Complete"}
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Step 2: Passport */}
-              {currentStep === 1 && (
-                <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                  <h2 className="text-2xl font-black text-slate-800 mb-2">{ar ? "معلومات جواز السفر" : "Passport Information"}</h2>
-                  <p className="text-slate-500 mb-8">
-                    {ar 
-                      ? "يمكنك رفع صورة جواز السفر وسنقوم بتعبئة البيانات تلقائياً." 
-                      : "Upload your passport image and we'll auto-fill the details."}
-                  </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {[
+                  { icon: Mail, label: ar ? "البريد الإلكتروني" : "Email", value: user?.email },
+                  { icon: Phone, label: ar ? "رقم الهاتف" : "Phone", value: user?.phone },
+                  { icon: Calendar, label: ar ? "تاريخ الميلاد" : "Date of Birth", value: user?.dateOfBirth },
+                  { icon: Globe, label: ar ? "الجنسية" : "Nationality", value: user?.nationality },
+                  { icon: Hash, label: ar ? "رقم الجواز" : "Passport Number", value: user?.passportNumber },
+                  { icon: Calendar, label: ar ? "انتهاء الجواز" : "Passport Expiry", value: user?.passportExpiryDate },
+                ].map(item => item.value ? (
+                  <div key={item.label} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+                    <div className="w-8 h-8 rounded-lg bg-[#0A2342]/8 flex items-center justify-center shrink-0">
+                      <item.icon className="w-4 h-4 text-[#0A2342]" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{item.label}</div>
+                      <div className="font-semibold text-slate-700 text-sm truncate" dir="ltr">{item.value}</div>
+                    </div>
+                  </div>
+                ) : null)}
+              </div>
 
-                  <div className="bg-blue-50 border border-blue-100 rounded-2xl p-6 mb-8">
-                    <Label className="text-sm font-bold text-blue-900 mb-3 block">
-                      {ar ? "صورة جواز السفر (للتعبئة التلقائية)" : "Passport Image (for auto-fill)"}
+              {/* GCC Residency indicator */}
+              {(user as any)?.isGccResident && (user as any)?.gccResidenceCountry && (
+                <div className="mt-4 flex items-center gap-3 p-3 rounded-xl bg-blue-50 border border-blue-100">
+                  <Flag className="w-4 h-4 text-blue-600 shrink-0" />
+                  <div>
+                    <div className="text-[10px] font-bold text-blue-500 uppercase tracking-wider">{ar ? "إقامة خليجية" : "GCC Residency"}</div>
+                    <div className="font-semibold text-blue-800 text-sm">{(user as any).gccResidenceCountry}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* European Residency indicator */}
+              {(user as any)?.isEuropeanResident && (user as any)?.europeanDocumentType && (
+                <div className="mt-2 flex items-center gap-3 p-3 rounded-xl bg-purple-50 border border-purple-100">
+                  <Globe className="w-4 h-4 text-purple-600 shrink-0" />
+                  <div>
+                    <div className="text-[10px] font-bold text-purple-500 uppercase tracking-wider">{ar ? "وثيقة أوروبية / شنغن" : "European / Schengen Doc"}</div>
+                    <div className="font-semibold text-purple-800 text-sm">{(user as any).europeanDocumentType}</div>
+                  </div>
+                </div>
+              )}
+
+              <Link href="/account">
+                <button className="mt-5 text-sm text-[#0A2342] hover:underline font-medium">
+                  {ar ? "← تعديل بياناتي الشخصية" : "← Edit my profile"}
+                </button>
+              </Link>
+            </div>
+          </div>
+
+          {/* Custom fields (if any) */}
+          {customFields && customFields.length > 0 && (
+            <div className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
+              <div className="bg-gradient-to-r from-[#0A2342] to-[#1E3A5F] px-8 py-5 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
+                  <FileText className="w-5 h-5 text-white" />
+                </div>
+                <h2 className="text-lg font-black text-white">
+                  {ar ? "معلومات إضافية" : "Additional Information"}
+                </h2>
+              </div>
+              <div className="p-8 space-y-5">
+                {customFields.map((field: any) => (
+                  <div key={field.id} className="space-y-2">
+                    <Label className="font-semibold text-slate-700">
+                      {ar ? field.labelAr : field.labelEn}
+                      {field.required && <span className="text-red-500 ms-1">*</span>}
                     </Label>
-                    <div className="relative">
-                      <input 
-                        type="file" 
-                        accept="image/*"
-                        onChange={(e) => {
-                          if (e.target.files?.[0]) handleUpload(e.target.files[0], "passportImageUrl");
-                        }}
-                        disabled={!!uploadingField}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
-                      />
-                      <div className={`flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-xl transition-all ${
-                        uploadingField === "passportImageUrl" ? "bg-white/50 border-blue-200" : 
-                        form.watch("passportImageUrl") ? "bg-emerald-50 border-emerald-200 text-emerald-600" : 
-                        "bg-white border-blue-200 hover:border-blue-400 text-blue-500"
-                      }`}>
-                        {uploadingField === "passportImageUrl" ? (
-                          <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                        ) : form.watch("passportImageUrl") ? (
-                          <div className="flex flex-col items-center">
-                            <CheckCircle2 className="w-8 h-8 mb-2" />
-                            <span className="font-bold">{ar ? "تم الرفع وقراءة البيانات" : "Uploaded & Scanned"}</span>
-                          </div>
-                        ) : (
-                          <div className="flex flex-col items-center">
-                            <UploadCloud className="w-10 h-10 mb-2" />
-                            <span className="font-bold">{ar ? "اضغط أو اسحب صورة الجواز هنا" : "Click or drag passport image here"}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <Label className="text-sm font-bold text-slate-700">{ar ? "رقم الجواز" : "Passport Number"} *</Label>
-                      <Input {...form.register("passportNumber")} className="h-12 bg-slate-50 border-slate-200 focus:bg-white uppercase" dir="ltr" />
-                      {form.formState.errors.passportNumber && <p className="text-xs text-red-500">{form.formState.errors.passportNumber.message}</p>}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className="text-sm font-bold text-slate-700">{ar ? "دولة الإصدار" : "Issuing Country"}</Label>
-                      <Controller
-                        control={form.control}
-                        name="passportIssuingCountry"
-                        render={({ field }) => (
-                          <CountrySelect language={language as "ar"|"en"} value={field.value || ""} onChange={field.onChange} />
-                        )}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className="text-sm font-bold text-slate-700">{ar ? "تاريخ الإصدار" : "Issue Date"} *</Label>
-                      <Input type="date" {...form.register("passportIssueDate")} className="h-12 bg-slate-50 border-slate-200 focus:bg-white" />
-                      {form.formState.errors.passportIssueDate && <p className="text-xs text-red-500">{form.formState.errors.passportIssueDate.message}</p>}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label className="text-sm font-bold text-slate-700">{ar ? "تاريخ الانتهاء" : "Expiry Date"} *</Label>
-                      <Input type="date" {...form.register("passportExpiryDate")} className="h-12 bg-slate-50 border-slate-200 focus:bg-white" />
-                      {form.formState.errors.passportExpiryDate && <p className="text-xs text-red-500">{form.formState.errors.passportExpiryDate.message}</p>}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Step 3: Documents */}
-              {currentStep === 2 && (
-                <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                  <h2 className="text-2xl font-black text-slate-800 mb-6">{ar ? "المرفقات والمعلومات الإضافية" : "Documents & Additional Info"}</h2>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {visa.requiresPersonalPhoto && (
-                      <div className="space-y-2">
-                        <Label className="text-sm font-bold text-slate-700">{ar ? "صورة شخصية بخلفية بيضاء" : "Personal Photo (White Background)"} *</Label>
-                        <div className="relative border-2 border-dashed border-slate-200 rounded-xl p-4 bg-slate-50 hover:bg-slate-100 transition-colors">
-                          <input 
-                            type="file" accept="image/*"
-                            onChange={e => e.target.files?.[0] && handleUpload(e.target.files[0], "personalPhotoUrl")}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                          />
-                          <div className="flex items-center gap-3">
-                            {uploadingField === "personalPhotoUrl" ? (
-                              <div className="w-6 h-6 border-2 border-[#0A2342] border-t-transparent rounded-full animate-spin" />
-                            ) : form.watch("personalPhotoUrl") ? (
-                              <CheckCircle2 className="w-6 h-6 text-emerald-500" />
-                            ) : (
-                              <UploadCloud className="w-6 h-6 text-slate-400" />
-                            )}
-                            <span className="text-sm font-medium text-slate-600">
-                              {form.watch("personalPhotoUrl") ? (ar ? "تم الرفع" : "Uploaded") : (ar ? "اختر صورة للرفع" : "Choose image to upload")}
-                            </span>
-                          </div>
-                        </div>
-                        {form.formState.errors.personalPhotoUrl && <p className="text-xs text-red-500">{ar ? "هذا المرفق مطلوب" : "This document is required"}</p>}
-                      </div>
-                    )}
-
-                    {visa.requiresResidencyImage && (
-                      <div className="space-y-2">
-                        <Label className="text-sm font-bold text-slate-700">{ar ? "صورة الإقامة" : "Residency Image"} *</Label>
-                        <div className="relative border-2 border-dashed border-slate-200 rounded-xl p-4 bg-slate-50 hover:bg-slate-100 transition-colors">
-                          <input 
-                            type="file" accept="image/*,application/pdf"
-                            onChange={e => e.target.files?.[0] && handleUpload(e.target.files[0], "residencyImageUrl")}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                          />
-                          <div className="flex items-center gap-3">
-                            {uploadingField === "residencyImageUrl" ? (
-                              <div className="w-6 h-6 border-2 border-[#0A2342] border-t-transparent rounded-full animate-spin" />
-                            ) : form.watch("residencyImageUrl") ? (
-                              <CheckCircle2 className="w-6 h-6 text-emerald-500" />
-                            ) : (
-                              <UploadCloud className="w-6 h-6 text-slate-400" />
-                            )}
-                            <span className="text-sm font-medium text-slate-600">
-                              {form.watch("residencyImageUrl") ? (ar ? "تم الرفع" : "Uploaded") : (ar ? "اختر ملفاً للرفع" : "Choose file to upload")}
-                            </span>
-                          </div>
-                        </div>
-                        {form.formState.errors.residencyImageUrl && <p className="text-xs text-red-500">{ar ? "هذا المرفق مطلوب" : "This document is required"}</p>}
-                      </div>
-                    )}
-                    
-                    {visa.requiresVisaImage && (
-                      <div className="space-y-2">
-                        <Label className="text-sm font-bold text-slate-700">{ar ? "صورة التأشيرة السابقة (إن وجدت)" : "Previous Visa Image (if any)"}</Label>
-                        <div className="relative border-2 border-dashed border-slate-200 rounded-xl p-4 bg-slate-50 hover:bg-slate-100 transition-colors">
-                          <input 
-                            type="file" accept="image/*,application/pdf"
-                            onChange={e => e.target.files?.[0] && handleUpload(e.target.files[0], "visaImageUrl")}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                          />
-                          <div className="flex items-center gap-3">
-                            {uploadingField === "visaImageUrl" ? (
-                              <div className="w-6 h-6 border-2 border-[#0A2342] border-t-transparent rounded-full animate-spin" />
-                            ) : form.watch("visaImageUrl") ? (
-                              <CheckCircle2 className="w-6 h-6 text-emerald-500" />
-                            ) : (
-                              <UploadCloud className="w-6 h-6 text-slate-400" />
-                            )}
-                            <span className="text-sm font-medium text-slate-600">
-                              {form.watch("visaImageUrl") ? (ar ? "تم الرفع" : "Uploaded") : (ar ? "اختر ملفاً للرفع" : "Choose file to upload")}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {customFields && customFields.length > 0 && (
-                    <div className="mt-10">
-                      <h3 className="text-lg font-bold text-[#0A2342] mb-6 pt-6 border-t border-slate-100">
-                        {ar ? "معلومات إضافية مطلوبة للسفارة" : "Additional Information for Embassy"}
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {customFields.map(cf => (
-                          <div key={cf.id} className="space-y-2">
-                            <Label className="text-sm font-bold text-slate-700">
-                              {ar ? cf.labelAr : cf.labelEn} {cf.isRequired && "*"}
-                            </Label>
-                            
-                            {cf.fieldType === 'text' || cf.fieldType === 'number' || cf.fieldType === 'date' ? (
-                              <Input 
-                                type={cf.fieldType}
-                                placeholder={ar ? (cf.placeholderAr || "") : (cf.placeholderEn || "")}
-                                className="h-12 bg-slate-50 border-slate-200 focus:bg-white"
-                                {...form.register(`customFieldResponses.${cf.id}`)}
-                                required={cf.isRequired}
-                              />
-                            ) : cf.fieldType === 'textarea' ? (
-                              <textarea
-                                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#0A2342]/20 focus:bg-white min-h-[100px]"
-                                placeholder={ar ? (cf.placeholderAr || "") : (cf.placeholderEn || "")}
-                                {...form.register(`customFieldResponses.${cf.id}`)}
-                                required={cf.isRequired}
-                              />
-                            ) : cf.fieldType === 'select' && cf.options ? (
-                              <Controller
-                                control={form.control}
-                                name={`customFieldResponses.${cf.id}`}
-                                render={({ field }) => (
-                                  <Select value={field.value} onValueChange={field.onChange} required={cf.isRequired}>
-                                    <SelectTrigger className="h-12 bg-slate-50 border-slate-200 focus:bg-white">
-                                      <SelectValue placeholder={ar ? (cf.placeholderAr || "اختر") : (cf.placeholderEn || "Select")} />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {cf.options?.map(opt => (
-                                        <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                )}
-                              />
-                            ) : cf.fieldType === 'boolean' ? (
-                              <RadioGroup 
-                                className="flex gap-6"
-                                onValueChange={(v) => form.setValue(`customFieldResponses.${cf.id}`, v === 'true')}
-                              >
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                  <RadioGroupItem value="true" />
-                                  <span>{ar ? "نعم" : "Yes"}</span>
-                                </label>
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                  <RadioGroupItem value="false" />
-                                  <span>{ar ? "لا" : "No"}</span>
-                                </label>
-                              </RadioGroup>
-                            ) : null}
-                          </div>
+                    {field.fieldType === "select" && field.options?.length > 0 ? (
+                      <select
+                        className="w-full h-11 px-3 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#0A2342]/20"
+                        value={customResponses[field.id] || ""}
+                        onChange={e => setCustomResponses(r => ({ ...r, [field.id]: e.target.value }))}
+                        required={field.required}
+                      >
+                        <option value="">{ar ? "اختر..." : "Select..."}</option>
+                        {field.options.map((opt: string) => (
+                          <option key={opt} value={opt}>{opt}</option>
                         ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Step 4: Review */}
-              {currentStep === 3 && (
-                <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
-                  <h2 className="text-2xl font-black text-slate-800 mb-6">{ar ? "مراجعة الطلب" : "Review Application"}</h2>
-                  
-                  <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-12">
-                      <div>
-                        <div className="text-xs font-bold text-slate-500 uppercase mb-1">{ar ? "الاسم الكامل" : "Full Name"}</div>
-                        <div className="font-bold text-slate-800">{form.getValues("fullName")}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-slate-500 uppercase mb-1">{ar ? "رقم الجواز" : "Passport Number"}</div>
-                        <div className="font-bold text-slate-800 uppercase" dir="ltr">{form.getValues("passportNumber")}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-slate-500 uppercase mb-1">{ar ? "رقم الهاتف" : "Phone"}</div>
-                        <div className="font-bold text-slate-800" dir="ltr">{form.getValues("phone")}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-slate-500 uppercase mb-1">{ar ? "البريد الإلكتروني" : "Email"}</div>
-                        <div className="font-bold text-slate-800">{form.getValues("email")}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-slate-500 uppercase mb-1">{ar ? "رسوم التأشيرة" : "Visa Fee"}</div>
-                        <div className="font-black text-[#0A2342] text-xl">{Number(visa.fee).toLocaleString()} {visa.currency}</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-blue-50 border border-blue-100 p-6 rounded-2xl flex items-start gap-4">
-                    <Shield className="w-6 h-6 text-blue-600 shrink-0" />
-                    <div>
-                      <h4 className="font-bold text-blue-900 mb-2">
-                        {ar ? "إقرار بصحة البيانات" : "Declaration"}
-                      </h4>
-                      <p className="text-sm text-blue-800/80 mb-4 leading-relaxed">
-                        {ar 
-                          ? "أقر بأن جميع البيانات والمرفقات التي قدمتها صحيحة ومطابقة للواقع، وأتحمل المسؤولية الكاملة في حال تبين خلاف ذلك مما قد يؤدي لرفض التأشيرة." 
-                          : "I declare that all information and documents provided are true and correct. I take full responsibility for any false information which may lead to visa rejection."}
-                      </p>
-                      
-                      <Controller
-                        control={form.control}
-                        name="agreedToTerms"
-                        render={({ field }) => (
-                          <div className="flex items-center space-x-2 space-x-reverse">
-                            <Checkbox 
-                              id="terms" 
-                              checked={field.value} 
-                              onCheckedChange={field.onChange} 
-                              className="border-blue-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
-                            />
-                            <label htmlFor="terms" className="text-sm font-bold text-blue-900 cursor-pointer">
-                              {ar ? "أوافق على الشروط والأحكام وأقر بصحة البيانات" : "I agree to the terms and confirm data accuracy"}
-                            </label>
-                          </div>
-                        )}
-                      />
-                      {form.formState.errors.agreedToTerms && (
-                        <p className="text-xs text-red-500 mt-2">{form.formState.errors.agreedToTerms.message}</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Navigation Buttons */}
-              <div className="pt-8 border-t border-slate-100 flex items-center justify-between">
-                {currentStep > 0 ? (
-                  <button
-                    type="button"
-                    onClick={prevStep}
-                    className="px-6 py-3 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors flex items-center gap-2"
-                  >
-                    {ar ? <ArrowRight className="w-4 h-4" /> : <ArrowLeft className="w-4 h-4" />}
-                    {ar ? "السابق" : "Back"}
-                  </button>
-                ) : <div />}
-
-                {currentStep < WIZARD_STEPS.length - 1 ? (
-                  <button
-                    type="button"
-                    onClick={nextStep}
-                    className="px-8 py-3 rounded-xl font-bold text-white bg-[#0A2342] hover:bg-[#11315c] transition-colors flex items-center gap-2"
-                  >
-                    {ar ? "التالي" : "Next"}
-                    {ar ? <ArrowLeft className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
-                  </button>
-                ) : (
-                  <button
-                    type="submit"
-                    disabled={submitMutation.isPending}
-                    className="px-8 py-3 rounded-xl font-bold text-white bg-[#D4AF37] hover:bg-[#b8973b] transition-all shadow-lg flex items-center gap-2 disabled:opacity-50"
-                  >
-                    {submitMutation.isPending ? (
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      </select>
                     ) : (
-                      <CheckCircle2 className="w-5 h-5" />
+                      <Input
+                        className="h-11 bg-slate-50 focus:bg-white"
+                        value={customResponses[field.id] || ""}
+                        onChange={e => setCustomResponses(r => ({ ...r, [field.id]: e.target.value }))}
+                        placeholder={ar ? field.placeholderAr : field.placeholderEn}
+                        required={field.required}
+                        type={field.fieldType === "date" ? "date" : "text"}
+                      />
                     )}
-                    {ar ? "تقديم الطلب" : "Submit Application"}
-                  </button>
-                )}
+                  </div>
+                ))}
               </div>
-            </form>
-          </div>
+            </div>
+          )}
+
+          {/* Visa summary + submit */}
+          <form onSubmit={handleSubmit}>
+            <div className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden">
+              <div className="bg-gradient-to-r from-[#0A2342] to-[#1E3A5F] px-8 py-5 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
+                  <Shield className="w-5 h-5 text-white" />
+                </div>
+                <h2 className="text-lg font-black text-white">
+                  {ar ? "ملخص الطلب والتأكيد" : "Application Summary & Confirmation"}
+                </h2>
+              </div>
+              <div className="p-8 space-y-6">
+                {/* Visa summary */}
+                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div>
+                    <div className="font-black text-slate-800 text-base">
+                      {ar ? visa.countryAr : visa.countryEn}
+                    </div>
+                    <div className="text-sm text-slate-500 mt-0.5">{visa.visaType}</div>
+                    {visa.processingDays && (
+                      <div className="text-xs text-slate-400 mt-1">
+                        {ar ? `وقت المعالجة: ${visa.processingDays} أيام` : `Processing: ${visa.processingDays} days`}
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-end">
+                    <div className="text-2xl font-black text-[#0A2342]">
+                      {Number(visa.fee).toLocaleString()}
+                    </div>
+                    <div className="text-sm text-slate-500">{visa.currency}</div>
+                  </div>
+                </div>
+
+                {/* Error */}
+                {serverError && (
+                  <div className="p-4 bg-red-50 border border-red-100 rounded-xl flex items-start gap-3 text-red-800">
+                    <AlertCircle className="w-5 h-5 shrink-0 text-red-500 mt-0.5" />
+                    <p className="text-sm font-medium">{serverError}</p>
+                  </div>
+                )}
+
+                {/* Terms */}
+                <label className="flex items-start gap-3 cursor-pointer p-4 rounded-xl border border-slate-200 hover:border-[#0A2342]/30 transition-colors">
+                  <Checkbox
+                    checked={agreed}
+                    onCheckedChange={(c) => setAgreed(!!c)}
+                    className="mt-0.5 scale-110"
+                  />
+                  <div className="text-sm text-slate-600 leading-relaxed">
+                    {ar
+                      ? "أقر بأن جميع البيانات المقدمة صحيحة ودقيقة، وأن الوثائق المرفوعة في ملفي الشخصي أصلية وسارية المفعول. أوافق على الشروط والأحكام."
+                      : "I confirm that all provided information is accurate, and that documents uploaded in my profile are genuine and valid. I agree to the terms and conditions."}
+                  </div>
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={!agreed || submitMutation.isPending}
+                  className="w-full h-14 bg-[#D4AF37] text-[#0A2342] font-black text-lg rounded-2xl hover:bg-[#c8a84b] disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-3 shadow-lg"
+                >
+                  {submitMutation.isPending ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      {ar ? "تقديم الطلب" : "Submit Application"}
+                      <ArrowLeft className={`w-5 h-5 ${ar ? "" : "rotate-180"}`} />
+                    </>
+                  )}
+                </button>
+
+                <p className="text-center text-xs text-slate-400">
+                  {ar
+                    ? "سيتم مراجعة طلبك وإشعارك بالحالة عبر البريد الإلكتروني والإشعارات."
+                    : "Your application will be reviewed and you'll be notified of the status via email and notifications."}
+                </p>
+              </div>
+            </div>
+          </form>
         </div>
       </div>
     </div>

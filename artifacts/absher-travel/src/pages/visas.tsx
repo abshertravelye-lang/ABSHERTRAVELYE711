@@ -171,12 +171,12 @@ function VisaCenterCard({ visa, ar, compact }: { visa: Visa; ar: boolean; compac
 
         {/* Action Buttons */}
         <div className="flex gap-2 mt-auto">
-          <Link href={`/visa/${visa.id}`} className="flex-1">
+          <Link href={visa.countryId ? `/visas/${visa.countryId}/${visa.id}` : `/visas/view/${visa.id}`} className="flex-1">
             <button className="w-full text-sm font-semibold py-2.5 rounded-xl border-2 border-[#0A2342] text-[#0A2342] hover:bg-[#0A2342] hover:text-white transition-colors">
               {ar ? "التفاصيل" : "Details"}
             </button>
           </Link>
-          <Link href={`/visa-apply/${visa.id}`} className="flex-1">
+          <Link href={`/visas/apply/${visa.id}`} className="flex-1">
             <button className="w-full text-sm font-semibold py-2.5 rounded-xl bg-[#D4AF37] text-[#0A2342] hover:bg-[#c9a632] transition-colors">
               {ar ? "تقدم الآن" : "Apply Now"}
             </button>

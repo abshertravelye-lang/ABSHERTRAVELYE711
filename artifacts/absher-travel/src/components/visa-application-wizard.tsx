@@ -51,6 +51,7 @@ const GCC_COUNTRIES = [
   { id: "kuwait",       ar: "الكويت",                  en: "Kuwait" },
   { id: "qatar",        ar: "قطر",                     en: "Qatar" },
   { id: "bahrain",      ar: "البحرين",                 en: "Bahrain" },
+  { id: "oman",         ar: "سلطنة عُمان",             en: "Oman" },
 ];
 
 /* ── Step meta ── */
@@ -433,7 +434,8 @@ export function VisaApplicationWizard({
     if (currentStep === "gcc_check") {
       if (data.hasGcc === undefined) return false;
       if (!data.hasGcc) return true;
-      return !!data.gccCountry && !!data.residencyImageUrl && !!data.residencyBackImageUrl;
+      // Back side is optional (some residency permits are electronic with no physical back)
+      return !!data.gccCountry && !!data.residencyImageUrl;
     }
     if (currentStep === "alternative_check") {
       if (data.hasAlternative === undefined) return false;
@@ -645,8 +647,8 @@ export function VisaApplicationWizard({
                       <FileUploadField required language={language}
                         label={ar ? "وجه بطاقة الإقامة" : "Residency Card (Front)"}
                         value={data.residencyImageUrl} onChange={v => updateData({ residencyImageUrl: v })} />
-                      <FileUploadField required language={language}
-                        label={ar ? "خلف بطاقة الإقامة" : "Residency Card (Back)"}
+                      <FileUploadField required={false} language={language}
+                        label={ar ? "خلف بطاقة الإقامة (اختياري)" : "Residency Card (Back) — Optional"}
                         value={data.residencyBackImageUrl} onChange={v => updateData({ residencyBackImageUrl: v })} />
                     </div>
                   )}

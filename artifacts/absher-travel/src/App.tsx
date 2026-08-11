@@ -16,6 +16,7 @@ import Programs from "@/pages/programs";
 import Visas from "@/pages/visas";
 import VisaCountryDetail from "@/pages/visa-country-detail";
 import VisaDetail from "@/pages/visa-detail";
+import VisaView from "@/pages/visa-view";
 import VisaApply from "@/pages/visa-apply";
 import VisaSuccess from "@/pages/visa-success";
 import VisaTrack from "@/pages/visa-track";
@@ -42,6 +43,7 @@ function Router() {
       <Route path="/visas/success" component={VisaSuccess} />
       <Route path="/visas/track" component={VisaTrack} />
       <Route path="/visas/apply/:visaId" component={VisaApply} />
+      <Route path="/visas/view/:visaId" component={VisaView} />
       <Route path="/visas/:countryId" component={VisaCountryDetail} />
       <Route path="/visas/:countryId/:visaId" component={VisaDetail} />
       

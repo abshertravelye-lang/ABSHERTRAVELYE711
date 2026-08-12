@@ -39,8 +39,8 @@ export default function HomeScreen() {
   };
 
   const services = [
-    { icon: 'bed-outline', title: lang === 'ar' ? 'حجوزات الفنادق' : 'Hotel bookings', route: '/(tabs)/flights' },
-    { icon: 'airplane-outline', title: lang === 'ar' ? 'حجوزات الطيران' : 'Flight bookings', route: '/(tabs)/flights' },
+    { icon: 'bed-outline', title: lang === 'ar' ? 'حجوزات الفنادق' : 'Hotel bookings', route: '/coming-soon?service=hotels' },
+    { icon: 'airplane-outline', title: lang === 'ar' ? 'حجوزات الطيران' : 'Flight bookings', route: '/coming-soon?service=flights' },
     { icon: 'moon-outline', title: lang === 'ar' ? 'تأشيرة العمرة' : 'Umrah visa', route: '/(tabs)/umrah' },
     { icon: 'document-text-outline', title: lang === 'ar' ? 'التأشيرات الإلكترونية' : 'E-visas', route: '/(tabs)/visas' },
   ];

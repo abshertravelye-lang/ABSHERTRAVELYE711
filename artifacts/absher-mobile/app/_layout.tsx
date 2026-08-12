@@ -48,6 +48,7 @@ function RootLayoutNav() {
       <Stack.Screen name="flight-results" options={{ headerShown: false }} />
       <Stack.Screen name="flight-booking" options={{ headerShown: false }} />
       <Stack.Screen name="notifications" options={{ headerShown: false }} />
+      <Stack.Screen name="coming-soon" options={{ headerShown: false }} />
       <Stack.Screen name="auth/login" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="auth/register" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="auth/otp" options={{ headerShown: false }} />

@@ -282,6 +282,7 @@ function FileUploadField({ label, value, onChange, required, language, imageOnly
   const isImage = imageOnly || (value && /\.(jpg|jpeg|png|gif|webp)$/i.test(value));
   const displayPreview = previewUrl || (value && isImage ? (() => {
     const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+    if (value.startsWith("/objects/")) return `${base}/api/storage${value}`;
     return value.startsWith("/api") ? `${base}${value}` : value;
   })() : null);
 

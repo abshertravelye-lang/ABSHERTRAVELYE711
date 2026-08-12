@@ -22,6 +22,14 @@ const STATUS_META: Record<string, { arLabel: string; enLabel: string; color: str
 
 const STATUS_ORDER = ["received","under_review","awaiting_documents","documents_uploaded","sent_to_embassy","processing","issued","completed","rejected","cancelled"];
 
+/** Storage object paths are served by the API at /api/storage/objects/* */
+function toDocUrl(url: string): string {
+  const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+  if (url.startsWith("/objects/")) return `${base}/api/storage${url}`;
+  if (url.startsWith("/api")) return `${base}${url}`;
+  return url;
+}
+
 function StatusBadge({ status, ar }: { status: string; ar: boolean }) {
   const meta = STATUS_META[status] ?? { arLabel: status, enLabel: status, color: "bg-slate-50 text-slate-700 border-slate-200", icon: null };
   return (
@@ -80,9 +88,9 @@ function DetailModal({ app, onClose, onUpdate, updating, ar }: {
             <div>
               <h3 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">{ar ? "المستندات" : "Documents"}</h3>
               <div className="flex gap-3 flex-wrap">
-                {!!app.passportImageUrl && <a href={String(app.passportImageUrl)} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 text-sm border rounded-lg hover:bg-slate-50 flex items-center gap-1.5"><FileText className="w-4 h-4" />{ar ? "صورة الجواز" : "Passport"}</a>}
-                {!!app.personalPhotoUrl && <a href={String(app.personalPhotoUrl)} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 text-sm border rounded-lg hover:bg-slate-50 flex items-center gap-1.5"><FileText className="w-4 h-4" />{ar ? "الصورة الشخصية" : "Personal Photo"}</a>}
-                {!!app.residencyImageUrl && <a href={String(app.residencyImageUrl)} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 text-sm border rounded-lg hover:bg-slate-50 flex items-center gap-1.5"><FileText className="w-4 h-4" />{ar ? "الإقامة" : "Residency"}</a>}
+                {!!app.passportImageUrl && <a href={toDocUrl(String(app.passportImageUrl))} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 text-sm border rounded-lg hover:bg-slate-50 flex items-center gap-1.5"><FileText className="w-4 h-4" />{ar ? "صورة الجواز" : "Passport"}</a>}
+                {!!app.personalPhotoUrl && <a href={toDocUrl(String(app.personalPhotoUrl))} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 text-sm border rounded-lg hover:bg-slate-50 flex items-center gap-1.5"><FileText className="w-4 h-4" />{ar ? "الصورة الشخصية" : "Personal Photo"}</a>}
+                {!!app.residencyImageUrl && <a href={toDocUrl(String(app.residencyImageUrl))} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 text-sm border rounded-lg hover:bg-slate-50 flex items-center gap-1.5"><FileText className="w-4 h-4" />{ar ? "الإقامة" : "Residency"}</a>}
               </div>
             </div>
           )}

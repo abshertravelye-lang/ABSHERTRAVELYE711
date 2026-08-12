@@ -566,9 +566,10 @@ export default function Account() {
       setIsValidatingPhoto(true);
       try {
         const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+        const token = localStorage.getItem("absher_access_token");
         const vRes = await fetch(`${base}/api/visa-applications/validate-photo`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
           body: JSON.stringify({ imageUrl: r.objectPath }),
         });
         const vData = await vRes.json();

@@ -91,7 +91,8 @@ export default function EmployeesAdmin() {
 
   const handleSave = () => {
     if (editingId) {
-      updateEmployee.mutate({ id: editingId, data: formData });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      updateEmployee.mutate({ id: String(editingId), data: formData as any });
     } else {
       createEmployee.mutate({ data: formData as any });
     }
@@ -99,7 +100,8 @@ export default function EmployeesAdmin() {
 
   const handleToggleStatus = (id: number, currentStatus: string) => {
     const newStatus = currentStatus === "active" ? "inactive" : "active";
-    updateEmployee.mutate({ id, data: { status: newStatus } });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    updateEmployee.mutate({ id: String(id), data: { status: newStatus } as any });
   };
 
   const filtered = employees?.filter((e: any) => {

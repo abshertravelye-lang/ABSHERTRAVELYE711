@@ -7,6 +7,7 @@ import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../lib/jw
 import { createHash } from "crypto";
 import { z } from "zod";
 import { requireAuth } from "../middleware/auth";
+import { canonicalCountryEn } from "@workspace/countries";
 
 const router = Router();
 
@@ -72,12 +73,12 @@ function safeUser(user: typeof usersTable.$inferSelect) {
 // POST /api/auth/register
 router.post("/auth/register", async (req, res) => {
   try {
-    const body = registerSchema.parse(req.body);
+    const body = profileUpdateSchema.parse(req.body);
 
     if (body.email) {
       const existing = await db.select({ id: usersTable.id })
         .from(usersTable)
-        .where(and(eq(usersTable.email, body.email), isNull(usersTable.deletedAt)));
+        .where(and(eq(usersTable.phone, body.phone), isNull(usersTable.deletedAt)));
       if (existing.length > 0) {
         return res.status(409).json({ error: "Email already registered" });
       }
@@ -93,16 +94,13 @@ router.post("/auth/register", async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(body.password, 12);
-    const [user] = await db.insert(usersTable).values({
-      email: body.email,
-      phone: body.phone,
-      passwordHash,
-      firstName: body.firstName,
-      lastName: body.lastName,
-      nationality: body.nationality,
-      gender: body.gender,
-      dateOfBirth: body.dateOfBirth,
-    }).returning();
+    const [user] = await db.select().from(usersTable)
+      .where(and(eq(usersTable.id, req.user!.sub), isNull(usersTable.deletedAt)));
+    if (!user || !user.isActive) return res.status(401).json({ error: "User not found" });
+
+    await db.update(userSessionsTable)
+      .set({ revokedAt: new Date() })
+      .where(eq(userSessionsTable.id, session.id));
 
     const tokenPayload = { sub: user.id, email: user.email ?? "", role: user.role };
     const accessToken = signAccessToken(tokenPayload);
@@ -128,13 +126,14 @@ router.post("/auth/register", async (req, res) => {
 // POST /api/auth/login
 router.post("/auth/login", async (req, res) => {
   try {
-    const body = loginSchema.parse(req.body);
+    const body = profileUpdateSchema.parse(req.body);
 
     const whereClause = body.email
       ? and(eq(usersTable.email, body.email), isNull(usersTable.deletedAt))
       : and(eq(usersTable.phone, body.phone!), isNull(usersTable.deletedAt));
 
-    const [user] = await db.select().from(usersTable).where(whereClause);
+    const [user] = await db.select().from(usersTable)
+      .where(and(eq(usersTable.id, req.user!.sub), isNull(usersTable.deletedAt)));
 
     if (!user || !user.isActive) {
       return res.status(401).json({ error: "Invalid credentials" });
@@ -154,24 +153,23 @@ router.post("/auth/login", async (req, res) => {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     await db.insert(userSessionsTable).values({
       userId: user.id,
-      refreshTokenHash: hashToken(refreshToken),
+      refreshTokenHash: hashToken(newRefreshToken),
       ipAddress: req.ip,
       userAgent: req.headers["user-agent"],
       expiresAt,
     });
 
-    res.json({ user: safeUser(user), accessToken, refreshToken });
+    res.json({ accessToken: newAccessToken, refreshToken: newRefreshToken });
   } catch (e) {
     req.log.error(e);
-    if (e instanceof z.ZodError) return res.status(400).json({ error: "Invalid input" });
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// POST /api/auth/refresh
-router.post("/auth/refresh", async (req, res) => {
+// POST /api/auth/logout
+router.post("/auth/logout", requireAuth, async (req, res) => {
   try {
-    const { refreshToken } = z.object({ refreshToken: z.string() }).parse(req.body);
+    const { refreshToken } = z.object({ refreshToken: z.string().optional() }).parse(req.body);
 
     let payload;
     try {
@@ -180,7 +178,7 @@ router.post("/auth/refresh", async (req, res) => {
       return res.status(401).json({ error: "Invalid or expired refresh token" });
     }
 
-    const tokenHash = hashToken(refreshToken);
+      const tokenHash = hashToken(refreshToken);
     const [session] = await db.select().from(userSessionsTable)
       .where(and(
         eq(userSessionsTable.refreshTokenHash, tokenHash),
@@ -192,7 +190,7 @@ router.post("/auth/refresh", async (req, res) => {
     }
 
     const [user] = await db.select().from(usersTable)
-      .where(and(eq(usersTable.id, payload.sub), isNull(usersTable.deletedAt)));
+      .where(and(eq(usersTable.id, req.user!.sub), isNull(usersTable.deletedAt)));
     if (!user || !user.isActive) return res.status(401).json({ error: "User not found" });
 
     await db.update(userSessionsTable)
@@ -284,6 +282,12 @@ const profileUpdateSchema = z.object({
 router.patch("/auth/profile", requireAuth, async (req, res) => {
   try {
     const body = profileUpdateSchema.parse(req.body);
+
+    // Canonicalize country values so eligibility checks compare exact canonical names.
+    // Unrecognized values are stored as-is (user may still fix them in the UI).
+    if (body.nationality) body.nationality = canonicalCountryEn(body.nationality) ?? body.nationality;
+    if (body.gccResidenceCountry) body.gccResidenceCountry = canonicalCountryEn(body.gccResidenceCountry) ?? body.gccResidenceCountry;
+    if (body.passportIssueCountry) body.passportIssueCountry = canonicalCountryEn(body.passportIssueCountry) ?? body.passportIssueCountry;
 
     // Postgres rejects "" for date columns — convert empty strings to null
     const dateFields = ["dateOfBirth", "passportIssueDate", "passportExpiryDate", "gccResidenceExpiry", "europeanDocumentExpiry"] as const;

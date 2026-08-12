@@ -9,6 +9,7 @@ import {
   UpdateVisaApplicationBody,
 } from "@workspace/api-zod";
 import { requireAuth, requireRole, optionalAuth } from "../middleware/auth";
+import { isSameCountry } from "@workspace/countries";
 import { isProfileComplete } from "./auth";
 import OpenAI from "openai";
 import fs from "fs/promises";
@@ -87,8 +88,6 @@ const toResponse = (r: typeof visaApplicationSubmissionsTable.$inferSelect) => (
   updatedAt: r.updatedAt.toISOString(),
 });
 
-const normalize = (s: string) => s.trim().toLocaleLowerCase();
-
 /** Generate unique application number: AT-YYYY-NNNNNN */
 function generateApplicationNumber(): string {
   const year = new Date().getFullYear();
@@ -108,12 +107,12 @@ function checkEligibility(
   visa: typeof visasTable.$inferSelect,
   ar: boolean,
 ): { eligible: boolean; reason?: string } {
-  const nationality = normalize(user.nationality ?? "");
+  const nationality = user.nationality ?? "";
   const ineligibleAr = visa.ineligibleMessageAr || "لا يمكنك التقديم على هذه التأشيرة";
   const ineligibleEn = visa.ineligibleMessageEn || "You cannot apply for this visa.";
 
   // ── Step 1: Prohibited nationality ALWAYS wins ─────────────────────────────
-  const blocked = visa.blockedNationalities.some((n) => normalize(n) === nationality);
+  const blocked = visa.blockedNationalities.some((n) => isSameCountry(n, nationality));
   if (blocked) {
     return { eligible: false, reason: ar ? ineligibleAr : ineligibleEn };
   }
@@ -121,7 +120,7 @@ function checkEligibility(
   // ── Step 2: Allowed nationalities list (empty = open to all non-blocked) ───
   const allowedList = visa.allowedNationalities ?? [];
   if (allowedList.length > 0) {
-    const allowed = allowedList.some((n) => normalize(n) === nationality);
+    const allowed = allowedList.some((n) => isSameCountry(n, nationality));
     if (!allowed) {
       return {
         eligible: false,
@@ -150,11 +149,8 @@ function checkEligibility(
     // Check that user's GCC country is in the accepted list (if specified)
     const acceptedGcc: string[] = ((visa as unknown as Record<string, unknown>).acceptedGccCountries as string[]) ?? [];
     if (acceptedGcc.length > 0) {
-      const userCountry = normalize(user.gccResidenceCountry ?? "");
-      const accepted = acceptedGcc.some((c) => {
-        const nc = normalize(c);
-        return nc === userCountry || nc.includes(userCountry) || userCountry.includes(nc);
-      });
+      // Exact-match on canonical country values — never substring.
+      const accepted = acceptedGcc.some((c) => isSameCountry(c, user.gccResidenceCountry));
       if (!accepted) {
         const list = acceptedGcc.join(ar ? "، " : ", ");
         return {

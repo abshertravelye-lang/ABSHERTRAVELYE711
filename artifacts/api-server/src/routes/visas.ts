@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { visasTable, notificationsTable, usersTable } from "@workspace/db";
 import { eq, and, isNull } from "drizzle-orm";
+import { canonicalCountryEn } from "@workspace/countries";
 import {
   CreateVisaBody,
   GetVisaParams,
@@ -83,11 +84,23 @@ router.get("/visas", async (req, res) => {
   }
 });
 
+/** Canonicalize country-list fields to canonical English names before persisting,
+ *  so the eligibility engine's exact-match comparison stays consistent even for
+ *  non-web/API clients. Unrecognized values are kept as-is (never silently dropped). */
+function canonicalizeCountryLists(data: Record<string, unknown>) {
+  for (const key of ["allowedNationalities", "blockedNationalities", "acceptedGccCountries"]) {
+    if (Array.isArray(data[key])) {
+      data[key] = (data[key] as string[]).map((v) => canonicalCountryEn(v) ?? v);
+    }
+  }
+}
+
 router.post("/visas", async (req, res) => {
   try {
     const body = CreateVisaBody.parse(req.body);
     const data: Record<string, unknown> = { ...body };
     if (typeof data.fee === "number") data.fee = String(data.fee);
+    canonicalizeCountryLists(data);
     const [row] = await db.insert(visasTable).values(data as never).returning();
     res.status(201).json(toResponse(row));
 
@@ -129,6 +142,7 @@ router.patch("/visas/:id", async (req, res) => {
     const body = UpdateVisaBody.parse(req.body);
     const data: Record<string, unknown> = { ...body, updatedAt: new Date() };
     if (typeof data.fee === "number") data.fee = String(data.fee);
+    canonicalizeCountryLists(data);
     const [row] = await db
       .update(visasTable)
       .set(data as never)

@@ -8,6 +8,8 @@ import {
   customFetch, ApiError,
 } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
+import { CountrySelect } from "@/components/country-select";
+import { getCountryByCode, canonicalCountryEn } from "@workspace/countries";
 import { useQueryClient } from "@tanstack/react-query";
 
 /* ── PDF Ticket Generator ── */
@@ -635,7 +637,7 @@ export default function Account() {
             ...((ocr as any).lastName ? { lastName: (ocr as any).lastName } : {}),
             // Always overwrite from passport (user can edit)
             ...(ocr.passportNumber ? { passportNumber: ocr.passportNumber } : {}),
-            ...(ocr.nationality ? { nationality: ocr.nationality } : {}),
+            ...(ocr.nationality ? { nationality: canonicalCountryEn(ocr.nationality) ?? ocr.nationality } : {}),
             ...(ocr.dateOfBirth ? { dateOfBirth: ocr.dateOfBirth } : {}),
             ...(ocr.issueDate ? { passportIssueDate: ocr.issueDate } : {}),
             ...(ocr.expiryDate ? { passportExpiryDate: ocr.expiryDate } : {}),
@@ -982,7 +984,13 @@ export default function Account() {
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{ar ? "الجنسية" : "Nationality"} *</Label>
-                        <Input className="bg-slate-50 focus:bg-white" value={profile.nationality || ""} onChange={e => setProfile({...profile, nationality: e.target.value})} placeholder={ar ? "مثال: اليمن" : "e.g. Yemen"} />
+                        <CountrySelect
+                          className="bg-slate-50"
+                          language={ar ? "ar" : "en"}
+                          value={profile.nationality || ""}
+                          onChange={code => setProfile({ ...profile, nationality: getCountryByCode(code)?.nameEn ?? code })}
+                          placeholder={ar ? "اختر الجنسية" : "Select nationality"}
+                        />
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{ar ? "تاريخ الميلاد" : "Date of Birth"} *</Label>

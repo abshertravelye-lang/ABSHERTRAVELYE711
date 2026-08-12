@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { requireAuth, requirePermission } from "../middleware/auth";
 import { db } from "@workspace/db";
 import { visaCustomFieldsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -27,7 +28,7 @@ router.get("/visas/:id/custom-fields", async (req, res) => {
 });
 
 // Create a custom field for a visa type
-router.post("/visas/:id/custom-fields", async (req, res) => {
+router.post("/visas/:id/custom-fields", requireAuth, requirePermission("visa_config"), async (req, res) => {
   try {
     const visaId = Number(req.params.id);
     const { labelAr, labelEn, fieldType, isRequired, options, placeholderAr, placeholderEn, sortOrder, isActive } = req.body;
@@ -54,7 +55,7 @@ router.post("/visas/:id/custom-fields", async (req, res) => {
 });
 
 // Update a custom field
-router.patch("/visa-custom-fields/:id", async (req, res) => {
+router.patch("/visa-custom-fields/:id", requireAuth, requirePermission("visa_config"), async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { labelAr, labelEn, fieldType, isRequired, options, placeholderAr, placeholderEn, sortOrder, isActive } = req.body;
@@ -71,7 +72,7 @@ router.patch("/visa-custom-fields/:id", async (req, res) => {
 });
 
 // Delete a custom field
-router.delete("/visa-custom-fields/:id", async (req, res) => {
+router.delete("/visa-custom-fields/:id", requireAuth, requirePermission("visa_config"), async (req, res) => {
   try {
     const id = Number(req.params.id);
     await db.delete(visaCustomFieldsTable).where(eq(visaCustomFieldsTable.id, id));

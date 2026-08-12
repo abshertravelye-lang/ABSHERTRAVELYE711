@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { requireAuth, requirePermission } from "../middleware/auth";
 import { db } from "@workspace/db";
 import { visaCountriesTable, visasTable } from "@workspace/db";
 import { eq, and, count } from "drizzle-orm";
@@ -44,7 +45,7 @@ router.get("/visa-countries", async (req, res) => {
   }
 });
 
-router.post("/visa-countries", async (req, res) => {
+router.post("/visa-countries", requireAuth, requirePermission("visa_config"), async (req, res) => {
   try {
     const { nameAr, nameEn, countryCode, region, imageUrl, flagEmoji, descriptionAr, descriptionEn, isActive, sortOrder } = req.body;
     if (!nameAr || !nameEn || !countryCode || !region) {
@@ -79,7 +80,7 @@ router.get("/visa-countries/:id", async (req, res) => {
   }
 });
 
-router.patch("/visa-countries/:id", async (req, res) => {
+router.patch("/visa-countries/:id", requireAuth, requirePermission("visa_config"), async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { nameAr, nameEn, countryCode, region, imageUrl, flagEmoji, descriptionAr, descriptionEn, isActive, sortOrder } = req.body;
@@ -95,7 +96,7 @@ router.patch("/visa-countries/:id", async (req, res) => {
   }
 });
 
-router.delete("/visa-countries/:id", async (req, res) => {
+router.delete("/visa-countries/:id", requireAuth, requirePermission("visa_config"), async (req, res) => {
   try {
     const id = Number(req.params.id);
     await db.delete(visaCountriesTable).where(eq(visaCountriesTable.id, id));

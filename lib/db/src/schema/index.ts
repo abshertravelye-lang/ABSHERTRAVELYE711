@@ -11,3 +11,4 @@ export * from "./flightSearches";
 export * from "./auditLogs";
 export * from "./travelerProfiles";
 export * from "./notifications";
+export * from "./appSettings";

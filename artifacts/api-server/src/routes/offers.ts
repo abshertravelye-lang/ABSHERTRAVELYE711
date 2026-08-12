@@ -11,6 +11,8 @@ import {
   DeleteOfferParams,
 } from "@workspace/api-zod";
 
+import { requireAuth, requirePermission } from "../middleware/auth";
+
 const router = Router();
 
 router.get("/offers", async (req, res) => {
@@ -35,7 +37,7 @@ router.get("/offers", async (req, res) => {
   }
 });
 
-router.post("/offers", async (req, res) => {
+router.post("/offers", requireAuth, requirePermission("visa_config"), async (req, res) => {
   try {
     const body = CreateOfferBody.parse(req.body);
     const [row] = await db.insert(offersTable).values(body as any).returning();
@@ -58,7 +60,7 @@ router.get("/offers/:id", async (req, res) => {
   }
 });
 
-router.patch("/offers/:id", async (req, res) => {
+router.patch("/offers/:id", requireAuth, requirePermission("visa_config"), async (req, res) => {
   try {
     const { id } = UpdateOfferParams.parse({ id: Number(req.params.id) });
     const body = UpdateOfferBody.parse(req.body);
@@ -71,7 +73,7 @@ router.patch("/offers/:id", async (req, res) => {
   }
 });
 
-router.delete("/offers/:id", async (req, res) => {
+router.delete("/offers/:id", requireAuth, requirePermission("visa_config"), async (req, res) => {
   try {
     const { id } = DeleteOfferParams.parse({ id: Number(req.params.id) });
     await db.delete(offersTable).where(eq(offersTable.id, id));

@@ -8,7 +8,9 @@ import {
   UpdateVisaApplicationParams,
   UpdateVisaApplicationBody,
 } from "@workspace/api-zod";
-import { requireAuth, requireRole, optionalAuth } from "../middleware/auth";
+import { requireAuth, requireRole, optionalAuth, requirePermission, hasStaffPermission } from "../middleware/auth";
+import { logAudit } from "../lib/audit";
+import { isSameCountry } from "@workspace/countries";
 import { isProfileComplete } from "./auth";
 import OpenAI from "openai";
 import fs from "fs/promises";
@@ -87,8 +89,6 @@ const toResponse = (r: typeof visaApplicationSubmissionsTable.$inferSelect) => (
   updatedAt: r.updatedAt.toISOString(),
 });
 
-const normalize = (s: string) => s.trim().toLocaleLowerCase();
-
 /** Generate unique application number: AT-YYYY-NNNNNN */
 function generateApplicationNumber(): string {
   const year = new Date().getFullYear();
@@ -108,12 +108,12 @@ function checkEligibility(
   visa: typeof visasTable.$inferSelect,
   ar: boolean,
 ): { eligible: boolean; reason?: string } {
-  const nationality = normalize(user.nationality ?? "");
+  const nationality = user.nationality ?? "";
   const ineligibleAr = visa.ineligibleMessageAr || "لا يمكنك التقديم على هذه التأشيرة";
   const ineligibleEn = visa.ineligibleMessageEn || "You cannot apply for this visa.";
 
   // ── Step 1: Prohibited nationality ALWAYS wins ─────────────────────────────
-  const blocked = visa.blockedNationalities.some((n) => normalize(n) === nationality);
+  const blocked = visa.blockedNationalities.some((n) => isSameCountry(n, nationality));
   if (blocked) {
     return { eligible: false, reason: ar ? ineligibleAr : ineligibleEn };
   }
@@ -121,7 +121,7 @@ function checkEligibility(
   // ── Step 2: Allowed nationalities list (empty = open to all non-blocked) ───
   const allowedList = visa.allowedNationalities ?? [];
   if (allowedList.length > 0) {
-    const allowed = allowedList.some((n) => normalize(n) === nationality);
+    const allowed = allowedList.some((n) => isSameCountry(n, nationality));
     if (!allowed) {
       return {
         eligible: false,
@@ -150,11 +150,8 @@ function checkEligibility(
     // Check that user's GCC country is in the accepted list (if specified)
     const acceptedGcc: string[] = ((visa as unknown as Record<string, unknown>).acceptedGccCountries as string[]) ?? [];
     if (acceptedGcc.length > 0) {
-      const userCountry = normalize(user.gccResidenceCountry ?? "");
-      const accepted = acceptedGcc.some((c) => {
-        const nc = normalize(c);
-        return nc === userCountry || nc.includes(userCountry) || userCountry.includes(nc);
-      });
+      // Exact-match on canonical country values — never substring.
+      const accepted = acceptedGcc.some((c) => isSameCountry(c, user.gccResidenceCountry));
       if (!accepted) {
         const list = acceptedGcc.join(ar ? "، " : ", ");
         return {
@@ -462,8 +459,15 @@ router.get("/visa-applications", requireAuth, async (req, res) => {
     const conditions = [];
     if (query.visaId) conditions.push(eq(visaApplicationSubmissionsTable.visaId, query.visaId));
     if (query.status) conditions.push(eq(visaApplicationSubmissionsTable.status, query.status as any));
-    const isStaff = ["agent", "admin", "super_admin"].includes(req.user!.role);
-    if (!isStaff) conditions.push(eq(visaApplicationSubmissionsTable.userId, req.user!.sub));
+    // Admins/super_admins see all; agents see all ONLY with the visa_applications
+    // permission; everyone else sees only their own applications.
+    let seesAll = ["admin", "super_admin"].includes(req.user!.role);
+    if (!seesAll && req.user!.role === "agent") {
+      const [staff] = await db.select({ permissions: usersTable.permissions, isActive: usersTable.isActive })
+        .from(usersTable).where(eq(usersTable.id, req.user!.sub));
+      seesAll = !!staff?.isActive && Array.isArray(staff.permissions) && staff.permissions.includes("visa_applications");
+    }
+    if (!seesAll) conditions.push(eq(visaApplicationSubmissionsTable.userId, req.user!.sub));
     const rows = await db
       .select()
       .from(visaApplicationSubmissionsTable)
@@ -591,8 +595,10 @@ router.get("/visa-applications/:id", requireAuth, async (req, res) => {
     const { id } = GetVisaApplicationParams.parse({ id: Number(req.params.id) });
     const [row] = await db.select().from(visaApplicationSubmissionsTable).where(eq(visaApplicationSubmissionsTable.id, id));
     if (!row) return res.status(404).json({ error: "Not found" });
-    const isStaff = ["agent", "admin", "super_admin"].includes(req.user!.role);
-    if (!isStaff && row.userId !== req.user!.sub) return res.status(403).json({ error: "Forbidden" });
+    // Owner, or staff with the visa_applications permission (DB-checked).
+    if (row.userId !== req.user!.sub && !(await hasStaffPermission(req.user!.sub, "visa_applications"))) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     res.json(toResponse(row));
   } catch (e) {
     req.log.error(e);
@@ -601,7 +607,7 @@ router.get("/visa-applications/:id", requireAuth, async (req, res) => {
 });
 
 // ── Update application status (staff only) ─────────────────────────────────
-router.patch("/visa-applications/:id", requireAuth, requireRole("agent", "admin", "super_admin"), async (req, res) => {
+router.patch("/visa-applications/:id", requireAuth, requirePermission("visa_applications"), async (req, res) => {
   try {
     const { id } = UpdateVisaApplicationParams.parse({ id: Number(req.params.id) });
     const body = UpdateVisaApplicationBody.parse(req.body);
@@ -624,6 +630,9 @@ router.patch("/visa-applications/:id", requireAuth, requireRole("agent", "admin"
       }
     }
 
+    if (body.status) {
+      logAudit(req, "visa_application.status_changed", { entityType: "visa_application", newValue: { id: row.id, status: body.status } });
+    }
     res.json(toResponse(row));
   } catch (e) {
     req.log.error(e);

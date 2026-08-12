@@ -14,6 +14,7 @@
     "@google-cloud/storage": "^7.21.0",
     "@types/multer": "^2.2.0",
     "@workspace/api-zod": "workspace:*",
+    "@workspace/countries": "workspace:*",
     "@workspace/db": "workspace:*",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",

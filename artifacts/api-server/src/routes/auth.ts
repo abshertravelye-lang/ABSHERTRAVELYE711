@@ -7,6 +7,8 @@ import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../lib/jw
 import { createHash } from "crypto";
 import { z } from "zod";
 import { requireAuth } from "../middleware/auth";
+import { logAudit } from "../lib/audit";
+import { canonicalCountryEn } from "@workspace/countries";
 
 const router = Router();
 
@@ -99,7 +101,7 @@ router.post("/auth/register", async (req, res) => {
       passwordHash,
       firstName: body.firstName,
       lastName: body.lastName,
-      nationality: body.nationality,
+      nationality: body.nationality ? canonicalCountryEn(body.nationality) ?? body.nationality : undefined,
       gender: body.gender,
       dateOfBirth: body.dateOfBirth,
     }).returning();
@@ -117,6 +119,7 @@ router.post("/auth/register", async (req, res) => {
       expiresAt,
     });
 
+    logAudit(req, "user.register", { userId: user.id, entityType: "user", entityId: user.id });
     res.status(201).json({ user: safeUser(user), accessToken, refreshToken });
   } catch (e) {
     req.log.error(e);
@@ -137,11 +140,15 @@ router.post("/auth/login", async (req, res) => {
     const [user] = await db.select().from(usersTable).where(whereClause);
 
     if (!user || !user.isActive) {
+      logAudit(req, "auth.login_failed", { userId: user?.id ?? null, newValue: { identifier: body.email ?? body.phone } });
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
     const valid = await bcrypt.compare(body.password, user.passwordHash);
-    if (!valid) return res.status(401).json({ error: "Invalid credentials" });
+    if (!valid) {
+      logAudit(req, "auth.login_failed", { userId: user.id });
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
 
     await db.update(usersTable)
       .set({ lastLoginAt: new Date() })
@@ -160,15 +167,16 @@ router.post("/auth/login", async (req, res) => {
       expiresAt,
     });
 
+    logAudit(req, "auth.login", { userId: user.id });
     res.json({ user: safeUser(user), accessToken, refreshToken });
   } catch (e) {
     req.log.error(e);
-    if (e instanceof z.ZodError) return res.status(400).json({ error: "Invalid input" });
+    if (e instanceof z.ZodError) return res.status(400).json({ error: "Invalid input", details: e.issues });
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// POST /api/auth/refresh
+// POST /api/auth/refresh — rotates the refresh token
 router.post("/auth/refresh", async (req, res) => {
   try {
     const { refreshToken } = z.object({ refreshToken: z.string() }).parse(req.body);
@@ -229,6 +237,7 @@ router.post("/auth/logout", requireAuth, async (req, res) => {
         .set({ revokedAt: new Date() })
         .where(eq(userSessionsTable.refreshTokenHash, tokenHash));
     }
+    logAudit(req, "auth.logout");
     res.json({ message: "Logged out successfully" });
   } catch (e) {
     req.log.error(e);
@@ -284,6 +293,12 @@ const profileUpdateSchema = z.object({
 router.patch("/auth/profile", requireAuth, async (req, res) => {
   try {
     const body = profileUpdateSchema.parse(req.body);
+
+    // Canonicalize country values so eligibility checks compare exact canonical names.
+    // Unrecognized values are stored as-is (user may still fix them in the UI).
+    if (body.nationality) body.nationality = canonicalCountryEn(body.nationality) ?? body.nationality;
+    if (body.gccResidenceCountry) body.gccResidenceCountry = canonicalCountryEn(body.gccResidenceCountry) ?? body.gccResidenceCountry;
+    if (body.passportIssueCountry) body.passportIssueCountry = canonicalCountryEn(body.passportIssueCountry) ?? body.passportIssueCountry;
 
     // Postgres rejects "" for date columns — convert empty strings to null
     const dateFields = ["dateOfBirth", "passportIssueDate", "passportExpiryDate", "gccResidenceExpiry", "europeanDocumentExpiry"] as const;

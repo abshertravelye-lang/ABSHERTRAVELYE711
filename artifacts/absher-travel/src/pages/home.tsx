@@ -10,6 +10,7 @@ import { AirportSearch } from "@/components/airport-search";
 import { FlightDatePicker } from "@/components/flight-date-picker";
 import { PassengerSelector, type PassengerConfig } from "@/components/passenger-selector";
 import type { Airport } from "@/data/airports";
+import { AppDownloadLinks } from "@/components/app-download-links";
 
 export default function Home() {
   const { t, language } = useTranslation();
@@ -211,6 +212,9 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      {/* App Download Promo — renders only when a store link is configured */}
+      <AppDownloadLinks variant="section" />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, boolean, timestamp, pgEnum, date } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, boolean, timestamp, pgEnum, date, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -16,6 +16,8 @@ export const usersTable = pgTable("users", {
   gender: genderEnum("gender"),
   dateOfBirth: date("date_of_birth"),
   role: userRoleEnum("role").notNull().default("customer"),
+  // Staff permission keys (admin sections). Empty for customers; super_admin bypasses.
+  permissions: jsonb("permissions").$type<string[]>().notNull().default([]),
   isActive: boolean("is_active").notNull().default(true),
   emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
   phoneVerifiedAt: timestamp("phone_verified_at", { withTimezone: true }),

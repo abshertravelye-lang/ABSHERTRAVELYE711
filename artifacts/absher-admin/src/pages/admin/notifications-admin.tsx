@@ -49,7 +49,7 @@ export default function NotificationsAdmin() {
         isGlobal: target === "all"
       };
 
-      const token = localStorage.getItem("absher_access_token");
+      const token = localStorage.getItem("absher_admin_access_token");
       const res = await fetch("/api/notifications/send", {
         method: "POST",
         headers: {

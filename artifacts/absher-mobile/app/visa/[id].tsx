@@ -356,7 +356,7 @@ export default function VisaDetailScreen() {
                 <TextInput
                   value={form.passportNumber}
                   onChangeText={v => set('passportNumber', v)}
-                  placeholder="A1234567"
+                  placeholder="رقم الجواز"
                   placeholderTextColor={colors.mutedForeground}
                   autoCapitalize="characters"
                   style={[s.fieldInput, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.foreground, fontFamily: 'Cairo_400Regular' }]}

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -54,14 +54,9 @@ export default function WelcomeScreen() {
   };
 
   const handleContact = () => {
-    const phone = '966500000000';
-    const msg = t('welcome.contactMessage');
-    const encoded = encodeURIComponent(msg);
-    const appUrl = `whatsapp://send?phone=${phone}&text=${encoded}`;
-    const webUrl = `https://wa.me/${phone}?text=${encoded}`;
-    Linking.canOpenURL(appUrl)
-      .then((supported) => Linking.openURL(supported ? appUrl : webUrl))
-      .catch(() => Linking.openURL(webUrl));
+    // "Contact Us" opens the real in-app support chat (guest flow for
+    // pre-login users) — no external WhatsApp redirect.
+    router.push('/support-chat');
   };
 
   const actions: Action[] = [

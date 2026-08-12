@@ -2923,3 +2923,226 @@ export const UpdateEmployeeResponse = zod.object({
 })
 
 
+/**
+ * @summary Get-or-create the caller's single open support conversation
+ */
+export const GetOrCreateSupportConversationResponse = zod.object({
+  "id": zod.string(),
+  "userId": zod.string().nullish(),
+  "guestName": zod.string().nullish(),
+  "status": zod.enum(['open', 'closed']),
+  "lastMessageAt": zod.string().nullish(),
+  "customerUnreadCount": zod.number(),
+  "staffUnreadCount": zod.number(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary List messages of the caller's conversation (resets customer unread)
+ */
+export const ListSupportMessagesQueryParams = zod.object({
+  "after": zod.coerce.string().optional().describe('ISO timestamp or message id; returns messages created after it')
+})
+
+export const ListSupportMessagesResponseItem = zod.object({
+  "id": zod.string(),
+  "conversationId": zod.string(),
+  "sender": zod.enum(['customer', 'staff']),
+  "senderUserId": zod.string().nullish(),
+  "body": zod.string(),
+  "createdAt": zod.string()
+})
+export const ListSupportMessagesResponse = zod.array(ListSupportMessagesResponseItem)
+
+
+/**
+ * @summary Send a customer message (creates conversation if none)
+ */
+export const sendSupportMessageBodyBodyMax = 2000;
+
+
+
+export const SendSupportMessageBody = zod.object({
+  "body": zod.string().min(1).max(sendSupportMessageBodyBodyMax)
+})
+
+export const SendSupportMessageResponse = zod.object({
+  "id": zod.string(),
+  "conversationId": zod.string(),
+  "sender": zod.enum(['customer', 'staff']),
+  "senderUserId": zod.string().nullish(),
+  "body": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Create a guest support conversation (no auth)
+ */
+export const createGuestSupportConversationBodyNameMax = 120;
+
+
+
+export const CreateGuestSupportConversationBody = zod.object({
+  "name": zod.string().min(1).max(createGuestSupportConversationBodyNameMax)
+})
+
+export const CreateGuestSupportConversationResponse = zod.object({
+  "conversationId": zod.string(),
+  "guestToken": zod.string()
+})
+
+
+/**
+ * @summary List messages for a guest conversation by token (no auth)
+ */
+export const ListGuestSupportMessagesQueryParams = zod.object({
+  "token": zod.coerce.string(),
+  "after": zod.coerce.string().optional()
+})
+
+export const ListGuestSupportMessagesResponseItem = zod.object({
+  "id": zod.string(),
+  "conversationId": zod.string(),
+  "sender": zod.enum(['customer', 'staff']),
+  "senderUserId": zod.string().nullish(),
+  "body": zod.string(),
+  "createdAt": zod.string()
+})
+export const ListGuestSupportMessagesResponse = zod.array(ListGuestSupportMessagesResponseItem)
+
+
+/**
+ * @summary Send a guest message by token (no auth)
+ */
+export const sendGuestSupportMessageBodyBodyMax = 2000;
+
+
+
+export const SendGuestSupportMessageBody = zod.object({
+  "token": zod.string(),
+  "body": zod.string().min(1).max(sendGuestSupportMessageBodyBodyMax)
+})
+
+export const SendGuestSupportMessageResponse = zod.object({
+  "id": zod.string(),
+  "conversationId": zod.string(),
+  "sender": zod.enum(['customer', 'staff']),
+  "senderUserId": zod.string().nullish(),
+  "body": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Link a guest conversation to the calling account
+ */
+export const ClaimGuestSupportConversationBody = zod.object({
+  "token": zod.string()
+})
+
+export const ClaimGuestSupportConversationResponse = zod.object({
+  "id": zod.string(),
+  "userId": zod.string().nullish(),
+  "guestName": zod.string().nullish(),
+  "status": zod.enum(['open', 'closed']),
+  "lastMessageAt": zod.string().nullish(),
+  "customerUnreadCount": zod.number(),
+  "staffUnreadCount": zod.number(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary List all support conversations (staff)
+ */
+export const ListAdminSupportConversationsResponseItem = zod.object({
+  "id": zod.string(),
+  "userId": zod.string().nullish(),
+  "guestName": zod.string().nullish(),
+  "status": zod.enum(['open', 'closed']),
+  "lastMessageAt": zod.string().nullish(),
+  "customerUnreadCount": zod.number(),
+  "staffUnreadCount": zod.number(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "customerName": zod.string(),
+  "userEmail": zod.string().nullish(),
+  "userPhone": zod.string().nullish(),
+  "isGuest": zod.boolean(),
+  "lastMessagePreview": zod.string().nullish(),
+  "lastMessageSenderAt": zod.string().nullish()
+})
+export const ListAdminSupportConversationsResponse = zod.array(ListAdminSupportConversationsResponseItem)
+
+
+/**
+ * @summary Full message history (resets staff unread)
+ */
+export const ListAdminSupportMessagesParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const ListAdminSupportMessagesResponseItem = zod.object({
+  "id": zod.string(),
+  "conversationId": zod.string(),
+  "sender": zod.enum(['customer', 'staff']),
+  "senderUserId": zod.string().nullish(),
+  "body": zod.string(),
+  "createdAt": zod.string()
+})
+export const ListAdminSupportMessagesResponse = zod.array(ListAdminSupportMessagesResponseItem)
+
+
+/**
+ * @summary Staff reply (notifies linked customer)
+ */
+export const ReplyAdminSupportConversationParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const replyAdminSupportConversationBodyBodyMax = 2000;
+
+
+
+export const ReplyAdminSupportConversationBody = zod.object({
+  "body": zod.string().min(1).max(replyAdminSupportConversationBodyBodyMax)
+})
+
+export const ReplyAdminSupportConversationResponse = zod.object({
+  "id": zod.string(),
+  "conversationId": zod.string(),
+  "sender": zod.enum(['customer', 'staff']),
+  "senderUserId": zod.string().nullish(),
+  "body": zod.string(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Update conversation status (open/close)
+ */
+export const UpdateAdminSupportConversationParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const UpdateAdminSupportConversationBody = zod.object({
+  "status": zod.enum(['open', 'closed'])
+})
+
+export const UpdateAdminSupportConversationResponse = zod.object({
+  "id": zod.string(),
+  "userId": zod.string().nullish(),
+  "guestName": zod.string().nullish(),
+  "status": zod.enum(['open', 'closed']),
+  "lastMessageAt": zod.string().nullish(),
+  "customerUnreadCount": zod.number(),
+  "staffUnreadCount": zod.number(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+

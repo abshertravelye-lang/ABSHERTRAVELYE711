@@ -16,3 +16,4 @@ export * from "./appSettings";
 export * from "./objectUploads";
 export * from "./applicationDocuments";
 export * from "./pushTokens";
+export * from "./supportChat";

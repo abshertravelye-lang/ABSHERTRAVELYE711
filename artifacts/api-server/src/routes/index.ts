@@ -20,6 +20,7 @@ import employeesRouter from "./employees";
 import settingsRouter from "./settings";
 import auditLogsRouter from "./auditLogs";
 import pushTokensRouter from "./pushTokens";
+import supportChatRouter from "./supportChat";
 
 const router: IRouter = Router();
 
@@ -44,5 +45,6 @@ router.use(pushTokensRouter);
 router.use(employeesRouter);
 router.use(settingsRouter);
 router.use(auditLogsRouter);
+router.use(supportChatRouter);
 
 export default router;

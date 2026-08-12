@@ -67,8 +67,11 @@ export default function MoreScreen() {
   ];
 
   const handlePress = (route: string) => {
-    if (route === 'support' || route === 'help') {
-      // Just a placeholder, could open URL
+    if (route === 'support') {
+      // Primary "Contact Us" now opens the real in-app support chat.
+      router.push('/support-chat' as any);
+    } else if (route === 'help') {
+      // Help Center placeholder — left as-is.
     } else {
       router.push(route as any);
     }

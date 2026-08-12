@@ -66,6 +66,7 @@ function RootLayoutNav() {
       <Stack.Screen name="visa-tracking/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="umrah-tracking/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="umrah-visa" options={{ headerShown: false }} />
+      <Stack.Screen name="support-chat" options={{ headerShown: false }} />
     </Stack>
   );
 }

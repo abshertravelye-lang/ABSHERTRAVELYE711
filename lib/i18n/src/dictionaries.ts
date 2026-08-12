@@ -488,6 +488,34 @@ export const home: Domain = {
   "home.services.umrah.desc": { ar: "تأشيرة عمرة بخطوات بسيطة", en: "Umrah visa in simple steps" },
   "home.exit.title": { ar: "الخروج من التطبيق", en: "Exit application" },
   "home.exit.message": { ar: "هل أنت متأكد أنك تريد الخروج من التطبيق؟", en: "Are you sure you want to exit?" },
+  // In-app support chat
+  "supportChat.title": { ar: "الدعم", en: "Support" },
+  "supportChat.headerSubtitle": { ar: "فريق ABSHER TRAVEL", en: "ABSHER TRAVEL Team" },
+  "supportChat.greeting": {
+    ar: "مرحباً {name} 👋 أهلاً بك في ABSHER TRAVEL. كيف يمكن لفريق الدعم مساعدتك اليوم؟",
+    en: "Hello {name} 👋 Welcome to ABSHER TRAVEL. How can our support team help you today?",
+  },
+  "supportChat.greetingGuest": {
+    ar: "مرحباً بك في ABSHER TRAVEL 👋 كيف يمكن لفريق الدعم مساعدتك اليوم؟",
+    en: "Welcome to ABSHER TRAVEL 👋 How can our support team help you today?",
+  },
+  "supportChat.guestPrompt": {
+    ar: "مرحباً بك في ABSHER TRAVEL 👋 يرجى إدخال اسمك لبدء المحادثة",
+    en: "Welcome to ABSHER TRAVEL 👋 Please provide your name to start the conversation",
+  },
+  "supportChat.nameLabel": { ar: "اسمك", en: "Your name" },
+  "supportChat.namePlaceholder": { ar: "أدخل اسمك", en: "Enter your name" },
+  "supportChat.continue": { ar: "متابعة", en: "Continue" },
+  "supportChat.inputPlaceholder": { ar: "اكتب رسالتك...", en: "Type your message..." },
+  "supportChat.send": { ar: "إرسال", en: "Send" },
+  "supportChat.loadError": {
+    ar: "تعذّر تحميل المحادثة. حاول مرة أخرى.",
+    en: "Could not load the conversation. Please try again.",
+  },
+  "supportChat.retry": { ar: "إعادة المحاولة", en: "Retry" },
+  "supportChat.staffName": { ar: "فريق الدعم", en: "Support Team" },
+  "supportChat.you": { ar: "أنت", en: "You" },
+  "supportChat.emptyName": { ar: "يرجى إدخال اسمك", en: "Please enter your name" },
 };
 
 /** Flights & hotels (coming-soon placeholders). */

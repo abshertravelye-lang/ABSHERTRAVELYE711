@@ -7,6 +7,7 @@ import logo from "@assets/absher-business-logo.png";
 import { useState } from "react";
 import { AppDownloadLinks } from "@/components/app-download-links";
 import { LogoutConfirmDialog } from "@/components/logout-confirm-dialog";
+import { SupportChat, openSupportChat } from "@/components/support-chat";
 
 function AccountNavButton({ language }: { language: string }) {
   const { isAuthenticated, user, logout } = useAuth();
@@ -143,15 +144,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
-      {/* WhatsApp Floating Button */}
-      <a 
-        href="https://wa.me/967779055511" 
-        target="_blank" 
-        rel="noreferrer"
-        className="fixed bottom-6 right-6 rtl:left-6 rtl:right-auto bg-[#25D366] text-white p-4 rounded-full shadow-xl hover:scale-110 transition-transform z-50 flex items-center justify-center"
-      >
-        <svg xmlns="http://www.0000.com/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-message-circle"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>
-      </a>
+      {/* In-app Support Chat (replaces the old WhatsApp redirect) */}
+      <SupportChat />
 
       {/* Footer */}
       <footer className="bg-primary text-primary-foreground pt-16 pb-8">
@@ -182,21 +176,26 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </h3>
             <ul className="space-y-3 text-sm text-slate-300">
               <li>
-                <Link href="/contact" className="flex items-center gap-2 hover:text-white transition-colors">
+                <button
+                  type="button"
+                  onClick={() => openSupportChat()}
+                  className="flex items-center gap-2 hover:text-white transition-colors text-start"
+                  data-testid="link-footer-contact"
+                >
                   <User size={16} className="text-accent shrink-0" />
                   {language === 'ar' ? 'تواصل معنا' : 'Contact Us'}
-                </Link>
+                </button>
               </li>
               <li>
-                <a
-                  href="https://wa.me/967779055511"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-2 hover:text-white transition-colors"
+                <button
+                  type="button"
+                  onClick={() => openSupportChat()}
+                  className="flex items-center gap-2 hover:text-white transition-colors text-start"
+                  data-testid="link-footer-chat"
                 >
                   <MessageCircle size={16} className="text-accent shrink-0" />
-                  {language === 'ar' ? 'واتساب' : 'WhatsApp'}
-                </a>
+                  {language === 'ar' ? 'الدردشة المباشرة' : 'Live Chat'}
+                </button>
               </li>
               <li>
                 <a href="mailto:info@abshertravel.com" className="flex items-center gap-2 hover:text-white transition-colors" dir="ltr">

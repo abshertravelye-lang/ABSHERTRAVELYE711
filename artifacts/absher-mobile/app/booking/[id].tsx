@@ -88,7 +88,7 @@ export default function BookingDetailScreen() {
 
   const handleSupport = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/(tabs)');
+    router.push('/support-chat');
   };
 
   return (

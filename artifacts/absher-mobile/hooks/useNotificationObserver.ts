@@ -7,6 +7,7 @@
  *   `data` and deep-link to the relevant screen:
  *     relatedEntityType 'visa_application'  → /visa-tracking/<id>
  *     relatedEntityType 'umrah_application' → /umrah-tracking/<id>
+ *     relatedEntityType 'support_conversation' → /support-chat
  *     url                                    → router.push(url)
  *
  * Everything is guarded so it never crashes on web / Expo Go.
@@ -47,6 +48,10 @@ function routeFromData(data: NotificationData | null | undefined) {
     }
     if (relatedEntityType === 'umrah_application' && relatedEntityId != null) {
       router.push(`/umrah-tracking/${relatedEntityId}` as never);
+      return;
+    }
+    if (relatedEntityType === 'support_conversation') {
+      router.push('/support-chat' as never);
       return;
     }
     if (url) {

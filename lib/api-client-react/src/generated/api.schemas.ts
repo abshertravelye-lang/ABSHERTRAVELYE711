@@ -1374,6 +1374,126 @@ export interface ContactMessage {
   createdAt: string;
 }
 
+export type SupportConversationStatus = typeof SupportConversationStatus[keyof typeof SupportConversationStatus];
+
+
+export const SupportConversationStatus = {
+  open: 'open',
+  closed: 'closed',
+} as const;
+
+export interface SupportConversation {
+  id: string;
+  /** @nullable */
+  userId?: string | null;
+  /** @nullable */
+  guestName?: string | null;
+  status: SupportConversationStatus;
+  /** @nullable */
+  lastMessageAt?: string | null;
+  customerUnreadCount: number;
+  staffUnreadCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AdminSupportConversationStatus = typeof AdminSupportConversationStatus[keyof typeof AdminSupportConversationStatus];
+
+
+export const AdminSupportConversationStatus = {
+  open: 'open',
+  closed: 'closed',
+} as const;
+
+export interface AdminSupportConversation {
+  id: string;
+  /** @nullable */
+  userId?: string | null;
+  /** @nullable */
+  guestName?: string | null;
+  status: AdminSupportConversationStatus;
+  /** @nullable */
+  lastMessageAt?: string | null;
+  customerUnreadCount: number;
+  staffUnreadCount: number;
+  createdAt: string;
+  updatedAt: string;
+  customerName: string;
+  /** @nullable */
+  userEmail?: string | null;
+  /** @nullable */
+  userPhone?: string | null;
+  isGuest: boolean;
+  /** @nullable */
+  lastMessagePreview?: string | null;
+  /** @nullable */
+  lastMessageSenderAt?: string | null;
+}
+
+export type SupportMessageSender = typeof SupportMessageSender[keyof typeof SupportMessageSender];
+
+
+export const SupportMessageSender = {
+  customer: 'customer',
+  staff: 'staff',
+} as const;
+
+export interface SupportMessage {
+  id: string;
+  conversationId: string;
+  sender: SupportMessageSender;
+  /** @nullable */
+  senderUserId?: string | null;
+  body: string;
+  createdAt: string;
+}
+
+export interface SupportMessageInput {
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  body: string;
+}
+
+export interface GuestConversationInput {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name: string;
+}
+
+export interface GuestConversationResponse {
+  conversationId: string;
+  guestToken: string;
+}
+
+export interface GuestMessageInput {
+  token: string;
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  body: string;
+}
+
+export interface ClaimGuestConversationInput {
+  token: string;
+}
+
+export type SupportConversationStatusInputStatus = typeof SupportConversationStatusInputStatus[keyof typeof SupportConversationStatusInputStatus];
+
+
+export const SupportConversationStatusInputStatus = {
+  open: 'open',
+  closed: 'closed',
+} as const;
+
+export interface SupportConversationStatusInput {
+  status: SupportConversationStatusInputStatus;
+}
+
 export type DashboardStatsBookingsByTypeItem = {
   type: string;
   count: number;
@@ -1995,5 +2115,17 @@ export type MarkAllNotificationsRead200 = {
 
 export type DeletePushToken200 = {
   deleted: number;
+};
+
+export type ListSupportMessagesParams = {
+/**
+ * ISO timestamp or message id; returns messages created after it
+ */
+after?: string;
+};
+
+export type ListGuestSupportMessagesParams = {
+token: string;
+after?: string;
 };
 

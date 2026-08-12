@@ -5,9 +5,10 @@ import {
   LayoutDashboard, Ticket, Map, MessageSquare, Briefcase, FileText,
   Users, Globe, Wrench, Building2, Languages, Flag,
   UserCog, CreditCard, BarChart3, Bell, Settings, ScrollText, LogOut, ShieldAlert,
-  Megaphone, Landmark, Sliders
+  Megaphone, Landmark, Sliders, Headset
 } from "lucide-react";
-import { lazy, Suspense, useState, type ComponentType } from "react";
+import { lazy, Suspense, useState, useMemo, type ComponentType } from "react";
+import { useListAdminSupportConversations, getListAdminSupportConversationsQueryKey } from "@workspace/api-client-react";
 import DashboardOverview from "./dashboard-overview";
 import { LogoutConfirmDialog } from "@/components/logout-confirm-dialog";
 
@@ -19,6 +20,7 @@ const OffersAdmin = lazy(() => import("./offers-admin"));
 const DestinationsAdmin = lazy(() => import("./destinations-admin"));
 const CustomersAdmin = lazy(() => import("./customers-admin"));
 const MessagesAdmin = lazy(() => import("./messages-admin"));
+const SupportChatAdmin = lazy(() => import("./support-chat-admin"));
 const VisaApplicationsAdmin = lazy(() => import("./visa-applications-admin"));
 const EmployeesAdmin = lazy(() => import("./employees-admin"));
 const PaymentsAdmin = lazy(() => import("./payments-admin"));
@@ -73,6 +75,21 @@ export default function AdminLayout() {
 
   const isSuperAdmin = user?.role === "super_admin";
 
+  /* Total unread support messages — powers the sidebar badge. Only polls when
+     the current user can access the support section. */
+  const canSeeSupport = hasPermission("messages");
+  const { data: supportConversations } = useListAdminSupportConversations({
+    query: {
+      queryKey: getListAdminSupportConversationsQueryKey(),
+      enabled: canSeeSupport,
+      refetchInterval: 5000,
+    },
+  });
+  const supportUnread = useMemo(
+    () => (supportConversations ?? []).reduce((sum, c) => sum + (c.staffUnreadCount ?? 0), 0),
+    [supportConversations]
+  );
+
   /* Each nav item maps to a backend permission key. `perm: null` means the
      item is always visible to authenticated staff (no specific permission). */
   const allNavItems: Array<{
@@ -82,6 +99,7 @@ export default function AdminLayout() {
     labelEn: string;
     perm: string | null;
     show?: boolean;
+    badge?: number;
   }> = [
     { href: "/",                         icon: LayoutDashboard, labelAr: "نظرة عامة",        labelEn: "Overview",           perm: "overview" },
     { href: "/admin/bookings",           icon: Ticket,          labelAr: "الحجوزات",          labelEn: "Bookings",           perm: "bookings" },
@@ -98,6 +116,7 @@ export default function AdminLayout() {
     { href: "/admin/customers",          icon: Users,           labelAr: "العملاء",           labelEn: "Customers",          perm: "customers" },
     { href: "/admin/employees",          icon: UserCog,         labelAr: "الموظفون",         labelEn: "Employees",          perm: "employees", show: isSuperAdmin || hasPermission("employees") },
     { href: "/admin/messages",           icon: MessageSquare,   labelAr: "الرسائل",           labelEn: "Messages",           perm: "messages" },
+    { href: "/admin/support-chat",       icon: Headset,         labelAr: "الدعم الفني",       labelEn: "Support Chat",       perm: "messages", badge: supportUnread },
     { href: "/admin/notifications",      icon: Bell,            labelAr: "الإشعارات",         labelEn: "Notifications",      perm: "notifications" },
     { href: "/admin/umrah-settings",      icon: Sliders,         labelAr: "إعدادات العمرة",    labelEn: "Umrah Settings",     perm: "settings" },
     { href: "/admin/settings",           icon: Settings,        labelAr: "الإعدادات",         labelEn: "Settings",           perm: "settings" },
@@ -165,7 +184,12 @@ export default function AdminLayout() {
                     }`}
                 >
                   <Icon className="w-5 h-5 shrink-0" />
-                  <span>{ar ? item.labelAr : item.labelEn}</span>
+                  <span className="flex-1">{ar ? item.labelAr : item.labelEn}</span>
+                  {item.badge ? (
+                    <span className="bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center shrink-0">
+                      {item.badge > 99 ? "99+" : item.badge}
+                    </span>
+                  ) : null}
                 </span>
               </Link>
             );
@@ -238,6 +262,7 @@ export default function AdminLayout() {
               <Route path="/admin/customers" component={guard("customers", CustomersAdmin)} />
               <Route path="/admin/employees" component={guard("employees", EmployeesAdmin)} />
               <Route path="/admin/messages" component={guard("messages", MessagesAdmin)} />
+              <Route path="/admin/support-chat" component={guard("messages", SupportChatAdmin)} />
               <Route path="/admin/notifications" component={guard("notifications", NotificationsAdmin)} />
               <Route path="/admin/umrah-settings" component={guard("settings", UmrahSettingsAdmin)} />
               <Route path="/admin/settings" component={guard("settings", SettingsAdmin)} />

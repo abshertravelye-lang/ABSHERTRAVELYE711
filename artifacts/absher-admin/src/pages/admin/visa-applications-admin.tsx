@@ -1,11 +1,26 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListVisaApplications, useUpdateVisaApplication, getListVisaApplicationsQueryKey,
 } from "@workspace/api-client-react";
 import { useTranslation } from "@/hooks/use-translation";
-import { Search, Filter, Eye, CheckCircle, X, Clock, FileText, Send, Award, Stamp, AlertTriangle, Ban } from "lucide-react";
+import { Search, Filter, Eye, CheckCircle, X, Clock, FileText, Send, Award, Stamp, AlertTriangle, Ban, UploadCloud, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
+
+// ── Storage upload helper (matches visas-admin conventions) ────────────────
+async function uploadFile(file: File): Promise<string | null> {
+  const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+  const fd = new FormData();
+  fd.append("file", file);
+  try {
+    const res = await fetch(`${base}/api/storage/uploads`, { method: "POST", body: fd });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.objectPath ?? json.url ?? null;
+  } catch {
+    return null;
+  }
+}
 
 const STATUS_META: Record<string, { arLabel: string; enLabel: string; color: string; icon: React.ReactNode }> = {
   received:           { arLabel: "مستلم",             enLabel: "Received",            color: "bg-blue-50 text-blue-700 border-blue-200",     icon: <FileText className="w-3.5 h-3.5" /> },
@@ -42,10 +57,20 @@ function StatusBadge({ status, ar }: { status: string; ar: boolean }) {
 
 function DetailModal({ app, onClose, onUpdate, updating, ar }: {
   app: Record<string, unknown>; onClose: () => void;
-  onUpdate: (status: string, notes: string) => void; updating: boolean; ar: boolean;
+  onUpdate: (status: string, notes: string, issuedVisaUrl: string) => void; updating: boolean; ar: boolean;
 }) {
   const [status, setStatus] = useState(app.status as string);
   const [notes, setNotes] = useState((app.adminNotes as string) ?? "");
+  const [issuedVisaUrl, setIssuedVisaUrl] = useState((app.issuedVisaUrl as string) ?? "");
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleVisaFile = async (file: File) => {
+    setUploading(true);
+    const path = await uploadFile(file);
+    setUploading(false);
+    if (path) setIssuedVisaUrl(path);
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
@@ -110,9 +135,47 @@ function DetailModal({ app, onClose, onUpdate, updating, ar }: {
             <div>
               <label className="block text-sm font-medium mb-2">{ar ? "ملاحظات إدارية" : "Admin Notes"}</label>
               <textarea rows={3} className="w-full border rounded-xl px-4 py-2.5 text-sm resize-none" value={notes} onChange={e => setNotes(e.target.value)} />
+              <p className="text-xs text-muted-foreground mt-1">{ar ? "ستظهر هذه الملاحظة للعميل في التطبيق." : "This note is shown to the client in the app."}</p>
             </div>
-            <Button onClick={() => onUpdate(status, notes)} disabled={updating} className="w-full">
-              {updating ? (ar ? "جارٍ التحديث..." : "Updating...") : (ar ? "تحديث الحالة" : "Update Status")}
+
+            {/* Issued visa file */}
+            <div>
+              <label className="block text-sm font-medium mb-2">{ar ? "إرفاق ملف التأشيرة" : "Attach Visa File"}</label>
+              {issuedVisaUrl ? (
+                <div className="flex items-center justify-between gap-3 border rounded-xl px-4 py-2.5 bg-white">
+                  <a
+                    href={toDocUrl(issuedVisaUrl)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 text-sm text-[#0d2351] font-medium truncate hover:underline"
+                  >
+                    <Paperclip className="w-4 h-4 shrink-0" />
+                    <span className="truncate" dir="ltr">{issuedVisaUrl.split("/").pop()}</span>
+                  </a>
+                  <div className="flex gap-2 shrink-0">
+                    <button type="button" onClick={() => fileRef.current?.click()} className="text-xs text-[#0d2351] hover:underline font-medium">
+                      {ar ? "استبدال" : "Replace"}
+                    </button>
+                    <button type="button" onClick={() => setIssuedVisaUrl("")} className="text-xs text-red-500 hover:underline">
+                      {ar ? "حذف" : "Remove"}
+                    </button>
+                  </div>
+                  <input ref={fileRef} type="file" className="hidden" accept="application/pdf,image/*" onChange={e => { const f = e.target.files?.[0]; if (f) handleVisaFile(f); }} disabled={uploading} />
+                </div>
+              ) : (
+                <label className="flex items-center justify-center gap-2 border-2 border-dashed rounded-xl px-4 py-4 text-sm text-muted-foreground cursor-pointer hover:border-[#0d2351]/50 hover:bg-[#0d2351]/5 transition-colors">
+                  <input type="file" className="hidden" accept="application/pdf,image/*" onChange={e => { const f = e.target.files?.[0]; if (f) handleVisaFile(f); }} disabled={uploading} />
+                  {uploading ? (
+                    <><div className="w-4 h-4 border-2 border-[#0d2351]/20 border-t-[#0d2351] rounded-full animate-spin" />{ar ? "جاري الرفع..." : "Uploading..."}</>
+                  ) : (
+                    <><UploadCloud className="w-4 h-4" />{ar ? "رفع ملف التأشيرة (PDF أو صورة)" : "Upload visa file (PDF or image)"}</>
+                  )}
+                </label>
+              )}
+            </div>
+
+            <Button onClick={() => onUpdate(status, notes, issuedVisaUrl)} disabled={updating || uploading} className="w-full">
+              {updating ? (ar ? "جارٍ الحفظ..." : "Saving...") : (ar ? "حفظ وإرسال للعميل" : "Save & Send to Client")}
             </Button>
           </div>
         </div>
@@ -141,9 +204,12 @@ export default function VisaApplicationsAdmin() {
     return matchesSearch && matchesStatus;
   });
 
-  async function handleUpdate(status: string, notes: string) {
+  async function handleUpdate(status: string, notes: string, issuedVisaUrl: string) {
     if (!selectedApp) return;
-    await updateMut.mutateAsync({ id: selectedApp.id as number, data: { status: status as never, adminNotes: notes } });
+    await updateMut.mutateAsync({
+      id: selectedApp.id as number,
+      data: { status: status as never, adminNotes: notes, issuedVisaUrl: issuedVisaUrl || undefined },
+    });
     await qc.invalidateQueries({ queryKey: getListVisaApplicationsQueryKey() });
     setSelectedApp(null);
   }

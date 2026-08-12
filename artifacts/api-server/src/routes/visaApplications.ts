@@ -419,6 +419,7 @@ router.get("/visa-applications/track/:trackingNumber", async (req, res) => {
         status: visaApplicationSubmissionsTable.status,
         fullName: visaApplicationSubmissionsTable.fullName,
         adminNotes: visaApplicationSubmissionsTable.adminNotes,
+        issuedVisaUrl: visaApplicationSubmissionsTable.issuedVisaUrl,
         createdAt: visaApplicationSubmissionsTable.createdAt,
         updatedAt: visaApplicationSubmissionsTable.updatedAt,
         visaId: visaApplicationSubmissionsTable.visaId,
@@ -440,6 +441,7 @@ router.get("/visa-applications/track/:trackingNumber", async (req, res) => {
       status: row.status,
       fullName: row.fullName,
       adminNotes: row.adminNotes,
+      issuedVisaUrl: row.issuedVisaUrl,
       visaType: visa?.visaType ?? "",
       countryAr: visa?.countryAr ?? "",
       countryEn: visa?.countryEn ?? "",
@@ -611,19 +613,64 @@ router.patch("/visa-applications/:id", requireAuth, requirePermission("visa_appl
   try {
     const { id } = UpdateVisaApplicationParams.parse({ id: Number(req.params.id) });
     const body = UpdateVisaApplicationBody.parse(req.body);
+
+    // Load the current row so we can detect what actually changed (admin notes,
+    // issued visa file) and only fire notifications for real changes.
+    const [prev] = await db.select().from(visaApplicationSubmissionsTable)
+      .where(eq(visaApplicationSubmissionsTable.id, id));
+    if (!prev) return res.status(404).json({ error: "Not found" });
+
     const [row] = await db
       .update(visaApplicationSubmissionsTable)
-      .set({ ...body, updatedAt: new Date() })
+      .set({ ...body, updatedAt: new Date() } as never)
       .where(eq(visaApplicationSubmissionsTable.id, id))
       .returning();
     if (!row) return res.status(404).json({ error: "Not found" });
 
-    if (body.status && row.userId) {
-      const copy = STATUS_MESSAGES[body.status];
-      if (copy) {
+    // ── Client notifications ────────────────────────────────────────────────
+    if (row.userId) {
+      // 1. Status change → status-specific copy.
+      if (body.status) {
+        const copy = STATUS_MESSAGES[body.status];
+        if (copy) {
+          await db.insert(notificationsTable).values({
+            userId: row.userId,
+            ...copy,
+            relatedEntityType: "visa_application",
+            relatedEntityId: String(row.id),
+          });
+        }
+      }
+
+      // 2. Admin note added/changed (independent of status) → notify client.
+      const noteChanged =
+        typeof body.adminNotes === "string" &&
+        body.adminNotes.trim().length > 0 &&
+        body.adminNotes !== (prev.adminNotes ?? "");
+      if (noteChanged) {
         await db.insert(notificationsTable).values({
           userId: row.userId,
-          ...copy,
+          titleAr: "ملاحظة من الإدارة",
+          titleEn: "A note from our team",
+          messageAr: body.adminNotes!.slice(0, 480),
+          messageEn: body.adminNotes!.slice(0, 480),
+          relatedEntityType: "visa_application",
+          relatedEntityId: String(row.id),
+        });
+      }
+
+      // 3. Issued visa file attached/changed → notify client it's ready.
+      const fileChanged =
+        typeof body.issuedVisaUrl === "string" &&
+        body.issuedVisaUrl.trim().length > 0 &&
+        body.issuedVisaUrl !== (prev.issuedVisaUrl ?? "");
+      if (fileChanged) {
+        await db.insert(notificationsTable).values({
+          userId: row.userId,
+          titleAr: "تأشيرتك جاهزة للتحميل",
+          titleEn: "Your visa is ready to download",
+          messageAr: "تم إرفاق ملف تأشيرتك. يمكنك الآن تحميلها من شاشة تتبع الطلب.",
+          messageEn: "Your visa document has been attached. You can now download it from the tracking screen.",
           relatedEntityType: "visa_application",
           relatedEntityId: String(row.id),
         });
@@ -632,6 +679,9 @@ router.patch("/visa-applications/:id", requireAuth, requirePermission("visa_appl
 
     if (body.status) {
       logAudit(req, "visa_application.status_changed", { entityType: "visa_application", newValue: { id: row.id, status: body.status } });
+    }
+    if (typeof body.issuedVisaUrl === "string" && body.issuedVisaUrl !== (prev.issuedVisaUrl ?? "")) {
+      logAudit(req, "visa_application.visa_file_attached", { entityType: "visa_application", newValue: { id: row.id } });
     }
     res.json(toResponse(row));
   } catch (e) {

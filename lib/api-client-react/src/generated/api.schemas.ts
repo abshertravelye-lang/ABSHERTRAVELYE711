@@ -405,10 +405,6 @@ export interface OcrResult {
   /** @nullable */
   fullNameEn?: string | null;
   /** @nullable */
-  firstName?: string | null;
-  /** @nullable */
-  lastName?: string | null;
-  /** @nullable */
   passportNumber?: string | null;
   /** @nullable */
   nationality?: string | null;
@@ -452,6 +448,8 @@ export interface VisaApplicationTracking {
   fullName: string;
   /** @nullable */
   adminNotes?: string | null;
+  /** @nullable */
+  issuedVisaUrl?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -753,6 +751,8 @@ export interface VisaApplication {
   status: VisaApplicationStatus;
   /** @nullable */
   adminNotes?: string | null;
+  /** @nullable */
+  issuedVisaUrl?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -823,6 +823,7 @@ export const VisaApplicationStatusUpdateStatus = {
 export interface VisaApplicationStatusUpdate {
   status?: VisaApplicationStatusUpdateStatus;
   adminNotes?: string;
+  issuedVisaUrl?: string;
 }
 
 export type BookingType = typeof BookingType[keyof typeof BookingType];
@@ -1182,7 +1183,7 @@ export interface SafeUser {
   passportExpiryDate?: string | null;
   /** @nullable */
   passportImageUrl?: string | null;
-  isGccResident?: boolean;
+  isGccResident: boolean;
   /** @nullable */
   gccResidenceCountry?: string | null;
   /** @nullable */
@@ -1193,7 +1194,7 @@ export interface SafeUser {
   gccResidenceFrontUrl?: string | null;
   /** @nullable */
   gccResidenceBackUrl?: string | null;
-  isEuropeanResident?: boolean;
+  isEuropeanResident: boolean;
   /** @nullable */
   europeanDocumentType?: string | null;
   /** @nullable */

@@ -795,11 +795,6 @@ export const CreateVisaBody = zod.object({
   "requiresPersonalPhoto": zod.boolean().optional(),
   "requiresResidencyImage": zod.boolean().optional(),
   "requiresVisaImage": zod.boolean().optional(),
-  "requiresEuropeanDoc": zod.boolean().optional(),
-  "requiresSchengenDoc": zod.boolean().optional(),
-  "gccResidencyRequirement": zod.string().optional(),
-  "acceptedGccCountries": zod.array(zod.string()).optional(),
-  "europeanSchengenLogic": zod.string().optional(),
   "ineligibleMessageAr": zod.string().optional(),
   "ineligibleMessageEn": zod.string().optional()
 })
@@ -935,11 +930,6 @@ export const UpdateVisaBody = zod.object({
   "requiresPersonalPhoto": zod.boolean().optional(),
   "requiresResidencyImage": zod.boolean().optional(),
   "requiresVisaImage": zod.boolean().optional(),
-  "requiresEuropeanDoc": zod.boolean().optional(),
-  "requiresSchengenDoc": zod.boolean().optional(),
-  "gccResidencyRequirement": zod.string().optional(),
-  "acceptedGccCountries": zod.array(zod.string()).optional(),
-  "europeanSchengenLogic": zod.string().optional(),
   "ineligibleMessageAr": zod.string().optional(),
   "ineligibleMessageEn": zod.string().optional()
 })
@@ -1119,6 +1109,7 @@ export const TrackVisaApplicationResponse = zod.object({
   "countryEn": zod.string(),
   "fullName": zod.string(),
   "adminNotes": zod.string().nullish(),
+  "issuedVisaUrl": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -1185,6 +1176,7 @@ export const ListVisaApplicationsResponseItem = zod.object({
   "agreedToTerms": zod.boolean(),
   "status": zod.enum(['received', 'under_review', 'awaiting_documents', 'documents_uploaded', 'sent_to_embassy', 'processing', 'issued', 'completed', 'rejected', 'cancelled']),
   "adminNotes": zod.string().nullish(),
+  "issuedVisaUrl": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -1253,6 +1245,7 @@ export const CreateVisaApplicationResponse = zod.object({
   "agreedToTerms": zod.boolean(),
   "status": zod.enum(['received', 'under_review', 'awaiting_documents', 'documents_uploaded', 'sent_to_embassy', 'processing', 'issued', 'completed', 'rejected', 'cancelled']),
   "adminNotes": zod.string().nullish(),
+  "issuedVisaUrl": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -1296,6 +1289,7 @@ export const GetVisaApplicationResponse = zod.object({
   "agreedToTerms": zod.boolean(),
   "status": zod.enum(['received', 'under_review', 'awaiting_documents', 'documents_uploaded', 'sent_to_embassy', 'processing', 'issued', 'completed', 'rejected', 'cancelled']),
   "adminNotes": zod.string().nullish(),
+  "issuedVisaUrl": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -1310,7 +1304,8 @@ export const UpdateVisaApplicationParams = zod.object({
 
 export const UpdateVisaApplicationBody = zod.object({
   "status": zod.enum(['received', 'under_review', 'awaiting_documents', 'documents_uploaded', 'sent_to_embassy', 'processing', 'issued', 'completed', 'rejected', 'cancelled']).optional(),
-  "adminNotes": zod.string().optional()
+  "adminNotes": zod.string().optional(),
+  "issuedVisaUrl": zod.string().optional()
 })
 
 export const UpdateVisaApplicationResponse = zod.object({
@@ -1344,6 +1339,7 @@ export const UpdateVisaApplicationResponse = zod.object({
   "agreedToTerms": zod.boolean(),
   "status": zod.enum(['received', 'under_review', 'awaiting_documents', 'documents_uploaded', 'sent_to_embassy', 'processing', 'issued', 'completed', 'rejected', 'cancelled']),
   "adminNotes": zod.string().nullish(),
+  "issuedVisaUrl": zod.string().nullish(),
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
@@ -1676,12 +1672,18 @@ export const RegisterUserResponse = zod.object({
   "passportIssueDate": zod.string().nullish(),
   "passportExpiryDate": zod.string().nullish(),
   "passportImageUrl": zod.string().nullish(),
-  "isGccResident": zod.boolean().optional(),
+  "isGccResident": zod.boolean(),
   "gccResidenceCountry": zod.string().nullish(),
   "gccResidenceNumber": zod.string().nullish(),
   "gccResidenceExpiry": zod.string().nullish(),
   "gccResidenceFrontUrl": zod.string().nullish(),
-  "gccResidenceBackUrl": zod.string().nullish()
+  "gccResidenceBackUrl": zod.string().nullish(),
+  "isEuropeanResident": zod.boolean(),
+  "europeanDocumentType": zod.string().nullish(),
+  "europeanDocumentUrl": zod.string().nullish(),
+  "europeanDocumentExpiry": zod.string().nullish(),
+  "profileCompletedAt": zod.string().nullish(),
+  "isProfileComplete": zod.boolean().optional()
 }),
   "accessToken": zod.string(),
   "refreshToken": zod.string()
@@ -1723,12 +1725,18 @@ export const LoginUserResponse = zod.object({
   "passportIssueDate": zod.string().nullish(),
   "passportExpiryDate": zod.string().nullish(),
   "passportImageUrl": zod.string().nullish(),
-  "isGccResident": zod.boolean().optional(),
+  "isGccResident": zod.boolean(),
   "gccResidenceCountry": zod.string().nullish(),
   "gccResidenceNumber": zod.string().nullish(),
   "gccResidenceExpiry": zod.string().nullish(),
   "gccResidenceFrontUrl": zod.string().nullish(),
-  "gccResidenceBackUrl": zod.string().nullish()
+  "gccResidenceBackUrl": zod.string().nullish(),
+  "isEuropeanResident": zod.boolean(),
+  "europeanDocumentType": zod.string().nullish(),
+  "europeanDocumentUrl": zod.string().nullish(),
+  "europeanDocumentExpiry": zod.string().nullish(),
+  "profileCompletedAt": zod.string().nullish(),
+  "isProfileComplete": zod.boolean().optional()
 }),
   "accessToken": zod.string(),
   "refreshToken": zod.string()
@@ -1786,12 +1794,18 @@ export const GetCurrentUserResponse = zod.object({
   "passportIssueDate": zod.string().nullish(),
   "passportExpiryDate": zod.string().nullish(),
   "passportImageUrl": zod.string().nullish(),
-  "isGccResident": zod.boolean().optional(),
+  "isGccResident": zod.boolean(),
   "gccResidenceCountry": zod.string().nullish(),
   "gccResidenceNumber": zod.string().nullish(),
   "gccResidenceExpiry": zod.string().nullish(),
   "gccResidenceFrontUrl": zod.string().nullish(),
-  "gccResidenceBackUrl": zod.string().nullish()
+  "gccResidenceBackUrl": zod.string().nullish(),
+  "isEuropeanResident": zod.boolean(),
+  "europeanDocumentType": zod.string().nullish(),
+  "europeanDocumentUrl": zod.string().nullish(),
+  "europeanDocumentExpiry": zod.string().nullish(),
+  "profileCompletedAt": zod.string().nullish(),
+  "isProfileComplete": zod.boolean().optional()
 })
 
 
@@ -1819,7 +1833,11 @@ export const UpdateProfileBody = zod.object({
   "gccResidenceNumber": zod.string().optional(),
   "gccResidenceExpiry": zod.coerce.date().optional(),
   "gccResidenceFrontUrl": zod.string().optional(),
-  "gccResidenceBackUrl": zod.string().optional()
+  "gccResidenceBackUrl": zod.string().optional(),
+  "isEuropeanResident": zod.boolean().optional(),
+  "europeanDocumentType": zod.string().optional(),
+  "europeanDocumentUrl": zod.string().optional(),
+  "europeanDocumentExpiry": zod.coerce.date().optional()
 })
 
 export const UpdateProfileResponse = zod.object({
@@ -1847,12 +1865,18 @@ export const UpdateProfileResponse = zod.object({
   "passportIssueDate": zod.string().nullish(),
   "passportExpiryDate": zod.string().nullish(),
   "passportImageUrl": zod.string().nullish(),
-  "isGccResident": zod.boolean().optional(),
+  "isGccResident": zod.boolean(),
   "gccResidenceCountry": zod.string().nullish(),
   "gccResidenceNumber": zod.string().nullish(),
   "gccResidenceExpiry": zod.string().nullish(),
   "gccResidenceFrontUrl": zod.string().nullish(),
-  "gccResidenceBackUrl": zod.string().nullish()
+  "gccResidenceBackUrl": zod.string().nullish(),
+  "isEuropeanResident": zod.boolean(),
+  "europeanDocumentType": zod.string().nullish(),
+  "europeanDocumentUrl": zod.string().nullish(),
+  "europeanDocumentExpiry": zod.string().nullish(),
+  "profileCompletedAt": zod.string().nullish(),
+  "isProfileComplete": zod.boolean().optional()
 })
 
 

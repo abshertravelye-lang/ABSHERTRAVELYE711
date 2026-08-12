@@ -174,6 +174,7 @@ export const visaApplicationSubmissionsTable = pgTable("visa_application_submiss
   agreedToTerms: boolean("agreed_to_terms").notNull().default(false),
   status: visaApplicationSubmissionStatusEnum("status").notNull().default("received"),
   adminNotes: text("admin_notes"),
+  issuedVisaUrl: text("issued_visa_url"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -185,5 +186,6 @@ export type InsertVisaApplicationSubmission = typeof visaApplicationSubmissionsT
 export type UpdateVisaApplicationSubmission = {
   status?: "received" | "under_review" | "awaiting_documents" | "documents_uploaded" | "sent_to_embassy" | "processing" | "issued" | "completed" | "rejected" | "cancelled";
   adminNotes?: string;
+  issuedVisaUrl?: string;
 };
 export type VisaApplicationSubmission = typeof visaApplicationSubmissionsTable.$inferSelect;

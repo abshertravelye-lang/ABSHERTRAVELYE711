@@ -1688,6 +1688,7 @@ components:
         countryEn: { type: string }
         fullName: { type: string }
         adminNotes: { type: ["string", "null"] }
+        issuedVisaUrl: { type: ["string", "null"] }
         createdAt: { type: string }
         updatedAt: { type: string }
 
@@ -1883,6 +1884,7 @@ components:
           type: string
           enum: [received, under_review, awaiting_documents, documents_uploaded, sent_to_embassy, processing, issued, completed, rejected, cancelled]
         adminNotes: { type: ["string", "null"] }
+        issuedVisaUrl: { type: ["string", "null"] }
         createdAt: { type: string }
         updatedAt: { type: string }
 
@@ -1929,6 +1931,7 @@ components:
           type: string
           enum: [received, under_review, awaiting_documents, documents_uploaded, sent_to_embassy, processing, issued, completed, rejected, cancelled]
         adminNotes: { type: string }
+        issuedVisaUrl: { type: string }
 
     Booking:
       type: object

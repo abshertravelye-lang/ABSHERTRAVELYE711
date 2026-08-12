@@ -19,7 +19,7 @@ function useAllUsers() {
   return useQuery<UserRecord[]>({
     queryKey: ["employees", "all"],
     queryFn: async () => {
-      const token = localStorage.getItem("absher_access_token");
+      const token = localStorage.getItem("absher_admin_access_token");
       const res = await fetch("/api/employees?all=true", {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });

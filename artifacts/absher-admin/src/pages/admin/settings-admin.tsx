@@ -1,11 +1,19 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "@/hooks/use-translation";
-import { Save, Settings2, Globe, BellRing, Database, CreditCard, Shield } from "lucide-react";
+import { customFetch } from "@workspace/api-client-react";
+import { Save, Settings2, Globe, BellRing, Database, CreditCard, Shield, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+
+interface AppLinks {
+  android_app_url: string;
+  ios_app_url: string;
+  app_landing_url: string;
+  support_url: string;
+}
 
 export default function SettingsAdmin() {
   const { language } = useTranslation();
@@ -25,6 +33,15 @@ export default function SettingsAdmin() {
 
   const [isSaving, setIsSaving] = useState(false);
 
+  const [appLinks, setAppLinks] = useState<AppLinks>({
+    android_app_url: "",
+    ios_app_url: "",
+    app_landing_url: "",
+    support_url: "",
+  });
+  const [linksLoading, setLinksLoading] = useState(true);
+  const [linksSaving, setLinksSaving] = useState(false);
+
   useEffect(() => {
     try {
       const saved = localStorage.getItem("absher_admin_settings");
@@ -33,6 +50,50 @@ export default function SettingsAdmin() {
       }
     } catch {}
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await customFetch<Partial<AppLinks>>(`/api/settings/app-links`, { method: "GET" });
+        if (!cancelled) {
+          setAppLinks({
+            android_app_url: data?.android_app_url ?? "",
+            ios_app_url: data?.ios_app_url ?? "",
+            app_landing_url: data?.app_landing_url ?? "",
+            support_url: data?.support_url ?? "",
+          });
+        }
+      } catch {
+        /* keep defaults */
+      } finally {
+        if (!cancelled) setLinksLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleSaveLinks = async () => {
+    setLinksSaving(true);
+    try {
+      await customFetch(`/api/settings/app-links`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(appLinks),
+      });
+      toast.success(ar ? "تم حفظ روابط التطبيق بنجاح" : "App links saved successfully");
+    } catch {
+      toast.error(ar ? "حدث خطأ أثناء الحفظ" : "Error saving links");
+    } finally {
+      setLinksSaving(false);
+    }
+  };
+
+  const updateLink = (key: keyof AppLinks, value: string) => {
+    setAppLinks(prev => ({ ...prev, [key]: value }));
+  };
 
   const handleSave = () => {
     setIsSaving(true);
@@ -175,6 +236,62 @@ export default function SettingsAdmin() {
                 <Switch 
                   checked={settings.smsNotifications}
                   onCheckedChange={v => updateSetting('smsNotifications', v)}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Application & Download Links */}
+          <div className="bg-card rounded-3xl border border-card-border p-6 shadow-sm">
+            <div className="flex items-center justify-between gap-3 mb-6">
+              <div className="flex items-center gap-3">
+                <Smartphone className="w-5 h-5 text-primary" />
+                <h2 className="text-lg font-bold">{ar ? "روابط التطبيق والتنزيل" : "Application & Download Links"}</h2>
+              </div>
+              <Button onClick={handleSaveLinks} disabled={linksLoading || linksSaving} className="rounded-xl">
+                <Save className="w-4 h-4 me-2" />
+                {linksSaving ? (ar ? "جاري الحفظ..." : "Saving...") : (ar ? "حفظ الروابط" : "Save Links")}
+              </Button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="space-y-2">
+                <Label>Google Play</Label>
+                <Input
+                  value={appLinks.android_app_url}
+                  onChange={e => updateLink('android_app_url', e.target.value)}
+                  placeholder="https://play.google.com/..."
+                  className="rounded-xl text-left" dir="ltr"
+                  disabled={linksLoading}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>App Store</Label>
+                <Input
+                  value={appLinks.ios_app_url}
+                  onChange={e => updateLink('ios_app_url', e.target.value)}
+                  placeholder="https://apps.apple.com/..."
+                  className="rounded-xl text-left" dir="ltr"
+                  disabled={linksLoading}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{ar ? "صفحة التطبيق" : "App Landing Page"}</Label>
+                <Input
+                  value={appLinks.app_landing_url}
+                  onChange={e => updateLink('app_landing_url', e.target.value)}
+                  placeholder="https://absher.travel/app"
+                  className="rounded-xl text-left" dir="ltr"
+                  disabled={linksLoading}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{ar ? "رابط الدعم" : "Support URL"}</Label>
+                <Input
+                  value={appLinks.support_url}
+                  onChange={e => updateLink('support_url', e.target.value)}
+                  placeholder="https://absher.travel/support"
+                  className="rounded-xl text-left" dir="ltr"
+                  disabled={linksLoading}
                 />
               </div>
             </div>

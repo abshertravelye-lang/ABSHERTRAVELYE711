@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Globe, Menu, X, Phone, MapPin, User, LogOut } from "lucide-react";
 import logo from "@assets/absher-business-logo.png";
 import { useState } from "react";
+import { AppDownloadLinks } from "@/components/app-download-links";
 
 function AccountNavButton({ language }: { language: string }) {
   const { isAuthenticated, user, logout } = useAuth();
@@ -164,6 +165,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <p className="text-sm text-slate-300">
               {t("heroSub")}
             </p>
+            <AppDownloadLinks variant="footer" />
           </div>
           <div>
             <h3 className="font-bold text-lg mb-4 text-accent">{t("about")}</h3>

@@ -1,11 +1,12 @@
-import { Switch, Route, Link, useLocation } from "wouter";
+import { Switch, Route, Link, Redirect, useLocation } from "wouter";
 import { useTranslation } from "@/hooks/use-translation";
+import { useAdminAuth } from "@/hooks/use-admin-auth";
 import {
   LayoutDashboard, Ticket, Map, MessageSquare, Briefcase, FileText,
   Users, Globe, Wrench, Building2, Languages, Flag,
-  UserCog, CreditCard, BarChart3, Bell, Settings
+  UserCog, CreditCard, BarChart3, Bell, Settings, ScrollText, LogOut, ShieldAlert
 } from "lucide-react";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type ComponentType } from "react";
 import DashboardOverview from "./dashboard-overview";
 
 const ProgramsAdmin = lazy(() => import("./programs-admin"));
@@ -22,6 +23,7 @@ const PaymentsAdmin = lazy(() => import("./payments-admin"));
 const ReportsAdmin = lazy(() => import("./reports-admin"));
 const NotificationsAdmin = lazy(() => import("./notifications-admin"));
 const SettingsAdmin = lazy(() => import("./settings-admin"));
+const AuditLogsAdmin = lazy(() => import("./audit-logs"));
 
 function LoadingSpinner() {
   return (
@@ -37,8 +39,24 @@ function navHref(path: string) {
   return `${BASE}${path}`;
 }
 
+/** Arabic "not authorized" screen shown when a section is accessed without permission. */
+function Unauthorized({ ar }: { ar: boolean }) {
+  return (
+    <div className="bg-card rounded-3xl shadow-sm border border-card-border p-20 text-center flex flex-col items-center justify-center min-h-[60vh]">
+      <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mb-6">
+        <ShieldAlert className="w-10 h-10 text-muted-foreground" />
+      </div>
+      <h3 className="text-2xl font-bold text-foreground mb-2">{ar ? "غير مصرح" : "Not Authorized"}</h3>
+      <p className="text-base text-muted-foreground max-w-sm">
+        {ar ? "ليس لديك صلاحية الوصول إلى هذا القسم." : "You do not have permission to access this section."}
+      </p>
+    </div>
+  );
+}
+
 export default function AdminLayout() {
   const { language, setLanguage } = useTranslation();
+  const { user, logout, hasPermission } = useAdminAuth();
   const [rawLocation] = useLocation();
   const ar = language === "ar";
 
@@ -47,27 +65,61 @@ export default function AdminLayout() {
      route pattern "/admin/..." still needs normalisation. */
   const location = rawLocation;
 
-  const navItems = [
-    { href: "/",                         icon: LayoutDashboard, labelAr: "نظرة عامة",        labelEn: "Overview" },
-    { href: "/admin/bookings",           icon: Ticket,          labelAr: "الحجوزات",          labelEn: "Bookings" },
-    { href: "/admin/payments",           icon: CreditCard,      labelAr: "المدفوعات",         labelEn: "Payments" },
-    { href: "/admin/reports",            icon: BarChart3,       labelAr: "التقارير",          labelEn: "Reports" },
-    { href: "/admin/visa-applications",  icon: FileText,        labelAr: "طلبات التأشيرة",    labelEn: "Visa Applications" },
-    { href: "/admin/visa-countries",     icon: Flag,            labelAr: "دول التأشيرة",      labelEn: "Visa Countries" },
-    { href: "/admin/visas",              icon: Globe,           labelAr: "أنواع التأشيرات",   labelEn: "Visa Types" },
-    { href: "/admin/programs",           icon: Map,             labelAr: "البرامج السياحية",  labelEn: "Programs" },
-    { href: "/admin/offers",             icon: Briefcase,       labelAr: "العروض",            labelEn: "Offers" },
-    { href: "/admin/destinations",       icon: Building2,       labelAr: "الوجهات",           labelEn: "Destinations" },
-    { href: "/admin/customers",          icon: Users,           labelAr: "العملاء",           labelEn: "Customers" },
-    { href: "/admin/employees",          icon: UserCog,         labelAr: "الموظفون",         labelEn: "Employees" },
-    { href: "/admin/messages",           icon: MessageSquare,   labelAr: "الرسائل",           labelEn: "Messages" },
-    { href: "/admin/notifications",      icon: Bell,            labelAr: "الإشعارات",         labelEn: "Notifications" },
-    { href: "/admin/settings",           icon: Settings,        labelAr: "الإعدادات",         labelEn: "Settings" },
+  const isSuperAdmin = user?.role === "super_admin";
+
+  /* Each nav item maps to a backend permission key. `perm: null` means the
+     item is always visible to authenticated staff (no specific permission). */
+  const allNavItems: Array<{
+    href: string;
+    icon: ComponentType<{ className?: string }>;
+    labelAr: string;
+    labelEn: string;
+    perm: string | null;
+    show?: boolean;
+  }> = [
+    { href: "/",                         icon: LayoutDashboard, labelAr: "نظرة عامة",        labelEn: "Overview",           perm: "overview" },
+    { href: "/admin/bookings",           icon: Ticket,          labelAr: "الحجوزات",          labelEn: "Bookings",           perm: "bookings" },
+    { href: "/admin/payments",           icon: CreditCard,      labelAr: "المدفوعات",         labelEn: "Payments",           perm: "payments" },
+    { href: "/admin/reports",            icon: BarChart3,       labelAr: "التقارير",          labelEn: "Reports",            perm: "reports" },
+    { href: "/admin/visa-applications",  icon: FileText,        labelAr: "طلبات التأشيرة",    labelEn: "Visa Applications",  perm: "visa_applications" },
+    { href: "/admin/visa-countries",     icon: Flag,            labelAr: "دول التأشيرة",      labelEn: "Visa Countries",     perm: "visa_config" },
+    { href: "/admin/visas",              icon: Globe,           labelAr: "أنواع التأشيرات",   labelEn: "Visa Types",         perm: "visa_config" },
+    { href: "/admin/programs",           icon: Map,             labelAr: "البرامج السياحية",  labelEn: "Programs",           perm: "visa_config" },
+    { href: "/admin/offers",             icon: Briefcase,       labelAr: "العروض",            labelEn: "Offers",             perm: "visa_config" },
+    { href: "/admin/destinations",       icon: Building2,       labelAr: "الوجهات",           labelEn: "Destinations",       perm: "visa_config" },
+    { href: "/admin/customers",          icon: Users,           labelAr: "العملاء",           labelEn: "Customers",          perm: "customers" },
+    { href: "/admin/employees",          icon: UserCog,         labelAr: "الموظفون",         labelEn: "Employees",          perm: "employees", show: isSuperAdmin || hasPermission("employees") },
+    { href: "/admin/messages",           icon: MessageSquare,   labelAr: "الرسائل",           labelEn: "Messages",           perm: "messages" },
+    { href: "/admin/notifications",      icon: Bell,            labelAr: "الإشعارات",         labelEn: "Notifications",      perm: "notifications" },
+    { href: "/admin/settings",           icon: Settings,        labelAr: "الإعدادات",         labelEn: "Settings",           perm: "settings" },
+    { href: "/admin/audit-logs",         icon: ScrollText,      labelAr: "سجل النشاط",        labelEn: "Audit Log",          perm: "audit_logs" },
   ];
 
-  const currentItem = navItems.find(i =>
+  const navItems = allNavItems.filter((item) => {
+    if (typeof item.show === "boolean") return item.show;
+    return item.perm ? hasPermission(item.perm) : true;
+  });
+
+  const currentItem = allNavItems.find(i =>
     i.href === "/" ? location === "/" || location === "" : location.startsWith(i.href)
   );
+
+  const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(" ").trim()
+    || user?.email || (ar ? "مستخدم" : "User");
+  const roleLabels: Record<string, { ar: string; en: string }> = {
+    agent: { ar: "وكيل", en: "Agent" },
+    admin: { ar: "مدير", en: "Admin" },
+    super_admin: { ar: "مدير عام", en: "Super Admin" },
+    customer: { ar: "عميل", en: "Customer" },
+  };
+  const roleLabel = user ? (ar ? roleLabels[user.role]?.ar : roleLabels[user.role]?.en) ?? user.role : "";
+  const initial = (user?.firstName?.[0] ?? user?.email?.[0] ?? "A").toUpperCase();
+
+  /** Wrap a section so it renders the Unauthorized screen without the permission. */
+  const guard = (perm: string | null, Comp: ComponentType) => {
+    if (perm && !hasPermission(perm)) return () => <Unauthorized ar={ar} />;
+    return Comp;
+  };
 
   return (
     <div className="flex h-screen bg-background overflow-hidden font-sans" dir={ar ? "rtl" : "ltr"}>
@@ -131,12 +183,20 @@ export default function AdminLayout() {
             {currentItem ? (ar ? currentItem.labelAr : currentItem.labelEn) : (ar ? "لوحة الإدارة" : "Admin Panel")}
           </h2>
           <div className="flex items-center gap-4">
-            <div className="text-sm text-muted-foreground font-medium hidden md:block">
-              {ar ? "مرحباً، مدير النظام" : "Welcome, Admin"}
+            <div className="text-sm font-medium hidden md:block text-end leading-tight">
+              <div className="text-foreground font-bold">{displayName}</div>
+              <div className="text-xs text-muted-foreground">{roleLabel}</div>
             </div>
             <div className="w-10 h-10 rounded-full bg-primary text-accent flex items-center justify-center font-bold text-lg shadow-sm border border-primary/10">
-              A
+              {initial}
             </div>
+            <button
+              onClick={logout}
+              title={ar ? "تسجيل الخروج" : "Logout"}
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
           </div>
         </header>
 
@@ -144,21 +204,25 @@ export default function AdminLayout() {
         <div className="flex-1 overflow-y-auto p-8">
           <Suspense fallback={<LoadingSpinner />}>
             <Switch>
-              <Route path="/" component={DashboardOverview} />
-              <Route path="/admin/bookings" component={BookingsAdmin} />
-              <Route path="/admin/payments" component={PaymentsAdmin} />
-              <Route path="/admin/reports" component={ReportsAdmin} />
-              <Route path="/admin/visa-applications" component={VisaApplicationsAdmin} />
-              <Route path="/admin/visa-countries" component={VisaCountriesAdmin} />
-              <Route path="/admin/visas" component={VisasAdmin} />
-              <Route path="/admin/programs" component={ProgramsAdmin} />
-              <Route path="/admin/offers" component={OffersAdmin} />
-              <Route path="/admin/destinations" component={DestinationsAdmin} />
-              <Route path="/admin/customers" component={CustomersAdmin} />
-              <Route path="/admin/employees" component={EmployeesAdmin} />
-              <Route path="/admin/messages" component={MessagesAdmin} />
-              <Route path="/admin/notifications" component={NotificationsAdmin} />
-              <Route path="/admin/settings" component={SettingsAdmin} />
+              <Route path="/" component={hasPermission("overview") ? guard("overview", DashboardOverview) : () => {
+                const first = navItems.find((i) => i.href !== "/");
+                return first ? <Redirect to={first.href} /> : <Unauthorized ar={ar} />;
+              }} />
+              <Route path="/admin/bookings" component={guard("bookings", BookingsAdmin)} />
+              <Route path="/admin/payments" component={guard("payments", PaymentsAdmin)} />
+              <Route path="/admin/reports" component={guard("reports", ReportsAdmin)} />
+              <Route path="/admin/visa-applications" component={guard("visa_applications", VisaApplicationsAdmin)} />
+              <Route path="/admin/visa-countries" component={guard("visa_config", VisaCountriesAdmin)} />
+              <Route path="/admin/visas" component={guard("visa_config", VisasAdmin)} />
+              <Route path="/admin/programs" component={guard("visa_config", ProgramsAdmin)} />
+              <Route path="/admin/offers" component={guard("visa_config", OffersAdmin)} />
+              <Route path="/admin/destinations" component={guard("visa_config", DestinationsAdmin)} />
+              <Route path="/admin/customers" component={guard("customers", CustomersAdmin)} />
+              <Route path="/admin/employees" component={guard("employees", EmployeesAdmin)} />
+              <Route path="/admin/messages" component={guard("messages", MessagesAdmin)} />
+              <Route path="/admin/notifications" component={guard("notifications", NotificationsAdmin)} />
+              <Route path="/admin/settings" component={guard("settings", SettingsAdmin)} />
+              <Route path="/admin/audit-logs" component={guard("audit_logs", AuditLogsAdmin)} />
               <Route path="/admin/:rest*">
                 <div className="bg-card rounded-3xl shadow-sm border border-card-border p-20 text-center flex flex-col items-center justify-center min-h-[60vh]">
                   <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mb-6">

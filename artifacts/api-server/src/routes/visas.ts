@@ -1,4 +1,6 @@
 import { Router } from "express";
+import { requireAuth, requirePermission } from "../middleware/auth";
+import { logAudit } from "../lib/audit";
 import { db } from "@workspace/db";
 import { visasTable, notificationsTable, usersTable } from "@workspace/db";
 import { eq, and, isNull } from "drizzle-orm";
@@ -95,7 +97,7 @@ function canonicalizeCountryLists(data: Record<string, unknown>) {
   }
 }
 
-router.post("/visas", async (req, res) => {
+router.post("/visas", requireAuth, requirePermission("visa_config"), async (req, res) => {
   try {
     const body = CreateVisaBody.parse(req.body);
     const data: Record<string, unknown> = { ...body };
@@ -136,7 +138,7 @@ router.get("/visas/:id", async (req, res) => {
   }
 });
 
-router.patch("/visas/:id", async (req, res) => {
+router.patch("/visas/:id", requireAuth, requirePermission("visa_config"), async (req, res) => {
   try {
     const { id } = UpdateVisaParams.parse({ id: Number(req.params.id) });
     const body = UpdateVisaBody.parse(req.body);
@@ -156,7 +158,7 @@ router.patch("/visas/:id", async (req, res) => {
   }
 });
 
-router.delete("/visas/:id", async (req, res) => {
+router.delete("/visas/:id", requireAuth, requirePermission("visa_config"), async (req, res) => {
   try {
     const { id } = DeleteVisaParams.parse({ id: Number(req.params.id) });
     await db

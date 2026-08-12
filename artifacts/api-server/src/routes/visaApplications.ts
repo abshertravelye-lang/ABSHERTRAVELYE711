@@ -8,7 +8,8 @@ import {
   UpdateVisaApplicationParams,
   UpdateVisaApplicationBody,
 } from "@workspace/api-zod";
-import { requireAuth, requireRole, optionalAuth } from "../middleware/auth";
+import { requireAuth, requireRole, optionalAuth, requirePermission, hasStaffPermission } from "../middleware/auth";
+import { logAudit } from "../lib/audit";
 import { isSameCountry } from "@workspace/countries";
 import { isProfileComplete } from "./auth";
 import OpenAI from "openai";
@@ -458,8 +459,15 @@ router.get("/visa-applications", requireAuth, async (req, res) => {
     const conditions = [];
     if (query.visaId) conditions.push(eq(visaApplicationSubmissionsTable.visaId, query.visaId));
     if (query.status) conditions.push(eq(visaApplicationSubmissionsTable.status, query.status as any));
-    const isStaff = ["agent", "admin", "super_admin"].includes(req.user!.role);
-    if (!isStaff) conditions.push(eq(visaApplicationSubmissionsTable.userId, req.user!.sub));
+    // Admins/super_admins see all; agents see all ONLY with the visa_applications
+    // permission; everyone else sees only their own applications.
+    let seesAll = ["admin", "super_admin"].includes(req.user!.role);
+    if (!seesAll && req.user!.role === "agent") {
+      const [staff] = await db.select({ permissions: usersTable.permissions, isActive: usersTable.isActive })
+        .from(usersTable).where(eq(usersTable.id, req.user!.sub));
+      seesAll = !!staff?.isActive && Array.isArray(staff.permissions) && staff.permissions.includes("visa_applications");
+    }
+    if (!seesAll) conditions.push(eq(visaApplicationSubmissionsTable.userId, req.user!.sub));
     const rows = await db
       .select()
       .from(visaApplicationSubmissionsTable)
@@ -587,8 +595,10 @@ router.get("/visa-applications/:id", requireAuth, async (req, res) => {
     const { id } = GetVisaApplicationParams.parse({ id: Number(req.params.id) });
     const [row] = await db.select().from(visaApplicationSubmissionsTable).where(eq(visaApplicationSubmissionsTable.id, id));
     if (!row) return res.status(404).json({ error: "Not found" });
-    const isStaff = ["agent", "admin", "super_admin"].includes(req.user!.role);
-    if (!isStaff && row.userId !== req.user!.sub) return res.status(403).json({ error: "Forbidden" });
+    // Owner, or staff with the visa_applications permission (DB-checked).
+    if (row.userId !== req.user!.sub && !(await hasStaffPermission(req.user!.sub, "visa_applications"))) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
     res.json(toResponse(row));
   } catch (e) {
     req.log.error(e);
@@ -597,7 +607,7 @@ router.get("/visa-applications/:id", requireAuth, async (req, res) => {
 });
 
 // ── Update application status (staff only) ─────────────────────────────────
-router.patch("/visa-applications/:id", requireAuth, requireRole("agent", "admin", "super_admin"), async (req, res) => {
+router.patch("/visa-applications/:id", requireAuth, requirePermission("visa_applications"), async (req, res) => {
   try {
     const { id } = UpdateVisaApplicationParams.parse({ id: Number(req.params.id) });
     const body = UpdateVisaApplicationBody.parse(req.body);
@@ -620,6 +630,9 @@ router.patch("/visa-applications/:id", requireAuth, requireRole("agent", "admin"
       }
     }
 
+    if (body.status) {
+      logAudit(req, "visa_application.status_changed", { entityType: "visa_application", newValue: { id: row.id, status: body.status } });
+    }
     res.json(toResponse(row));
   } catch (e) {
     req.log.error(e);

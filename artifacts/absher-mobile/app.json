@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "ابشراعمال للسفريات والسياحة ABSHER",
-    "slug": "absher",
+    "name": "ABSHER TRAVEL",
+    "slug": "abshertravel",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "absher",
+    "scheme": "abshertravel",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -15,10 +15,10 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.absher.app"
+      "bundleIdentifier": "com.abshertravel.app"
     },
     "android": {
-      "package": "com.absher.app"
+      "package": "com.abshertravel.app"
     },
     "web": {
       "favicon": "./assets/images/favicon.png"

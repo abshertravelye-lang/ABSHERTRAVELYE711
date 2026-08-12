@@ -9,7 +9,7 @@ import {
   UpdateBookingParams,
   UpdateBookingBody,
 } from "@workspace/api-zod";
-import { requireAuth, optionalAuth } from "../middleware/auth";
+import { requireAuth, optionalAuth, requirePermission, hasStaffPermission } from "../middleware/auth";
 
 const router = Router();
 
@@ -34,7 +34,7 @@ router.get("/bookings/my", requireAuth, async (req, res) => {
   }
 });
 
-router.get("/bookings", async (req, res) => {
+router.get("/bookings", requireAuth, requirePermission("bookings"), async (req, res) => {
   try {
     const query = ListBookingsQueryParams.parse(req.query);
     let rows = await db.select().from(bookingsTable).orderBy(bookingsTable.createdAt);
@@ -60,11 +60,15 @@ router.post("/bookings", optionalAuth, async (req, res) => {
   }
 });
 
-router.get("/bookings/:id", async (req, res) => {
+router.get("/bookings/:id", requireAuth, async (req, res) => {
   try {
     const { id } = GetBookingParams.parse({ id: Number(req.params.id) });
     const [row] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id));
     if (!row) return res.status(404).json({ error: "Not found" });
+    // Owner or staff with the bookings permission only.
+    if (row.userId !== req.user!.sub && !(await hasStaffPermission(req.user!.sub, "bookings"))) {
+      return res.status(403).json({ error: "Insufficient permissions" });
+    }
     res.json(formatBooking(row));
   } catch (e) {
     req.log.error(e);
@@ -72,7 +76,7 @@ router.get("/bookings/:id", async (req, res) => {
   }
 });
 
-router.patch("/bookings/:id", async (req, res) => {
+router.patch("/bookings/:id", requireAuth, requirePermission("bookings"), async (req, res) => {
   try {
     const { id } = UpdateBookingParams.parse({ id: Number(req.params.id) });
     const body = UpdateBookingBody.parse(req.body);

@@ -29,6 +29,7 @@ import Login from "@/pages/login";
 import Register from "@/pages/register";
 import Account from "@/pages/account";
 import Admin from "@/pages/admin";
+import Umrah from "@/pages/umrah";
 
 const queryClient = new QueryClient();
 
@@ -49,6 +50,8 @@ function Router() {
       <Route path="/visas/:countryId" component={VisaCountryDetail} />
       <Route path="/visas/:countryId/:visaId" component={VisaDetail} />
       
+      <Route path="/umrah" component={Umrah} />
+
       <Route path="/about" component={About} />
       <Route path="/contact" component={Contact} />
       <Route path="/flights" component={Flights} />

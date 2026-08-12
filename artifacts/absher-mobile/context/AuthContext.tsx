@@ -3,6 +3,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef, useSt
 import { setAuthTokenGetter, setAuthRefreshHandler } from '@workspace/api-client-react';
 import type { SafeUser } from '@workspace/api-client-react';
 import { setImageAuthToken } from '../hooks/useImageUrl';
+import { registerForPush, unregisterPush } from '../lib/pushNotifications';
 
 type AuthState = {
   user: SafeUser | null;
@@ -83,6 +84,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const { user, accessToken } = JSON.parse(raw);
           tokenRef.current = accessToken;
           setState({ user, accessToken, isLoading: false });
+          // Register this device for push after restoring an existing session.
+          if (accessToken) void registerForPush();
         } catch {
           setState((s) => ({ ...s, isLoading: false }));
         }
@@ -96,6 +99,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     tokenRef.current = auth.accessToken;
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(auth));
     setState({ user: auth.user, accessToken: auth.accessToken, isLoading: false });
+    // Register this device for push after a successful login.
+    void registerForPush();
   }, []);
 
   const updateUser = useCallback(async (user: SafeUser) => {
@@ -112,6 +117,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    // Remove this device's push token BEFORE clearing local tokens (the DELETE
+    // needs a valid bearer token). Fails silently.
+    await unregisterPush();
     // Revoke the session on the server (best-effort) before clearing local
     // tokens. The endpoint requires auth + accepts the refresh token to revoke
     // the matching session row (see api-server/src/routes/auth.ts POST /auth/logout).

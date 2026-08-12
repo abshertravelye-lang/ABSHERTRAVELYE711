@@ -3,8 +3,7 @@ import { useTranslation } from "@/hooks/use-translation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Plane, Building, FileText, Map, Star, Car, Shield, MapPin, Briefcase, Users, ArrowRight, ArrowLeft, Calendar, HelpCircle, Home as HomeIcon } from "lucide-react";
+import { Plane, Building, FileText, Map, Star, ArrowRight, ArrowLeft, Calendar } from "lucide-react";
 import { useListOffers, useListDestinations } from "@workspace/api-client-react";
 import { Link, useLocation } from "wouter";
 import { AirportSearch } from "@/components/airport-search";
@@ -44,15 +43,12 @@ export default function Home() {
 
   const ar = language === "ar";
 
-  // Umrah host-eligibility flow state
-  const [umrahStep, setUmrahStep] = useState<null | "ask" | "reject">(null);
-
   const handleHeroSearch = () => {
     navigate("/flights");
   };
 
   // Primary services — each links to a REAL page in the system.
-  // Umrah opens the host-eligibility dialog first (handled via onClick).
+  // Umrah is a dedicated standalone service at /umrah.
   const services = [
     {
       icon: Plane,
@@ -90,8 +86,7 @@ export default function Home() {
     {
       icon: Star,
       emoji: "🕋",
-      href: null,
-      onClick: () => setUmrahStep("ask"),
+      href: "/umrah",
       titleAr: "تأشيرة العمرة",
       titleEn: "Umrah Visa",
       descAr: "تقديم طلب تأشيرة العمرة",
@@ -224,95 +219,15 @@ export default function Home() {
                 </div>
               );
 
-              if (service.href) {
-                return (
-                  <Link key={index} href={service.href} className="group block h-full" data-testid={`link-service-${index}`}>
-                    {cardInner}
-                  </Link>
-                );
-              }
               return (
-                <button
-                  key={index}
-                  type="button"
-                  onClick={service.onClick}
-                  className="group block h-full w-full text-start"
-                  data-testid="button-service-umrah"
-                >
+                <Link key={index} href={service.href} className="group block h-full" data-testid={`link-service-${index}`}>
                   {cardInner}
-                </button>
+                </Link>
               );
             })}
           </div>
         </div>
       </section>
-
-      {/* Umrah — host eligibility flow */}
-      <Dialog open={umrahStep === "ask"} onOpenChange={(o) => { if (!o) setUmrahStep(null); }}>
-        <DialogContent className="max-w-md rounded-2xl" dir={ar ? "rtl" : "ltr"}>
-          <DialogHeader className="items-center text-center">
-            <div className="w-16 h-16 rounded-full bg-[#D4AF37]/15 border-2 border-[#D4AF37]/30 flex items-center justify-center mb-3 mx-auto">
-              <HelpCircle className="w-8 h-8 text-[#D4AF37]" />
-            </div>
-            <DialogTitle className="text-xl font-extrabold text-[#052B5B]">
-              {ar ? "تأشيرة العمرة 🕋" : "Umrah Visa 🕋"}
-            </DialogTitle>
-            <DialogDescription className="text-base text-slate-600 pt-1">
-              {ar
-                ? "هل لديك مستضيف في المملكة العربية السعودية؟"
-                : "Do you have a host in the Kingdom of Saudi Arabia?"}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex gap-3 pt-2">
-            <Button
-              onClick={() => { setUmrahStep(null); navigate("/visas?category=umrah"); }}
-              className="flex-1 h-12 bg-[#052B5B] text-white hover:bg-[#052B5B]/90 font-bold rounded-xl"
-              data-testid="button-umrah-yes"
-            >
-              {ar ? "نعم" : "Yes"}
-            </Button>
-            <Button
-              onClick={() => setUmrahStep("reject")}
-              variant="outline"
-              className="flex-1 h-12 border-slate-200 text-slate-700 hover:bg-slate-50 font-bold rounded-xl"
-              data-testid="button-umrah-no"
-            >
-              {ar ? "لا" : "No"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Umrah — rejection (no host) popup */}
-      <Dialog open={umrahStep === "reject"} onOpenChange={(o) => { if (!o) setUmrahStep(null); }}>
-        <DialogContent className="max-w-md rounded-2xl" dir={ar ? "rtl" : "ltr"}>
-          <DialogHeader className="items-center text-center">
-            <div className="w-16 h-16 rounded-full bg-red-50 border-2 border-red-100 flex items-center justify-center mb-3 mx-auto">
-              <span className="text-3xl">🕋</span>
-            </div>
-            <DialogTitle className="text-lg font-extrabold text-[#052B5B]">
-              {ar ? "عذراً" : "Sorry"}
-            </DialogTitle>
-            <DialogDescription className="text-base text-slate-600 pt-1 leading-relaxed">
-              {ar
-                ? "عذراً، لا يمكنك التقديم على تأشيرة العمرة لعدم وجود مستضيف في المملكة العربية السعودية."
-                : "Sorry, you cannot apply for an Umrah visa because you do not have a host in the Kingdom of Saudi Arabia."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="pt-2">
-            <Link href="/">
-              <Button
-                onClick={() => setUmrahStep(null)}
-                className="w-full h-12 bg-[#D4AF37] text-[#052B5B] hover:bg-[#D4AF37]/90 font-bold rounded-xl gap-2"
-                data-testid="button-umrah-back-home"
-              >
-                <HomeIcon className="h-4 w-4" />
-                {ar ? "العودة للرئيسية" : "Back to Home"}
-              </Button>
-            </Link>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Featured Offers */}
       <section className="py-24 bg-white">
@@ -339,7 +254,7 @@ export default function Home() {
                   <div className="h-60 overflow-hidden relative">
                     <img src={offer.imageUrl || 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?q=80&w=1000&auto=format&fit=crop'} alt={language === 'ar' ? offer.titleAr : offer.titleEn} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                     <div className="absolute top-4 right-4 bg-accent text-primary font-bold px-4 py-1.5 rounded-full text-sm shadow-md tabular-nums">
-                      {offer.price} {offer.currency || 'USD'}
+                      {offer.price ?? '—'} {offer.currency || 'USD'}
                     </div>
                   </div>
                   <CardContent className="p-6 flex-1 flex flex-col">

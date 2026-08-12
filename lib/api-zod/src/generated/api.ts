@@ -30,13 +30,20 @@ export const ListOffersResponseItem = zod.object({
   "titleEn": zod.string(),
   "descriptionAr": zod.string(),
   "descriptionEn": zod.string(),
-  "price": zod.number(),
-  "currency": zod.string().optional(),
-  "duration": zod.string(),
   "imageUrl": zod.string(),
+  "discountLabel": zod.string().nullish(),
+  "linkUrl": zod.string().nullish(),
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish(),
+  "isActive": zod.boolean(),
+  "sortOrder": zod.number(),
+  "price": zod.number().nullish(),
+  "currency": zod.string().nullish(),
+  "duration": zod.string().nullish(),
   "destination": zod.string().nullish(),
   "featured": zod.boolean(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
 })
 export const ListOffersResponse = zod.array(ListOffersResponseItem)
 
@@ -49,10 +56,16 @@ export const CreateOfferBody = zod.object({
   "titleEn": zod.string(),
   "descriptionAr": zod.string(),
   "descriptionEn": zod.string(),
-  "price": zod.number(),
-  "currency": zod.string().optional(),
-  "duration": zod.string(),
   "imageUrl": zod.string(),
+  "discountLabel": zod.string().optional(),
+  "linkUrl": zod.string().optional(),
+  "startDate": zod.string().optional(),
+  "endDate": zod.string().optional(),
+  "isActive": zod.boolean().optional(),
+  "sortOrder": zod.number().optional(),
+  "price": zod.number().optional(),
+  "currency": zod.string().optional(),
+  "duration": zod.string().optional(),
   "destination": zod.string().optional(),
   "featured": zod.boolean().optional()
 })
@@ -63,14 +76,48 @@ export const CreateOfferResponse = zod.object({
   "titleEn": zod.string(),
   "descriptionAr": zod.string(),
   "descriptionEn": zod.string(),
-  "price": zod.number(),
-  "currency": zod.string().optional(),
-  "duration": zod.string(),
   "imageUrl": zod.string(),
+  "discountLabel": zod.string().nullish(),
+  "linkUrl": zod.string().nullish(),
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish(),
+  "isActive": zod.boolean(),
+  "sortOrder": zod.number(),
+  "price": zod.number().nullish(),
+  "currency": zod.string().nullish(),
+  "duration": zod.string().nullish(),
   "destination": zod.string().nullish(),
   "featured": zod.boolean(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
 })
+
+
+/**
+ * @summary List all offers (admin, includes inactive)
+ */
+export const ListOffersAdminResponseItem = zod.object({
+  "id": zod.number(),
+  "titleAr": zod.string(),
+  "titleEn": zod.string(),
+  "descriptionAr": zod.string(),
+  "descriptionEn": zod.string(),
+  "imageUrl": zod.string(),
+  "discountLabel": zod.string().nullish(),
+  "linkUrl": zod.string().nullish(),
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish(),
+  "isActive": zod.boolean(),
+  "sortOrder": zod.number(),
+  "price": zod.number().nullish(),
+  "currency": zod.string().nullish(),
+  "duration": zod.string().nullish(),
+  "destination": zod.string().nullish(),
+  "featured": zod.boolean(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListOffersAdminResponse = zod.array(ListOffersAdminResponseItem)
 
 
 /**
@@ -86,13 +133,20 @@ export const GetOfferResponse = zod.object({
   "titleEn": zod.string(),
   "descriptionAr": zod.string(),
   "descriptionEn": zod.string(),
-  "price": zod.number(),
-  "currency": zod.string().optional(),
-  "duration": zod.string(),
   "imageUrl": zod.string(),
+  "discountLabel": zod.string().nullish(),
+  "linkUrl": zod.string().nullish(),
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish(),
+  "isActive": zod.boolean(),
+  "sortOrder": zod.number(),
+  "price": zod.number().nullish(),
+  "currency": zod.string().nullish(),
+  "duration": zod.string().nullish(),
   "destination": zod.string().nullish(),
   "featured": zod.boolean(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
 })
 
 
@@ -108,10 +162,16 @@ export const UpdateOfferBody = zod.object({
   "titleEn": zod.string().optional(),
   "descriptionAr": zod.string().optional(),
   "descriptionEn": zod.string().optional(),
+  "imageUrl": zod.string().optional(),
+  "discountLabel": zod.string().optional(),
+  "linkUrl": zod.string().optional(),
+  "startDate": zod.string().optional(),
+  "endDate": zod.string().optional(),
+  "isActive": zod.boolean().optional(),
+  "sortOrder": zod.number().optional(),
   "price": zod.number().optional(),
   "currency": zod.string().optional(),
   "duration": zod.string().optional(),
-  "imageUrl": zod.string().optional(),
   "destination": zod.string().optional(),
   "featured": zod.boolean().optional()
 })
@@ -122,13 +182,20 @@ export const UpdateOfferResponse = zod.object({
   "titleEn": zod.string(),
   "descriptionAr": zod.string(),
   "descriptionEn": zod.string(),
-  "price": zod.number(),
-  "currency": zod.string().optional(),
-  "duration": zod.string(),
   "imageUrl": zod.string(),
+  "discountLabel": zod.string().nullish(),
+  "linkUrl": zod.string().nullish(),
+  "startDate": zod.string().nullish(),
+  "endDate": zod.string().nullish(),
+  "isActive": zod.boolean(),
+  "sortOrder": zod.number(),
+  "price": zod.number().nullish(),
+  "currency": zod.string().nullish(),
+  "duration": zod.string().nullish(),
   "destination": zod.string().nullish(),
   "featured": zod.boolean(),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
 })
 
 
@@ -2677,6 +2744,7 @@ export const ListNotificationsResponseItem = zod.object({
   "channel": zod.enum(['in_app', 'email', 'whatsapp', 'sms']),
   "relatedEntityType": zod.string().nullish(),
   "relatedEntityId": zod.string().nullish(),
+  "url": zod.string().nullish(),
   "isRead": zod.boolean(),
   "sentBy": zod.string().nullish(),
   "createdAt": zod.string()
@@ -2701,6 +2769,7 @@ export const MarkNotificationReadResponse = zod.object({
   "channel": zod.enum(['in_app', 'email', 'whatsapp', 'sms']),
   "relatedEntityType": zod.string().nullish(),
   "relatedEntityId": zod.string().nullish(),
+  "url": zod.string().nullish(),
   "isRead": zod.boolean(),
   "sentBy": zod.string().nullish(),
   "createdAt": zod.string()
@@ -2746,6 +2815,7 @@ export const ListAdminNotificationHistoryResponseItem = zod.object({
   "channel": zod.enum(['in_app', 'email', 'whatsapp', 'sms']),
   "relatedEntityType": zod.string().nullish(),
   "relatedEntityId": zod.string().nullish(),
+  "url": zod.string().nullish(),
   "isRead": zod.boolean(),
   "sentBy": zod.string().nullish(),
   "createdAt": zod.string()

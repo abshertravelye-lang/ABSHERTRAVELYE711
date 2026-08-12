@@ -30,14 +30,28 @@ export interface Offer {
   titleEn: string;
   descriptionAr: string;
   descriptionEn: string;
-  price: number;
-  currency?: string;
-  duration: string;
   imageUrl: string;
+  /** @nullable */
+  discountLabel?: string | null;
+  /** @nullable */
+  linkUrl?: string | null;
+  /** @nullable */
+  startDate?: string | null;
+  /** @nullable */
+  endDate?: string | null;
+  isActive: boolean;
+  sortOrder: number;
+  /** @nullable */
+  price?: number | null;
+  /** @nullable */
+  currency?: string | null;
+  /** @nullable */
+  duration?: string | null;
   /** @nullable */
   destination?: string | null;
   featured: boolean;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface OfferInput {
@@ -45,10 +59,16 @@ export interface OfferInput {
   titleEn: string;
   descriptionAr: string;
   descriptionEn: string;
-  price: number;
-  currency?: string;
-  duration: string;
   imageUrl: string;
+  discountLabel?: string;
+  linkUrl?: string;
+  startDate?: string;
+  endDate?: string;
+  isActive?: boolean;
+  sortOrder?: number;
+  price?: number;
+  currency?: string;
+  duration?: string;
   destination?: string;
   featured?: boolean;
 }
@@ -58,10 +78,16 @@ export interface OfferUpdate {
   titleEn?: string;
   descriptionAr?: string;
   descriptionEn?: string;
+  imageUrl?: string;
+  discountLabel?: string;
+  linkUrl?: string;
+  startDate?: string;
+  endDate?: string;
+  isActive?: boolean;
+  sortOrder?: number;
   price?: number;
   currency?: string;
   duration?: string;
-  imageUrl?: string;
   destination?: string;
   featured?: boolean;
 }
@@ -1413,6 +1439,8 @@ export interface Notification {
   relatedEntityType?: string | null;
   /** @nullable */
   relatedEntityId?: string | null;
+  /** @nullable */
+  url?: string | null;
   isRead: boolean;
   /** @nullable */
   sentBy?: string | null;

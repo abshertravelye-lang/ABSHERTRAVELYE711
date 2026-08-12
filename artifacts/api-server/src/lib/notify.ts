@@ -158,6 +158,7 @@ async function insertInAppRows(userIds: Array<string>, payload: NotifyPayload): 
     channel: "in_app" as const,
     relatedEntityType: payload.relatedEntityType ?? null,
     relatedEntityId: payload.relatedEntityId ?? null,
+    url: payload.url ?? null,
     sentBy: payload.sentBy ?? null,
     isRead: false,
   }));

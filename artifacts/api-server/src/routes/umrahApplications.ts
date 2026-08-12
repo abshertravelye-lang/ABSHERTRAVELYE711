@@ -5,7 +5,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { requireAuth, requirePermission, hasStaffPermission } from "../middleware/auth";
 import { logAudit } from "../lib/audit";
 import { canonicalCountryEn } from "@workspace/countries";
-import { findUnownedObjectPath } from "../lib/objectAccess";
+import { findUnownedObjectPath, getObjectOwner } from "../lib/objectAccess";
 import { notifyUser } from "../lib/notify";
 import { getUmrahSettings, resolveUmrahFee } from "./settings";
 
@@ -198,7 +198,30 @@ router.post("/umrah-applications", requireAuth, async (req, res) => {
       declarationAccepted: true,
     };
 
-    const [row] = await db.insert(umrahApplicationsTable).values(insertData as never).returning();
+    let row;
+    try {
+      [row] = await db.insert(umrahApplicationsTable).values(insertData as never).returning();
+    } catch (insertErr: unknown) {
+      // DB-level guard: the partial unique index
+      // (umrah_applications_one_active_per_user) closes the race window between
+      // the read-then-insert duplicate check above and this INSERT. A 23505
+      // unique-violation here means a concurrent request already created an
+      // active application — return the same bilingual 409.
+      if (
+        insertErr &&
+        typeof insertErr === "object" &&
+        "code" in insertErr &&
+        (insertErr as { code?: string }).code === "23505"
+      ) {
+        return res.status(409).json({
+          error: bilingual(
+            "لديك بالفعل طلب تأشيرة عمرة قيد المعالجة. لا يمكنك تقديم طلب جديد الآن.",
+            "You already have an Umrah visa application in progress. You cannot submit a new one right now.",
+          ),
+        });
+      }
+      throw insertErr;
+    }
 
     logAudit(req, "umrah_application.created", { entityType: "umrah_application", newValue: { id: row.id } });
 
@@ -236,13 +259,21 @@ router.post("/umrah-applications/:id/pay", requireAuth, async (req, res) => {
       });
     }
 
-    // TODO: Integrate a real payment gateway here. This is the server-verified
-    // payment recording layer — a production integration must charge the
-    // customer and VERIFY the transaction with the gateway (e.g. via a
-    // provider reference / webhook) BEFORE marking the application as paid.
-    // The application must NEVER be marked paid based on a frontend-supplied
-    // flag. No external gateway exists in this repo yet.
-    const paymentReference = `PAY-${Math.random().toString(36).slice(2, 10).toUpperCase()}${Date.now().toString(36).toUpperCase()}`;
+    // ── SIMULATED PAYMENT ────────────────────────────────────────────────
+    // No external payment gateway exists in this repo yet, so this endpoint
+    // ONLY records a simulated, server-verified payment. The "PAY-SIM-" prefix
+    // marks the reference as simulated so it is never mistaken for a real
+    // gateway transaction.
+    //
+    // TODO(payment-gateway): Replace this block with a real integration:
+    //   1. Create/confirm a charge with the gateway using the stored
+    //      feeAmount/feeCurrency (server-side amount — never trust the client).
+    //   2. VERIFY the transaction succeeded via the gateway's authoritative
+    //      source (synchronous confirm response AND/OR a signed webhook).
+    //   3. Only then mark paymentStatus='paid' and store the real provider
+    //      reference. The application must NEVER be marked paid based on any
+    //      frontend-supplied flag.
+    const paymentReference = `PAY-SIM-${Math.random().toString(36).slice(2, 10).toUpperCase()}${Date.now().toString(36).toUpperCase()}`;
     const now = new Date();
 
     const [row] = await db.update(umrahApplicationsTable)
@@ -357,7 +388,20 @@ router.patch("/umrah-applications/:id", requireAuth, requirePermission("visa_app
       set.status = body.status;
     }
     if (typeof body.adminNotes === "string") set.adminNotes = body.adminNotes;
-    if (typeof body.issuedVisaUrl === "string") set.issuedVisaUrl = body.issuedVisaUrl;
+    if (typeof body.issuedVisaUrl === "string") {
+      // Ownership guard: when issuedVisaUrl is an internal object path, it MUST
+      // be owned by the caller (the staff member who uploaded it). Otherwise a
+      // staff member could point issuedVisaUrl at an arbitrary private object
+      // and leak it to the customer via callerOwnsIssuedVisa (which grants the
+      // owning customer read access to whatever path is stored here).
+      if (body.issuedVisaUrl.startsWith("/objects/")) {
+        const owner = await getObjectOwner(body.issuedVisaUrl);
+        if (owner !== req.user!.sub) {
+          return res.status(422).json({ error: "issuedVisaUrl must reference an object you uploaded" });
+        }
+      }
+      set.issuedVisaUrl = body.issuedVisaUrl;
+    }
 
     const [prev] = await db.select().from(umrahApplicationsTable)
       .where(eq(umrahApplicationsTable.id, id));

@@ -1,6 +1,7 @@
 import {
-  pgTable, uuid, text, boolean, numeric, timestamp, pgEnum,
+  pgTable, uuid, text, boolean, numeric, timestamp, pgEnum, uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { usersTable } from "./users";
 
@@ -74,7 +75,15 @@ export const umrahApplicationsTable = pgTable("umrah_applications", {
 
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => ({
+  // Enforce at most ONE active Umrah application per user at the DB level.
+  // "Active" = any status other than a terminal one (rejected/completed). This
+  // closes the race window that the read-then-insert check in the route cannot.
+  // Applied manually via psql (CREATE UNIQUE INDEX ... WHERE ...); mirrored here.
+  oneActivePerUser: uniqueIndex("umrah_applications_one_active_per_user")
+    .on(table.userId)
+    .where(sql`status NOT IN ('rejected','completed')`),
+}));
 
 export const insertUmrahApplicationSchema = createInsertSchema(umrahApplicationsTable).omit({
   id: true, createdAt: true, updatedAt: true, trackingNumber: true, userId: true,

@@ -19,6 +19,8 @@ import { setBaseUrl } from '@workspace/api-client-react';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { LanguageProvider } from '@/context/LanguageContext';
+import { useNotificationObserver } from '@/hooks/useNotificationObserver';
+import { usePreferredLanguageSync } from '@/hooks/usePreferredLanguageSync';
 
 // Set API base URL — Expo runs outside the proxy and needs an absolute URL
 setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
@@ -37,6 +39,10 @@ const queryClient = new QueryClient({
 });
 
 function RootLayoutNav() {
+  // Notification tap handling + preferred-language sync live here so they run
+  // inside the Auth/Language providers.
+  useNotificationObserver();
+  usePreferredLanguageSync();
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -58,6 +64,7 @@ function RootLayoutNav() {
       <Stack.Screen name="wallet" options={{ headerShown: false }} />
       <Stack.Screen name="booking/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="visa-tracking/[id]" options={{ headerShown: false }} />
+      <Stack.Screen name="umrah-tracking/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="umrah-visa" options={{ headerShown: false }} />
     </Stack>
   );

@@ -475,6 +475,19 @@ export const home: Domain = {
   },
   "home.service.corporate": { ar: "حجوزات الشركات", en: "Corporate Bookings" },
   "home.service.business": { ar: "خدمات رجال الأعمال", en: "Business Services" },
+  // Home redesign — promotional carousel
+  "home.carousel.a11y": { ar: "العروض الترويجية", en: "Promotional offers" },
+  // Home redesign — services 2x2 grid
+  "home.services.flights.title": { ar: "حجوزات الطيران", en: "Flight Bookings" },
+  "home.services.flights.desc": { ar: "احجز رحلتك بسهولة وأمان", en: "Book your flight easily and securely" },
+  "home.services.hotels.title": { ar: "حجوزات الفنادق", en: "Hotel Bookings" },
+  "home.services.hotels.desc": { ar: "أفضل الفنادق في أرقى الوجهات", en: "The finest hotels in premier destinations" },
+  "home.services.evisas.title": { ar: "التأشيرات الإلكترونية", en: "E-Visas" },
+  "home.services.evisas.desc": { ar: "تأشيرات إلكترونية لسفر أسهل", en: "Electronic visas for easier travel" },
+  "home.services.umrah.title": { ar: "تأشيرة العمرة", en: "Umrah Visa" },
+  "home.services.umrah.desc": { ar: "تأشيرة عمرة بخطوات بسيطة", en: "Umrah visa in simple steps" },
+  "home.exit.title": { ar: "الخروج من التطبيق", en: "Exit application" },
+  "home.exit.message": { ar: "هل أنت متأكد أنك تريد الخروج من التطبيق؟", en: "Are you sure you want to exit?" },
 };
 
 /** Flights & hotels (coming-soon placeholders). */

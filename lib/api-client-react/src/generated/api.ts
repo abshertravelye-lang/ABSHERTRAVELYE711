@@ -359,6 +359,83 @@ export const useCreateOffer = <TError = ErrorType<unknown>,
       return useMutation(getCreateOfferMutationOptions(options));
     }
 
+export const getListOffersAdminUrl = () => {
+
+
+
+
+  return `/api/offers/admin/list`
+}
+
+/**
+ * @summary List all offers (admin, includes inactive)
+ */
+export const listOffersAdmin = async ( options?: RequestInit): Promise<Offer[]> => {
+
+  return customFetch<Offer[]>(getListOffersAdminUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListOffersAdminQueryKey = () => {
+    return [
+    `/api/offers/admin/list`
+    ] as const;
+    }
+
+
+export const getListOffersAdminQueryOptions = <TData = Awaited<ReturnType<typeof listOffersAdmin>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listOffersAdmin>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListOffersAdminQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listOffersAdmin>>> = ({ signal }) => listOffersAdmin({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listOffersAdmin>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListOffersAdminQueryResult = NonNullable<Awaited<ReturnType<typeof listOffersAdmin>>>
+export type ListOffersAdminQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List all offers (admin, includes inactive)
+ */
+
+export function useListOffersAdmin<TData = Awaited<ReturnType<typeof listOffersAdmin>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listOffersAdmin>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListOffersAdminQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getGetOfferUrl = (id: number,) => {
 
 

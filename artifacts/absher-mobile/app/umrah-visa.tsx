@@ -1,25 +1,21 @@
 /**
- * Visa Application — premium wizard driven ENTIRELY by the stored user profile.
+ * Umrah Visa — a fully SEPARATE application service (NOT part of the normal
+ * visa form). Dedicated single-page wizard driven by the Umrah backend:
+ *   GET  /umrah/config?nationality=<x>   → declaration text + fee per nationality
+ *   POST /umrah-applications              → creates the application
+ *   POST /umrah-applications/:id/pay      → confirms payment (verified server-side)
  *
- * SERVER CONTRACT (see api-server/src/routes/visaApplications.ts):
- *   POST /visa-applications requires auth, a REAL visaId, a COMPLETE stored
- *   profile, and builds the application record entirely from the stored profile.
- *   Client-entered fields are NOT persisted as application data — so this wizard
- *   edits the PROFILE (useUpdateProfile) and only submits the chosen visaId.
- *
- * Flow (profile-driven, NO re-entry of personal data):
- *   PROFILE GATE: at entry, if the stored profile is incomplete a branded dialog
- *   sends the customer to the profile-completion screen (/profile-edit). Only a
- *   COMPLETE profile may proceed.
- *
- *   0) اختيار التأشيرة   (visa selection — skipped when a visaId route param is present)
- *   1) بيانات التأشيرة   (visa details: price + processing duration, a read-only
- *                         "بطاقة بياناتي" card rendered from the stored profile,
- *                         and the الإقرار declaration checkbox)
- *   2) التأكيد            (confirm → if no immediate payment: a branded
- *                         "ستدفع بعد الموافقة الأولية" popup showing the fee,
- *                         then POST /visa-applications → success renders ONLY
- *                         from the API response; back is fully blocked)
+ * Spec (attached_assets/Pasted-IMPORTANT-UMRAH-VISA...):
+ *   1) Host question (نعم/لا). "لا" → professional block modal → home only.
+ *   2) نعم → upload host residency image → host phone (+966 prefix, 9 digits, 5x).
+ *   3) Applicant (المعتمر): passport image → OCR autofill (name/passport/
+ *      nationality/dob/gender/issue/expiry), personal photo, phone, contact
+ *      email (optional), emergency phone. NO profile display/reuse.
+ *   4) Declaration: fetch config by nationality → show declaration + required
+ *      checkbox.
+ *   5) Payment: show fee → POST create → payment screen → "ادفع الآن" → pay.
+ *   6) Success: tracking, name, type, payment status, order status, date. ONLY
+ *      "العودة للرئيسية"; all back navigation blocked after submission.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -40,8 +36,7 @@ import {
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams, useNavigation, useFocusEffect } from 'expo-router';
-import ConfirmDialog from '@/components/ConfirmDialog';
+import { router, useNavigation, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -49,26 +44,28 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
 import colors from '@/constants/colors';
 import { useAuth } from '@/context/AuthContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { getImageSource } from '@/hooks/useImageUrl';
 import WizardStepper from '@/components/wizard/WizardStepper';
 import {
   ApiError,
   useOcrPassport,
-  useListVisas,
-  getListVisasQueryKey,
-  useGetVisa,
-  getGetVisaQueryKey,
-  useGetCurrentUser,
-  getGetCurrentUserQueryKey,
-  useUpdateProfile,
-  useCreateVisaApplication,
+  useGetUmrahConfig,
+  getGetUmrahConfigQueryKey,
+  useCreateUmrahApplication,
+  usePayUmrahApplication,
 } from '@workspace/api-client-react';
-import type { Visa, SafeUser, ProfileUpdate, VisaApplication } from '@workspace/api-client-react';
+import type {
+  UmrahConfig,
+  UmrahApplicationCreated,
+  UmrahApplicationCreateGender,
+} from '@workspace/api-client-react';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const API_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
 
-type Gender = 'male' | 'female';
+type Lang = 'ar' | 'en';
+const tr = (lang: Lang, ar: string, en: string) => (lang === 'en' ? en : ar);
 
 interface DocPicked {
   uri: string;
@@ -78,7 +75,6 @@ interface DocPicked {
 }
 
 // ─── Upload helper (multipart POST, authenticated) ─────────────────────────────
-/** Uploads a local file to /api/storage/uploads and returns the objectPath. */
 async function uploadToStorage(
   uri: string,
   token: string | null,
@@ -107,10 +103,10 @@ async function uploadToStorage(
   }
 }
 
-async function pickImageAsset(): Promise<DocPicked | null> {
+async function pickImageAsset(lang: Lang): Promise<DocPicked | null> {
   const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!perm.granted) {
-    Alert.alert('الصلاحية مطلوبة', 'يرجى السماح بالوصول إلى الصور لرفع المستندات');
+    Alert.alert(tr(lang, 'الصلاحية مطلوبة', 'Permission required'), tr(lang, 'يرجى السماح بالوصول إلى الصور', 'Please allow access to photos'));
     return null;
   }
   const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85 });
@@ -119,10 +115,10 @@ async function pickImageAsset(): Promise<DocPicked | null> {
   return { uri: a.uri, name: a.fileName ?? `photo_${Date.now()}.jpg`, mimeType: a.mimeType ?? 'image/jpeg', isPdf: false };
 }
 
-async function captureImageAsset(): Promise<DocPicked | null> {
+async function captureImageAsset(lang: Lang): Promise<DocPicked | null> {
   const perm = await ImagePicker.requestCameraPermissionsAsync();
   if (!perm.granted) {
-    Alert.alert('الصلاحية مطلوبة', 'يرجى السماح بالوصول إلى الكاميرا');
+    Alert.alert(tr(lang, 'الصلاحية مطلوبة', 'Permission required'), tr(lang, 'يرجى السماح بالوصول إلى الكاميرا', 'Please allow camera access'));
     return null;
   }
   const result = await ImagePicker.launchCameraAsync({ quality: 0.85 });
@@ -138,20 +134,13 @@ async function pickPdfAsset(): Promise<DocPicked | null> {
   return { uri: a.uri, name: a.name ?? `document_${Date.now()}.pdf`, mimeType: a.mimeType ?? 'application/pdf', isPdf: true };
 }
 
-// New profile-driven flow. When the profile is complete the customer never
-// re-enters data — they only review their details, tick the declaration, and
-// confirm. Two logical steps: (1) visa details + data card + declaration,
-// (2) confirm/submit (with a deferred-payment notice popup when applicable).
-const STEP_LABELS = ['بيانات التأشيرة', 'التأكيد'];
-const STEP_LABELS_WITH_VISA = ['التأشيرة', ...STEP_LABELS];
-
 // ─── Reusable field ─────────────────────────────────────────────────────────
 function Field({
-  label, value, onChangeText, placeholder, keyboardType, required, ltr,
+  label, value, onChangeText, placeholder, keyboardType, required, ltr, autoCapitalize,
 }: {
   label: string; value: string; onChangeText: (v: string) => void;
-  placeholder?: string; keyboardType?: 'default' | 'phone-pad' | 'email-address';
-  required?: boolean; ltr?: boolean;
+  placeholder?: string; keyboardType?: 'default' | 'phone-pad' | 'email-address' | 'number-pad';
+  required?: boolean; ltr?: boolean; autoCapitalize?: 'none' | 'characters' | 'sentences';
 }) {
   const c = useColors();
   return (
@@ -165,6 +154,7 @@ function Field({
         placeholder={placeholder ?? label}
         placeholderTextColor={c.mutedForeground}
         keyboardType={keyboardType ?? 'default'}
+        autoCapitalize={autoCapitalize ?? 'sentences'}
         style={[f.input, { backgroundColor: c.muted, borderColor: c.border, color: c.foreground, fontFamily: 'Cairo_400Regular', textAlign: ltr ? 'left' : 'right' }]}
       />
     </View>
@@ -176,13 +166,13 @@ const f = StyleSheet.create({
   input: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15 },
 });
 
-// ─── Document tile (uploads into a profile field) ───────────────────────────
+// ─── Document tile ─────────────────────────────────────────────────────────
 function DocField({
-  label, hint, icon, required, value, busy, onPick, onRemove, allowPdf = true,
+  label, hint, icon, required, value, busy, onPick, onRemove, allowPdf = true, lang,
 }: {
   label: string; hint?: string; icon: keyof typeof Ionicons.glyphMap;
   required?: boolean; value?: string | null; busy?: boolean;
-  onPick: (a: DocPicked) => void; onRemove: () => void; allowPdf?: boolean;
+  onPick: (a: DocPicked) => void; onRemove: () => void; allowPdf?: boolean; lang: Lang;
 }) {
   const c = useColors();
   const imageSource = getImageSource(value);
@@ -191,27 +181,17 @@ function DocField({
   const choose = async () => {
     if (busy) return;
     const handle = async (source: 'camera' | 'gallery' | 'pdf') => {
-      const a = source === 'camera' ? await captureImageAsset()
-        : source === 'gallery' ? await pickImageAsset()
+      const a = source === 'camera' ? await captureImageAsset(lang)
+        : source === 'gallery' ? await pickImageAsset(lang)
         : await pickPdfAsset();
       if (a) onPick(a);
     };
-    if (Platform.OS === 'web') {
-      const buttons: { text: string; onPress?: () => void; style?: 'cancel' }[] = [
-        { text: 'المعرض', onPress: () => handle('gallery') },
-      ];
-      if (allowPdf) buttons.push({ text: 'ملف PDF', onPress: () => handle('pdf') });
-      buttons.push({ text: 'إلغاء', style: 'cancel' });
-      Alert.alert(label, 'اختر مصدر الملف', buttons);
-      return;
-    }
-    const buttons: { text: string; onPress?: () => void; style?: 'cancel' }[] = [
-      { text: 'الكاميرا', onPress: () => handle('camera') },
-      { text: 'المعرض', onPress: () => handle('gallery') },
-    ];
-    if (allowPdf) buttons.push({ text: 'ملف PDF', onPress: () => handle('pdf') });
-    buttons.push({ text: 'إلغاء', style: 'cancel' });
-    Alert.alert(label, 'اختر مصدر الملف', buttons);
+    const buttons: { text: string; onPress?: () => void; style?: 'cancel' }[] = [];
+    if (Platform.OS !== 'web') buttons.push({ text: tr(lang, 'الكاميرا', 'Camera'), onPress: () => handle('camera') });
+    buttons.push({ text: tr(lang, 'المعرض', 'Gallery'), onPress: () => handle('gallery') });
+    if (allowPdf) buttons.push({ text: tr(lang, 'ملف PDF', 'PDF file'), onPress: () => handle('pdf') });
+    buttons.push({ text: tr(lang, 'إلغاء', 'Cancel'), style: 'cancel' });
+    Alert.alert(label, tr(lang, 'اختر مصدر الملف', 'Choose source'), buttons);
   };
 
   return (
@@ -226,7 +206,7 @@ function DocField({
         {!!value && (
           <View style={[docS.badge, { backgroundColor: c.success + '18', borderColor: c.success }]}>
             <Ionicons name="checkmark-circle" size={13} color={c.success} />
-            <Text style={[docS.badgeText, { color: c.success, fontFamily: 'Cairo_600SemiBold' }]}>تم الرفع</Text>
+            <Text style={[docS.badgeText, { color: c.success, fontFamily: 'Cairo_600SemiBold' }]}>{tr(lang, 'تم الرفع', 'Uploaded')}</Text>
           </View>
         )}
       </View>
@@ -234,7 +214,7 @@ function DocField({
       {busy ? (
         <View style={[docS.area, { backgroundColor: c.muted, borderColor: c.border }]}>
           <ActivityIndicator color={colors.gold} />
-          <Text style={[docS.uploadHint, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>جارٍ الرفع...</Text>
+          <Text style={[docS.uploadHint, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{tr(lang, 'جارٍ الرفع...', 'Uploading...')}</Text>
         </View>
       ) : value && isPdf ? (
         <View style={[docS.pdfCard, { backgroundColor: c.goldTint, borderColor: colors.gold }]}>
@@ -245,7 +225,7 @@ function DocField({
             <Text style={[docS.pdfName, { color: c.foreground, fontFamily: 'Cairo_600SemiBold' }]} numberOfLines={1}>
               {decodeURIComponent(value.split('/').pop() ?? 'document.pdf')}
             </Text>
-            <Text style={[docS.hint, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>ملف PDF</Text>
+            <Text style={[docS.hint, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>PDF</Text>
           </View>
           <Pressable onPress={choose} hitSlop={8} style={[docS.pdfBtn, { backgroundColor: colors.umrahGreen }]}>
             <Ionicons name="swap-horizontal" size={16} color="#FFFFFF" />
@@ -259,7 +239,7 @@ function DocField({
           <Pressable onPress={onRemove} hitSlop={8}><Ionicons name="trash-outline" size={20} color={c.destructive} /></Pressable>
           <Pressable onPress={choose} style={docS.replaceBtn}>
             <Ionicons name="camera-outline" size={16} color={colors.umrahGreen} />
-            <Text style={[docS.replaceText, { fontFamily: 'Cairo_600SemiBold' }]}>تغيير</Text>
+            <Text style={[docS.replaceText, { fontFamily: 'Cairo_600SemiBold' }]}>{tr(lang, 'تغيير', 'Change')}</Text>
           </Pressable>
           <View style={{ flex: 1 }} />
           <Image source={imageSource} style={docS.thumb} contentFit="cover" />
@@ -267,8 +247,8 @@ function DocField({
       ) : (
         <Pressable onPress={choose} style={({ pressed }) => [docS.area, { backgroundColor: c.muted, borderColor: required ? c.destructive + '55' : c.border, opacity: pressed ? 0.85 : 1 }]}>
           <View style={[docS.iconCircle, { backgroundColor: c.goldTint }]}><Ionicons name={icon} size={24} color={colors.gold} /></View>
-          <Text style={[docS.uploadTitle, { color: c.foreground, fontFamily: 'Cairo_600SemiBold' }]}>اضغط لرفع الملف</Text>
-          <Text style={[docS.uploadHint, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{allowPdf ? 'كاميرا · معرض · PDF' : 'كاميرا · معرض'}</Text>
+          <Text style={[docS.uploadTitle, { color: c.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{tr(lang, 'اضغط لرفع الملف', 'Tap to upload')}</Text>
+          <Text style={[docS.uploadHint, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{allowPdf ? tr(lang, 'كاميرا · معرض · PDF', 'Camera · Gallery · PDF') : tr(lang, 'كاميرا · معرض', 'Camera · Gallery')}</Text>
         </Pressable>
       )}
     </View>
@@ -297,130 +277,151 @@ const docS = StyleSheet.create({
 // ═══════════════════════════════════════════════════════════════════════════
 //  Main screen
 // ═══════════════════════════════════════════════════════════════════════════
-export default function VisaApplicationWizard() {
+
+// Wizard steps (single-page with a step progress header).
+//   0) المستضيف   host question + residency + phone
+//   1) المعتمر     applicant documents + contact
+//   2) الإقرار     declaration
+//   3) الدفع       payment
+type Gender = UmrahApplicationCreateGender;
+
+export default function UmrahVisaWizard() {
   const c = useColors();
+  const { lang } = useLanguage();
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const bottomInset = Platform.OS === 'web' ? 34 : Math.max(insets.bottom, 16);
   const scroll = useRef<ScrollView>(null);
 
-  const { visaId: visaIdParam } = useLocalSearchParams<{ visaId?: string }>();
-  const { user: authUser, accessToken, updateUser } = useAuth();
-
-  const paramVisaId = visaIdParam ? Number(visaIdParam) : null;
-  const hasParamVisa = paramVisaId !== null && !Number.isNaN(paramVisaId);
-
-  // ── Data ─────────────────────────────────────────────────────────────────
-  const { data: currentUser, isLoading: userLoading } = useGetCurrentUser({
-    query: { enabled: !!authUser, queryKey: getGetCurrentUserQueryKey() },
-  });
-  const { data: visas, isLoading: visasLoading } = useListVisas(undefined, {
-    query: { enabled: !hasParamVisa && !!authUser, queryKey: getListVisasQueryKey(undefined) },
-  });
-  // When entered via a visaId route param the list isn't fetched, so load the
-  // single visa directly to render its price / processing duration.
-  const { data: paramVisa } = useGetVisa(paramVisaId ?? 0, {
-    query: { enabled: hasParamVisa && !!authUser, queryKey: getGetVisaQueryKey(paramVisaId ?? 0) },
-  });
-
-  const ocrMutation = useOcrPassport();
-  const updateProfileMutation = useUpdateProfile();
-  const createAppMutation = useCreateVisaApplication();
-
+  const { user: authUser, accessToken } = useAuth();
   const navigation = useNavigation();
 
-  // ── Unsaved-data guard state ───────────────────────────────────────────────
-  // `dirty` becomes true once the user actually starts entering/editing data
-  // (past the visa-selection step). It is force-disabled after a successful
-  // submission so the success screen never triggers the warning.
-  const [dirty, setDirty] = useState(false);
-  const dirtyRef = useRef(false);
-  const markDirty = () => {
-    if (!dirtyRef.current) {
-      dirtyRef.current = true;
-      setDirty(true);
+  const ocrMutation = useOcrPassport();
+  const createMutation = useCreateUmrahApplication();
+  const payMutation = usePayUmrahApplication();
+
+  // ── Auth gate ─────────────────────────────────────────────────────────────
+  const authCheckedRef = useRef(false);
+  useEffect(() => {
+    if (authCheckedRef.current) return;
+    authCheckedRef.current = true;
+    if (!authUser) {
+      Alert.alert(
+        tr(lang, 'تسجيل الدخول مطلوب', 'Login required'),
+        tr(lang, 'يجب تسجيل الدخول للتقديم على تأشيرة العمرة', 'You must log in to apply for an Umrah visa'),
+        [
+          { text: tr(lang, 'إلغاء', 'Cancel'), style: 'cancel', onPress: () => router.replace('/(tabs)' as never) },
+          { text: tr(lang, 'تسجيل الدخول', 'Log in'), onPress: () => router.replace('/auth/login' as never) },
+        ],
+      );
     }
-  };
-  // Pending navigation action, held while the "unsaved data" dialog is shown.
-  const [leaveDialog, setLeaveDialog] = useState<{ proceed: () => void } | null>(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authUser]);
 
-  // ── Local editable profile snapshot (persisted via updateProfile) ─────────
-  const [profile, setProfile] = useState<ProfileUpdate>({});
-  const setP = (patch: Partial<ProfileUpdate>) => {
-    markDirty();
-    setProfile((p) => ({ ...p, ...patch }));
-  };
+  const STEP_LABELS = [
+    tr(lang, 'المستضيف', 'Host'),
+    tr(lang, 'المعتمر', 'Pilgrim'),
+    tr(lang, 'الإقرار', 'Declaration'),
+    tr(lang, 'الدفع', 'Payment'),
+  ];
 
-  const [selectedVisaId, setSelectedVisaId] = useState<number | null>(hasParamVisa ? paramVisaId : null);
-
-  // Step index — when a visaId param is present we skip the selection step.
-  const stepLabels = hasParamVisa ? STEP_LABELS : STEP_LABELS_WITH_VISA;
   const [step, setStep] = useState(0);
 
+  // ── Step 0: host ────────────────────────────────────────────────────────
+  const [hasHost, setHasHost] = useState<boolean | null>(null);
+  const [noHostModal, setNoHostModal] = useState(false);
+  const [sponsorResidencyImageUrl, setSponsorResidencyImageUrl] = useState('');
+  const [hostPhoneDigits, setHostPhoneDigits] = useState(''); // 9 digits after +966
+
+  // ── Step 1: applicant ─────────────────────────────────────────────────────
+  const [passportImageUrl, setPassportImageUrl] = useState('');
+  const [personalPhotoUrl, setPersonalPhotoUrl] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [passportNumber, setPassportNumber] = useState('');
+  const [nationality, setNationality] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
+  const [gender, setGender] = useState<Gender>('male');
+  const [passportIssueDate, setPassportIssueDate] = useState('');
+  const [passportExpiryDate, setPassportExpiryDate] = useState('');
+  const [phone, setPhone] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [emergencyPhone, setEmergencyPhone] = useState('');
+
+  const [busyDoc, setBusyDoc] = useState<string | null>(null);
   const [ocrRunning, setOcrRunning] = useState(false);
   const [ocrDone, setOcrDone] = useState(false);
-  const [busyDoc, setBusyDoc] = useState<string | null>(null);
 
-  // Declaration (الإقرار) — the customer must tick it after reading their data.
+  // ── Step 2: declaration ────────────────────────────────────────────────────
   const [declared, setDeclared] = useState(false);
 
-  // Deferred-payment notice popup ("ستدفع بعد الموافقة الأولية على التأشيرة").
-  const [payNotice, setPayNotice] = useState(false);
+  // ── Step 3: payment / create ────────────────────────────────────────────────
+  const [created, setCreated] = useState<UmrahApplicationCreated | null>(null);
+  const [result, setResult] = useState<UmrahApplicationCreated | null>(null);
 
-  // Profile-gate dialog — shown when the stored profile is incomplete.
-  const [gateDialog, setGateDialog] = useState(false);
+  // Umrah config keyed by extracted nationality (declaration + fee per nationality).
+  const { data: umrahConfig, isLoading: configLoading } = useGetUmrahConfig(
+    nationality ? { nationality } : undefined,
+    { query: { enabled: !!authUser, queryKey: getGetUmrahConfigQueryKey(nationality ? { nationality } : undefined) } },
+  );
 
-  // Submit result — success screen renders ONLY from this.
-  const [result, setResult] = useState<VisaApplication | null>(null);
-  const [submitError, setSubmitError] = useState<{ message: string; profileIncomplete: boolean } | null>(null);
+  // ── Back-blocking after submission ──────────────────────────────────────────
+  const resultRef = useRef(false);
+  useEffect(() => { if (result) resultRef.current = true; }, [result]);
 
-  // Prefill from the freshly-fetched profile.
-  const seededRef = useRef(false);
+  const leaveToHome = useCallback(() => {
+    resultRef.current = false; // allow the navigation to proceed
+    router.replace('/(tabs)' as never);
+  }, []);
+
+  const goToStep = (s: number) => {
+    scroll.current?.scrollTo({ y: 0, animated: false });
+    setStep(s);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
+  // Header back / hardware back.
+  const back = () => {
+    if (resultRef.current) return; // fully blocked on success
+    if (step > 0) { goToStep(step - 1); return; }
+    if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)' as never);
+  };
+
+  // Block OS-level back on the success screen (swipe/browser).
   useEffect(() => {
-    if (!currentUser || seededRef.current) return;
-    seededRef.current = true;
-    setProfile({
-      firstName: currentUser.firstName || '',
-      lastName: currentUser.lastName || '',
-      phone: currentUser.phone || '',
-      whatsapp: currentUser.whatsapp || '',
-      nationality: currentUser.nationality || '',
-      gender: (currentUser.gender as Gender) || 'male',
-      dateOfBirth: currentUser.dateOfBirth || '',
-      passportNumber: currentUser.passportNumber || '',
-      passportIssueDate: currentUser.passportIssueDate || '',
-      passportExpiryDate: currentUser.passportExpiryDate || '',
-      passportIssueCountry: currentUser.passportIssueCountry || '',
-      passportImageUrl: currentUser.passportImageUrl || '',
-      profilePhotoUrl: currentUser.profilePhotoUrl || '',
-      isGccResident: currentUser.isGccResident || false,
-      gccResidenceCountry: currentUser.gccResidenceCountry || '',
-      gccResidenceFrontUrl: currentUser.gccResidenceFrontUrl || '',
-      gccResidenceBackUrl: currentUser.gccResidenceBackUrl || '',
-      isEuropeanResident: currentUser.isEuropeanResident || false,
-      europeanDocumentUrl: currentUser.europeanDocumentUrl || '',
+    const unsub = navigation.addListener('beforeRemove', (e: { preventDefault: () => void }) => {
+      if (resultRef.current) e.preventDefault();
     });
-  }, [currentUser]);
+    return unsub;
+  }, [navigation]);
 
-  // ── PROFILE GATE ───────────────────────────────────────────────────────────
-  // The stored profile MUST be complete before the customer may apply. The
-  // server enforces this too (422 profileIncomplete), but we gate the UI at
-  // entry so no data is ever re-entered. `isProfileComplete` is computed by the
-  // server and returned on SafeUser.
-  // Drive the gate from the FRESHEST source. On returning from profile-edit the
-  // React Query cache is updated (setQueryData there), and AuthContext `user`
-  // is also refreshed; treat the profile as complete if EITHER source says so,
-  // so a completed profile never re-triggers the gate from stale cache.
-  const profileComplete =
-    currentUser?.isProfileComplete === true ||
-    authUser?.isProfileComplete === true;
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS === 'web') return;
+      const onBackPress = () => {
+        if (resultRef.current) return true; // block on success
+        if (step > 0) { goToStep(step - 1); return true; }
+        return false;
+      };
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => sub.remove();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [step]),
+  );
+
+  // Web browser-back trap on success.
   useEffect(() => {
-    if (!currentUser) return;
-    if (profileComplete) setGateDialog(false); // completed → ensure gate is closed
-    else setGateDialog(true); // incomplete → block entry
-  }, [currentUser, profileComplete]);
+    if (Platform.OS !== 'web' || !result) return;
+    if (typeof window === 'undefined' || !window.history) return;
+    const onPopState = () => {
+      if (resultRef.current) window.history.pushState(null, '', window.location.href);
+    };
+    window.history.pushState(null, '', window.location.href);
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [result]);
 
-  // Success animation
+  // Success animation.
   const successScale = useRef(new Animated.Value(0)).current;
   const successOpacity = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -432,287 +433,146 @@ export default function VisaApplicationWizard() {
     }
   }, [result, successScale, successOpacity]);
 
-  const selectedVisa: Visa | undefined = useMemo(
-    () => (visas ?? []).find((v) => v.id === selectedVisaId) ?? (paramVisa && paramVisa.id === selectedVisaId ? paramVisa : undefined),
-    [visas, selectedVisaId, paramVisa],
-  );
-
-  const goToStep = (s: number) => {
-    scroll.current?.scrollTo({ y: 0, animated: false });
-    setStep(s);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  };
-  const next = () => goToStep(step + 1);
-
-  // After a successful submission the UNSAVED-DATA guard is disabled, but the
-  // success screen BLOCKS all back navigation (hardware back + swipe + browser
-  // back) — the only way forward is the two explicit buttons at the bottom.
-  const submittedRef = useRef(false);
-  const resultRef = useRef(false);
-  useEffect(() => {
-    if (result) {
-      submittedRef.current = true;
-      resultRef.current = true;
-    }
-  }, [result]);
-
-  // ── WEB browser-Back trap for the success screen ───────────────────────────
-  // On Expo web, `beforeRemove` cannot stop a real browser Back (it is genuine
-  // history navigation, not a router GO_BACK). We arm a history sentinel: push a
-  // duplicate same-URL entry, then on every `popstate` re-push it — so Back is a
-  // no-op while the success screen is showing. Explicit buttons disarm first
-  // (they use router.replace, so any leftover sentinel entry is harmless).
-  // Set when the user leaves the success screen via an explicit exit button, so
-  // the beforeRemove success-block lets that navigation through.
-  const exitRef = useRef(false);
-  const disarmWebBackTrapRef = useRef<null | (() => void)>(null);
-  const disarmWebBackTrap = useCallback(() => {
-    disarmWebBackTrapRef.current?.();
-    disarmWebBackTrapRef.current = null;
-  }, []);
-  useEffect(() => {
-    if (Platform.OS !== 'web' || !result) return;
-    if (typeof window === 'undefined' || !window.history) return;
-    if (disarmWebBackTrapRef.current) return; // already armed
-    const onPopState = () => {
-      // Success screen still showing → immediately cancel the Back by re-pushing.
-      if (resultRef.current) window.history.pushState(null, '', window.location.href);
-    };
-    window.history.pushState(null, '', window.location.href); // sentinel entry
-    window.addEventListener('popstate', onPopState);
-    disarmWebBackTrapRef.current = () => window.removeEventListener('popstate', onPopState);
-    return () => disarmWebBackTrap();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [result]);
-
-  // Safely leave the wizard WITHOUT ever dispatching an unhandled GO_BACK.
-  // On a fresh deep-load of /umrah-visa there is no back stack, so fall back
-  // to replacing with the tabs root.
-  const leaveWizard = useCallback(() => {
-    dirtyRef.current = false;
-    submittedRef.current = true; // let the pending navigation through the safety net
-    if (router.canGoBack()) router.back();
-    else router.replace('/(tabs)' as never);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // The first DATA-ENTRY step in UI-step terms. Steps above it are data steps
-  // (personal/passport/docs/review/submit); stepping back BETWEEN them retains
-  // data and never prompts. Stepping back FROM the first data step would leave
-  // the data-entry flow (onto visa-selection, or exit when the visa is a param),
-  // so it is treated as an EXIT and guarded when dirty.
-  const firstDataStep = hasParamVisa ? 0 : 1;
-
-  // Header back/close control.
-  const back = () => {
-    // Deep within the wizard (a previous DATA step exists) → plain step-back,
-    // data retained, no prompt (spec §3: normal in-wizard back).
-    if (step > firstDataStep) { goToStep(step - 1); return; }
-    // At the first data step (or the visa-selection step) → back would leave the
-    // data-entry flow. Guard when dirty; مغادرة fully exits the wizard route.
-    if (dirtyRef.current && !submittedRef.current) {
-      setLeaveDialog({ proceed: leaveWizard });
-      return;
-    }
-    if (step > 0) { goToStep(step - 1); return; }        // clean, still in-wizard
-    leaveWizard();                                       // clean exit at step 0
-  };
-
-  // ── Safety net: OS/browser-level removal (swipe-back, browser back button) ──
-  // The header control above is the PRIMARY path. This only catches removals
-  // that bypass our button. It preventDefault()s and shows the same dialog; on
-  // confirm it re-dispatches the original action (which the navigator produced,
-  // so it is guaranteed handleable). It never fabricates a GO_BACK.
-  useEffect(() => {
-    const unsub = navigation.addListener('beforeRemove', (e: { preventDefault: () => void; data: { action: unknown } }) => {
-      // Success screen → fully block back; never leave via OS/browser removal.
-      // Exception: the two explicit exit buttons set `exitRef` before navigating.
-      if (resultRef.current) {
-        if (!exitRef.current) e.preventDefault();
-        return;
-      }
-      if (!dirtyRef.current || submittedRef.current) return; // allow when clean/submitted
-      e.preventDefault();
-      const action = e.data.action;
-      setLeaveDialog({
-        proceed: () => {
-          setLeaveDialog(null);
-          dirtyRef.current = false;
-          submittedRef.current = true;
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          navigation.dispatch(action as any);
-        },
-      });
-    });
-    return unsub;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [navigation, dirty]);
-
-  // Android hardware back inside the wizard: step-back for sub-steps; at step 0
-  // route through the same explicit exit logic (dirty → dialog, clean → leave).
-  useFocusEffect(
-    useCallback(() => {
-      if (Platform.OS === 'web') return;
-      const onBackPress = () => {
-        // Success screen → fully block hardware back.
-        if (resultRef.current) return true;
-        // Deep within the wizard → plain step-back, no prompt.
-        if (step > firstDataStep) { goToStep(step - 1); return true; }
-        // First data step (or visa-selection) → guard when dirty.
-        if (dirtyRef.current && !submittedRef.current) {
-          setLeaveDialog({ proceed: leaveWizard });
-          return true;
-        }
-        if (step > 0) { goToStep(step - 1); return true; } // clean, in-wizard
-        return false; // clean at step 0 → let default removal proceed
-      };
-      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-      return () => sub.remove();
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [step, leaveWizard]),
-  );
-
-  // Logical step accessor (0=visa selection, 1=data+declaration, 2=confirm).
-  // When a param visa exists the visa step is removed, so shift indices by +1.
-  const logical = hasParamVisa ? step + 1 : step;
-
-  // ── Validation ─────────────────────────────────────────────────────────────
-  const validate = (lstep: number): boolean => {
-    if (lstep === 0) {
-      if (!selectedVisaId) { Alert.alert('اختر تأشيرة', 'يرجى اختيار التأشيرة التي ترغب بالتقديم عليها'); return false; }
-      return true;
-    }
-    if (lstep === 1) {
-      // Profile is guaranteed complete by the gate; only the declaration matters.
-      if (!declared) { Alert.alert('الإقرار مطلوب', 'يرجى قراءة بياناتك والموافقة على الإقرار قبل المتابعة'); return false; }
-      return true;
-    }
-    return true;
-  };
-
-  const handleNext = async () => {
-    // Hard profile gate — never advance past visa selection with an incomplete
-    // profile (server enforces too, but we stop it here to avoid re-entry).
-    if (currentUser && !profileComplete) { setGateDialog(true); return; }
-    if (!validate(logical)) return;
-    next();
-  };
-
-  // ── OCR passport scan → prefill profile fields ─────────────────────────────
+  // ── OCR passport scan ─────────────────────────────────────────────────────
   const handlePassportScan = async (a: DocPicked) => {
     setBusyDoc('passport');
     setOcrDone(false);
     const objectPath = await uploadToStorage(a.uri, accessToken, a.name, a.mimeType);
     setBusyDoc(null);
     if (!objectPath) {
-      Alert.alert('خطأ في الرفع', 'تعذّر رفع صورة الجواز.');
+      Alert.alert(tr(lang, 'خطأ في الرفع', 'Upload error'), tr(lang, 'تعذّر رفع صورة الجواز.', 'Could not upload the passport image.'));
       return;
     }
-    setP({ passportImageUrl: objectPath });
-    if (a.isPdf) return; // OCR only for images
+    setPassportImageUrl(objectPath);
+    if (a.isPdf) return;
     setOcrRunning(true);
     try {
       const ocr = await ocrMutation.mutateAsync({ data: { imageUrl: objectPath } });
       if (ocr.success) {
-        setProfile((p) => ({
-          ...p,
-          passportImageUrl: objectPath,
-          ...(ocr.firstName && !p.firstName ? { firstName: ocr.firstName } : {}),
-          ...(ocr.lastName && !p.lastName ? { lastName: ocr.lastName } : {}),
-          ...(ocr.passportNumber ? { passportNumber: ocr.passportNumber } : {}),
-          ...(ocr.nationality ? { nationality: ocr.nationality } : {}),
-          ...(ocr.dateOfBirth ? { dateOfBirth: ocr.dateOfBirth } : {}),
-          ...(ocr.issueDate ? { passportIssueDate: ocr.issueDate } : {}),
-          ...(ocr.expiryDate ? { passportExpiryDate: ocr.expiryDate } : {}),
-          ...(ocr.gender ? { gender: (ocr.gender === 'M' || ocr.gender.toLowerCase() === 'male' ? 'male' : 'female') as Gender } : {}),
-        }));
+        const name = (ocr.fullName || [ocr.firstName, ocr.lastName].filter(Boolean).join(' ')).trim();
+        if (name) setFullName(name);
+        if (ocr.passportNumber) setPassportNumber(ocr.passportNumber);
+        if (ocr.nationality) setNationality(ocr.nationality);
+        if (ocr.dateOfBirth) setDateOfBirth(ocr.dateOfBirth);
+        if (ocr.issueDate) setPassportIssueDate(ocr.issueDate);
+        if (ocr.expiryDate) setPassportExpiryDate(ocr.expiryDate);
+        if (ocr.gender) setGender(ocr.gender === 'M' || ocr.gender.toLowerCase() === 'male' ? 'male' : 'female');
         setOcrDone(true);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         setOcrDone(true);
-        Alert.alert('تنبيه', 'لم نتمكن من قراءة الجواز بالكامل. يرجى مراجعة البيانات وإكمالها يدوياً.');
+        Alert.alert(tr(lang, 'تنبيه', 'Notice'), tr(lang, 'لم نتمكن من قراءة الجواز بالكامل. يرجى مراجعة البيانات وإكمالها يدوياً.', 'Could not fully read the passport. Please review and complete the fields.'));
       }
     } catch {
       setOcrDone(true);
-      Alert.alert('تعذر المسح', 'يمكنك إدخال بيانات الجواز يدوياً.');
+      Alert.alert(tr(lang, 'تعذر المسح', 'Scan failed'), tr(lang, 'يمكنك إدخال بيانات الجواز يدوياً.', 'You can enter the passport data manually.'));
     } finally {
       setOcrRunning(false);
     }
   };
 
-  // ── Upload a document straight into a profile field ────────────────────────
-  const uploadDoc = async (key: keyof ProfileUpdate, a: DocPicked) => {
-    setBusyDoc(String(key));
+  const uploadDoc = async (setter: (v: string) => void, key: string, a: DocPicked) => {
+    setBusyDoc(key);
     const objectPath = await uploadToStorage(a.uri, accessToken, a.name, a.mimeType);
     setBusyDoc(null);
-    if (!objectPath) { Alert.alert('خطأ في الرفع', 'تعذّر رفع الملف.'); return; }
-    setP({ [key]: objectPath } as Partial<ProfileUpdate>);
+    if (!objectPath) { Alert.alert(tr(lang, 'خطأ في الرفع', 'Upload error'), tr(lang, 'تعذّر رفع الملف.', 'Could not upload the file.')); return; }
+    setter(objectPath);
   };
 
-  // ── Submit — only the real visaId + agreedToTerms. Server rebuilds the whole
-  // application record from the STORED profile (no re-entry). TS still requires
-  // the personal fields on the request body; we source them from the stored
-  // profile snapshot (currentUser) — the server ignores them regardless.
-  const submitApplication = () => {
-    if (!selectedVisaId) { Alert.alert('اختر تأشيرة', 'يرجى اختيار التأشيرة'); return; }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    setSubmitError(null);
+  // ── Validation + step advance ─────────────────────────────────────────────
+  const validate = (s: number): boolean => {
+    if (s === 0) {
+      if (hasHost !== true) { setNoHostModal(true); return false; }
+      if (!sponsorResidencyImageUrl) { Alert.alert(tr(lang, 'مستند مطلوب', 'Document required'), tr(lang, 'يرجى إرفاق صورة إقامة المستضيف.', 'Please upload the host residency image.')); return false; }
+      if (!/^5\d{8}$/.test(hostPhoneDigits)) { Alert.alert(tr(lang, 'رقم غير صحيح', 'Invalid number'), tr(lang, 'أدخل رقم جوال المستضيف: 9 أرقام تبدأ بـ 5.', 'Enter the host phone: 9 digits starting with 5.')); return false; }
+      return true;
+    }
+    if (s === 1) {
+      if (!passportImageUrl) { Alert.alert(tr(lang, 'مستند مطلوب', 'Document required'), tr(lang, 'يرجى إرفاق صورة الجواز.', 'Please upload the passport image.')); return false; }
+      if (!personalPhotoUrl) { Alert.alert(tr(lang, 'مستند مطلوب', 'Document required'), tr(lang, 'يرجى إرفاق الصورة الشخصية.', 'Please upload the personal photo.')); return false; }
+      if (!fullName.trim()) { Alert.alert(tr(lang, 'بيانات ناقصة', 'Missing data'), tr(lang, 'يرجى إدخال اسم المعتمر.', 'Please enter the pilgrim name.')); return false; }
+      if (!nationality.trim()) { Alert.alert(tr(lang, 'بيانات ناقصة', 'Missing data'), tr(lang, 'يرجى إدخال الجنسية.', 'Please enter the nationality.')); return false; }
+      if (!/^5\d{8}$/.test(phone) && phone.trim().length < 7) { Alert.alert(tr(lang, 'رقم غير صحيح', 'Invalid number'), tr(lang, 'يرجى إدخال رقم جوال المعتمر.', 'Please enter the pilgrim phone.')); return false; }
+      if (!emergencyPhone.trim() || emergencyPhone.trim().length < 7) { Alert.alert(tr(lang, 'رقم غير صحيح', 'Invalid number'), tr(lang, 'يرجى إدخال رقم قريب أو صديق للطوارئ.', 'Please enter an emergency contact phone.')); return false; }
+      return true;
+    }
+    if (s === 2) {
+      if (!declared) { Alert.alert(tr(lang, 'الإقرار مطلوب', 'Declaration required'), tr(lang, 'يرجى قراءة الإقرار والموافقة عليه قبل المتابعة.', 'Please read and accept the declaration to continue.')); return false; }
+      return true;
+    }
+    return true;
+  };
 
-    const fullName = `${currentUser?.firstName ?? ''} ${currentUser?.lastName ?? ''}`.trim();
-    createAppMutation.mutate(
+  const handleNext = () => {
+    if (!validate(step)) return;
+    goToStep(step + 1);
+  };
+
+  // ── Create the application (spec §5) ──────────────────────────────────────
+  const submitCreate = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    createMutation.mutate(
       {
         data: {
-          visaId: selectedVisaId,
-          agreedToTerms: true,
-          fullName,
-          nationality: currentUser?.nationality ?? '',
-          gender: (currentUser?.gender as Gender) ?? 'male',
-          dateOfBirth: currentUser?.dateOfBirth ?? '',
-          email: currentUser?.email ?? '',
-          phone: currentUser?.phone ?? '',
-          passportNumber: currentUser?.passportNumber ?? '',
-          passportIssueDate: currentUser?.passportIssueDate ?? '',
-          passportExpiryDate: currentUser?.passportExpiryDate ?? '',
+          sponsorAvailable: true,
+          sponsorResidencyImageUrl,
+          sponsorPhone: `+966${hostPhoneDigits}`,
+          passportImageUrl,
+          personalPhotoUrl,
+          fullName: fullName.trim() || undefined,
+          passportNumber: passportNumber.trim() || undefined,
+          nationality: nationality.trim() || undefined,
+          dateOfBirth: dateOfBirth || undefined,
+          gender,
+          passportIssueDate: passportIssueDate || undefined,
+          passportExpiryDate: passportExpiryDate || undefined,
+          phone: phone.trim(),
+          contactEmail: contactEmail.trim() || undefined,
+          emergencyPhone: emergencyPhone.trim(),
+          declarationAccepted: declared,
         },
       },
       {
         onSuccess: (res) => {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          // Arm the back-blocking refs SYNCHRONOUSLY (before the state commit)
-          // so a back gesture landing in the same tick is already blocked; the
-          // effect on `result` is now just a backstop.
-          submittedRef.current = true;
-          resultRef.current = true;
-          setResult(res);
+          setCreated(res);
         },
         onError: (err) => {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-          let message = 'تعذّر تقديم الطلب. يرجى المحاولة لاحقاً.';
-          let profileIncomplete = false;
+          let message = tr(lang, 'تعذّر تقديم الطلب. يرجى المحاولة لاحقاً.', 'Could not submit the application. Please try again later.');
           if (err instanceof ApiError) {
-            const data = err.data as { error?: string; profileIncomplete?: boolean } | null;
-            if (data?.error) message = data.error;
-            profileIncomplete = !!data?.profileIncomplete;
+            const data = err.data as { error?: string } | null;
+            if (data?.error) message = data.error; // bilingual error surfaced by server
           }
-          setSubmitError({ message, profileIncomplete });
+          Alert.alert(tr(lang, 'تعذّر التقديم', 'Submission failed'), message);
         },
       },
     );
   };
 
-  // Confirm-step primary action. If the visa had an immediate payment flow we
-  // would branch to it here; today no immediate payment exists for visas, so we
-  // show the deferred-payment notice popup then submit on "موافق".
-  const hasImmediatePayment = false; // no immediate visa payment flow exists yet
-  const handleConfirm = () => {
-    if (!selectedVisaId) { Alert.alert('اختر تأشيرة', 'يرجى اختيار التأشيرة'); return; }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (hasImmediatePayment) {
-      // Future: route to the existing payment flow here.
-      submitApplication();
-      return;
-    }
-    setPayNotice(true);
+  // ── Pay (spec §5 → §8) ────────────────────────────────────────────────────
+  const submitPay = () => {
+    if (!created) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    payMutation.mutate(
+      { id: created.id },
+      {
+        onSuccess: () => {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          resultRef.current = true;
+          setResult(created);
+        },
+        onError: (err) => {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          let message = tr(lang, 'تعذّر إتمام الدفع. يرجى المحاولة مجدداً.', 'Payment could not be completed. Please try again.');
+          if (err instanceof ApiError) {
+            const data = err.data as { error?: string } | null;
+            if (data?.error) message = data.error;
+          }
+          Alert.alert(tr(lang, 'فشل الدفع', 'Payment failed'), message);
+        },
+      },
+    );
   };
 
   // ── Shared small components ─────────────────────────────────────────────────
@@ -726,6 +586,7 @@ export default function VisaApplicationWizard() {
       )}
     </Pressable>
   );
+
   const StepHead = ({ icon, title, sub }: { icon: keyof typeof Ionicons.glyphMap; title: string; sub: string }) => (
     <View style={styles.stepHead}>
       <View style={[styles.stepHeadIcon, { backgroundColor: c.goldTint }]}><Ionicons name={icon} size={22} color={colors.gold} /></View>
@@ -736,502 +597,402 @@ export default function VisaApplicationWizard() {
     </View>
   );
 
-  // ── Step renderers keyed by LOGICAL step ────────────────────────────────────
-  const renderVisaSelect = () => {
-    const activeVisas = (visas ?? []).filter((v) => v.isActive && v.status === 'available');
-    // Umrah category first, then the rest — matches this screen's original intent.
-    const sorted = [...activeVisas].sort((a, b) => {
-      const au = a.category === 'umrah' ? 0 : 1;
-      const bu = b.category === 'umrah' ? 0 : 1;
-      return au - bu || a.countryAr.localeCompare(b.countryAr);
-    });
-    return (
-      <View style={styles.stepWrap}>
-        <StepHead icon="airplane-outline" title="اختر التأشيرة" sub="حدد نوع التأشيرة التي ترغب بالتقديم عليها" />
-        {visasLoading ? (
-          <ActivityIndicator color={colors.gold} style={{ marginTop: 30 }} />
-        ) : sorted.length === 0 ? (
-          <Text style={[styles.stepSub, { color: c.mutedForeground, fontFamily: 'Cairo_600SemiBold', textAlign: 'center', marginTop: 20 }]}>
-            لا توجد تأشيرات متاحة حالياً
-          </Text>
-        ) : (
-          <View style={{ gap: 10 }}>
-            {sorted.map((v) => {
-              const active = selectedVisaId === v.id;
-              return (
-                <Pressable
-                  key={v.id}
-                  onPress={() => { setSelectedVisaId(v.id); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-                  style={[styles.visaCard, { backgroundColor: c.card, borderColor: active ? colors.gold : c.border }]}
-                >
-                  <View style={[styles.visaRadio, { borderColor: active ? colors.gold : c.border, backgroundColor: active ? colors.gold : 'transparent' }]}>
-                    {active && <Ionicons name="checkmark" size={14} color={colors.umrahGreen} />}
-                  </View>
-                  <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                    <Text style={[styles.visaTitle, { color: c.foreground, fontFamily: 'Cairo_700Bold' }]}>{v.countryAr} — {v.visaType}</Text>
-                    <Text style={[styles.visaMeta, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-                      {v.fee} {v.currency} · {v.processingDays} أيام عمل
-                    </Text>
-                  </View>
-                  <Text style={styles.visaFlag}>{v.countryCode || '🌍'}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        )}
-        <NextButton label="التالي" onPress={handleNext} />
-      </View>
-    );
-  };
-
-  // ── Read-only "بطاقة بياناتي" row ──────────────────────────────────────────
-  const DataRow = ({ label, value, ltr }: { label: string; value?: string | null; ltr?: boolean }) =>
-    value ? (
-      <View style={[styles.reviewRow, { borderBottomColor: c.border }]}>
-        <Text style={[styles.reviewVal, { color: c.foreground, fontFamily: 'Cairo_600SemiBold', textAlign: ltr ? 'left' : 'right', writingDirection: ltr ? 'ltr' : 'rtl' }]}>{value}</Text>
-        <Text style={[styles.reviewKey, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{label}</Text>
-      </View>
-    ) : null;
-
-  // ── STEP 1: visa details + بطاقة بياناتي (read-only) + الإقرار ──────────────
-  const renderDataStep = () => {
-    const u = currentUser;
-    const fullName = `${u?.firstName ?? ''} ${u?.lastName ?? ''}`.trim();
-    const docs: [string, boolean][] = [
-      ['جواز السفر', !!u?.passportImageUrl],
-      ['الصورة الشخصية', !!u?.profilePhotoUrl],
-      ...(u?.isGccResident ? ([['الإقامة الخليجية', !!u?.gccResidenceFrontUrl]] as [string, boolean][]) : []),
-      ...(u?.isEuropeanResident ? ([['الوثيقة الأوروبية / شنغن', !!u?.europeanDocumentUrl]] as [string, boolean][]) : []),
+  // ═══ SUCCESS SCREEN (spec §6, §9) ══════════════════════════════════════════
+  if (result) {
+    const rows: [string, string][] = [
+      [tr(lang, 'رقم الطلب', 'Tracking number'), result.trackingNumber],
+      [tr(lang, 'اسم المعتمر', 'Pilgrim name'), fullName.trim() || '—'],
+      [tr(lang, 'نوع الطلب', 'Application type'), tr(lang, 'تأشيرة العمرة', 'Umrah visa')],
+      [tr(lang, 'حالة الدفع', 'Payment status'), tr(lang, 'مدفوع', 'Paid')],
+      [tr(lang, 'حالة الطلب', 'Application status'), tr(lang, 'تم التقديم', 'Submitted')],
+      [tr(lang, 'تاريخ التقديم', 'Submission date'), new Date().toLocaleDateString(lang === 'en' ? 'en-GB' : 'ar-SA')],
     ];
     return (
-      <View style={styles.stepWrap}>
-        <StepHead icon="airplane-outline" title="بيانات التأشيرة" sub="راجع تفاصيل التأشيرة وبياناتك المحفوظة ثم وافق على الإقرار" />
+      <View style={[styles.container, { backgroundColor: c.background }]}>
+        <LinearGradient colors={[colors.umrahGreen, '#0A3D28']} style={[styles.header, { paddingTop: topInset + 12 }]}>
+          <Text style={[styles.headerTitle, { fontFamily: 'Cairo_700Bold' }]}>{tr(lang, 'تأشيرة العمرة', 'Umrah Visa')}</Text>
+        </LinearGradient>
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: bottomInset + 40 }} showsVerticalScrollIndicator={false}>
+          <Animated.View style={{ alignItems: 'center', transform: [{ scale: successScale }], opacity: successOpacity }}>
+            <View style={[styles.successIcon, { backgroundColor: c.success + '18', borderColor: c.success }]}>
+              <Ionicons name="checkmark-circle" size={64} color={c.success} />
+            </View>
+            <Text style={[styles.successTitle, { color: c.foreground, fontFamily: 'Cairo_700Bold' }]}>
+              {tr(lang, 'تم تقديم طلب تأشيرة العمرة بنجاح', 'Your Umrah visa application was submitted successfully')}
+            </Text>
+          </Animated.View>
 
-        {/* Visa details: price + processing duration */}
-        <View style={[styles.visaDetailCard, { backgroundColor: c.goldTint, borderColor: colors.gold }]}>
-          <View style={styles.visaDetailHead}>
-            <View style={[styles.visaDetailIcon, { backgroundColor: colors.gold }]}>
-              <Ionicons name="ribbon-outline" size={22} color={colors.umrahGreen} />
-            </View>
-            <View style={{ flex: 1, alignItems: 'flex-end' }}>
-              <Text style={[styles.visaDetailTitle, { color: c.foreground, fontFamily: 'Cairo_700Bold' }]}>
-                {selectedVisa ? `${selectedVisa.countryAr} — ${selectedVisa.visaType}` : 'طلب تأشيرة'}
-              </Text>
-              {selectedVisa?.entryType ? (
-                <Text style={[styles.visaDetailSub, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-                  {selectedVisa.entryType === 'single' ? 'دخول مرة واحدة' : selectedVisa.entryType === 'multiple' ? 'دخول متعدد' : selectedVisa.entryType}
-                </Text>
-              ) : null}
-            </View>
-          </View>
-          <View style={styles.visaDetailStats}>
-            <View style={[styles.visaStat, { backgroundColor: c.card, borderColor: colors.gold + '55' }]}>
-              <Text style={[styles.visaStatLabel, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>الرسوم</Text>
-              <Text style={[styles.visaStatValue, { color: colors.gold, fontFamily: 'Cairo_700Bold' }]}>
-                {selectedVisa ? `${selectedVisa.fee} ${selectedVisa.currency}` : '—'}
-              </Text>
-            </View>
-            <View style={[styles.visaStat, { backgroundColor: c.card, borderColor: colors.gold + '55' }]}>
-              <Text style={[styles.visaStatLabel, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>مدة المعالجة</Text>
-              <Text style={[styles.visaStatValue, { color: c.foreground, fontFamily: 'Cairo_700Bold' }]}>
-                {selectedVisa ? `${selectedVisa.processingDays} أيام عمل` : '—'}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* بطاقة بياناتي — read-only, pulled from the stored profile */}
-        <View style={[styles.reviewCard, { backgroundColor: c.card, borderColor: c.border }]}>
-          <View style={styles.reviewHeader}>
-            <Pressable onPress={() => router.push('/profile-edit' as never)} hitSlop={8} style={styles.editLink}>
-              <Ionicons name="create-outline" size={15} color={colors.gold} />
-              <Text style={[styles.editLinkText, { fontFamily: 'Cairo_600SemiBold' }]}>تعديل الملف</Text>
-            </Pressable>
-            <View style={styles.reviewHeaderRight}>
-              <Text style={[styles.reviewCardTitle, { color: c.foreground, fontFamily: 'Cairo_700Bold' }]}>بطاقة بياناتي</Text>
-              <Ionicons name="id-card-outline" size={20} color={colors.gold} />
-            </View>
-          </View>
-          <Text style={[styles.dataCardHint, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-            بيانات طلبك مأخوذة من ملفك الشخصي — لا حاجة لإعادة إدخالها.
-          </Text>
-          <DataRow label="الاسم الكامل" value={fullName} />
-          <DataRow label="الجنسية" value={u?.nationality} />
-          <DataRow label="الجنس" value={u?.gender ? (u.gender === 'female' ? 'أنثى' : 'ذكر') : ''} />
-          <DataRow label="تاريخ الميلاد" value={u?.dateOfBirth} ltr />
-          <DataRow label="رقم الجوال" value={u?.phone} ltr />
-          <DataRow label="البريد الإلكتروني" value={u?.email} ltr />
-          <DataRow label="رقم جواز السفر" value={u?.passportNumber} ltr />
-          <DataRow label="تاريخ إصدار الجواز" value={u?.passportIssueDate} ltr />
-          <DataRow label="تاريخ انتهاء الجواز" value={u?.passportExpiryDate} ltr />
-          <DataRow label="دولة إصدار الجواز" value={u?.passportIssueCountry} />
-          {u?.isGccResident ? <DataRow label="الإقامة الخليجية" value={u?.gccResidenceCountry} /> : null}
-
-          {/* Uploaded documents summary (upload logic lives in the profile) */}
-          <View style={[styles.dataDocsWrap, { borderTopColor: c.border }]}>
-            <Text style={[styles.dataDocsTitle, { color: c.foreground, fontFamily: 'Cairo_600SemiBold' }]}>المستندات المرفقة</Text>
-            {docs.map(([k, ok]) => (
-              <View key={k} style={styles.reviewRow}>
-                <View style={styles.dataDocBadge}>
-                  <Ionicons name={ok ? 'checkmark-circle' : 'remove-circle-outline'} size={16} color={ok ? c.success : c.mutedForeground} />
-                  <Text style={[styles.reviewVal, { color: ok ? c.success : c.mutedForeground, fontFamily: 'Cairo_600SemiBold', flex: 0 }]}>{ok ? 'مرفق' : 'غير مرفق'}</Text>
-                </View>
+          <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border, marginTop: 20 }]}>
+            {rows.map(([k, v], i) => (
+              <View key={k} style={[styles.reviewRow, { borderBottomColor: c.border, borderBottomWidth: i === rows.length - 1 ? 0 : StyleSheet.hairlineWidth }]}>
+                <Text style={[styles.reviewVal, { color: c.foreground, fontFamily: 'Cairo_700Bold' }]}>{v}</Text>
                 <Text style={[styles.reviewKey, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{k}</Text>
               </View>
             ))}
           </View>
-        </View>
 
-        {/* الإقرار — declaration checkbox */}
-        <Pressable
-          onPress={() => { markDirty(); setDeclared((d) => !d); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
-          style={[styles.declareRow, { backgroundColor: c.card, borderColor: declared ? colors.gold : c.border }]}
-        >
-          <View style={[styles.declareBox, { borderColor: declared ? colors.gold : c.border, backgroundColor: declared ? colors.gold : 'transparent' }]}>
-            {declared && <Ionicons name="checkmark" size={16} color={colors.umrahGreen} />}
-          </View>
-          <Text style={[styles.declareText, { color: c.foreground, fontFamily: 'Cairo_600SemiBold' }]}>
-            أقر بأنني راجعت بياناتي أعلاه وأنها صحيحة وكاملة، وأتحمل مسؤولية صحتها.
-          </Text>
-        </Pressable>
-
-        <NextButton label="متابعة" onPress={handleNext} />
-      </View>
-    );
-  };
-
-  // ── STEP 2: confirm & submit ────────────────────────────────────────────────
-  const renderSubmit = () => (
-    <View style={styles.stepWrap}>
-      <StepHead icon="send-outline" title="تأكيد الطلب" sub="بالضغط على تأكيد أنت تقر بصحة جميع البيانات وترسل طلبك" />
-
-      <View style={[styles.summaryCard, { backgroundColor: c.goldTint, borderColor: colors.gold }]}>
-        <Ionicons name="shield-checkmark-outline" size={30} color={colors.gold} />
-        <Text style={[styles.summaryTitle, { color: c.foreground, fontFamily: 'Cairo_700Bold' }]}>
-          {selectedVisa ? `${selectedVisa.countryAr} — ${selectedVisa.visaType}` : 'طلب تأشيرة'}
-        </Text>
-        <Text style={[styles.summaryName, { color: c.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>
-          {`${currentUser?.firstName ?? ''} ${currentUser?.lastName ?? ''}`.trim() || 'المتقدم'}
-        </Text>
-        {selectedVisa ? (
-          <Text style={[styles.summaryName, { color: colors.gold, fontFamily: 'Cairo_700Bold' }]}>
-            {`الرسوم: ${selectedVisa.fee} ${selectedVisa.currency}`}
-          </Text>
-        ) : null}
-        <View style={[styles.divider, { backgroundColor: colors.gold + '40' }]} />
-        <Text style={[styles.summaryNote, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-          سيتم مراجعة طلبك وستتلقى إشعاراً بأي تحديث على حالته.
-        </Text>
-      </View>
-
-      {submitError && (
-        <View style={[styles.errorBox, { backgroundColor: c.destructive + '14', borderColor: c.destructive + '66' }]}>
-          <View style={styles.errorHead}>
-            <Ionicons name="alert-circle" size={20} color={c.destructive} />
-            <Text style={[styles.errorTitle, { color: c.destructive, fontFamily: 'Cairo_700Bold' }]}>
-              {submitError.profileIncomplete ? 'ملفك الشخصي غير مكتمل' : 'تعذّر تقديم الطلب'}
-            </Text>
-          </View>
-          <Text style={[styles.errorMsg, { color: c.foreground, fontFamily: 'Cairo_400Regular' }]}>{submitError.message}</Text>
-          {submitError.profileIncomplete && (
-            <Pressable
-              style={({ pressed }) => [styles.errorCta, { backgroundColor: colors.umrahGreen, opacity: pressed ? 0.85 : 1 }]}
-              onPress={() => router.push('/profile-edit' as never)}
-            >
-              <Ionicons name="person-outline" size={16} color="#FFFFFF" />
-              <Text style={[styles.errorCtaText, { fontFamily: 'Cairo_700Bold' }]}>إكمال الملف الشخصي</Text>
-            </Pressable>
-          )}
-        </View>
-      )}
-
-      <NextButton label="تأكيد وإرسال الطلب" onPress={handleConfirm} loading={createAppMutation.isPending} />
-      <Pressable style={styles.secondaryBtn} onPress={back}>
-        <Text style={[styles.secondaryBtnText, { color: c.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>العودة</Text>
-      </Pressable>
-    </View>
-  );
-
-  const renderStep = () => {
-    switch (logical) {
-      case 0: return renderVisaSelect();
-      case 1: return renderDataStep();
-      case 2: return renderSubmit();
-      default: return null;
-    }
-  };
-
-  // ── Guests must log in ──────────────────────────────────────────────────────
-  if (!authUser) {
-    return (
-      <View style={[styles.container, { backgroundColor: c.background }]}>
-        <LinearGradient colors={['#042D1C', colors.umrahGreen]} style={[styles.header, { paddingTop: topInset + 8, paddingBottom: 16 }]}>
-          <View style={styles.headerTop}>
-            <Pressable style={styles.backBtn} onPress={() => router.back()}><Ionicons name="arrow-forward" size={22} color="rgba(255,255,255,0.85)" /></Pressable>
-            <View style={styles.headerCenter}><Text style={[styles.headerTitle, { fontFamily: 'Cairo_700Bold' }]}>طلب تأشيرة</Text></View>
-            <View style={{ width: 40 }} />
-          </View>
-        </LinearGradient>
-        <View style={styles.guestWrap}>
-          <View style={[styles.guestIcon, { backgroundColor: c.goldTint }]}><Ionicons name="lock-closed-outline" size={44} color={colors.gold} /></View>
-          <Text style={[styles.guestTitle, { color: c.foreground, fontFamily: 'Cairo_700Bold' }]}>تسجيل الدخول مطلوب</Text>
-          <Text style={[styles.guestSub, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-            يجب تسجيل الدخول لإكمال طلب التأشيرة ومتابعة حالته لاحقاً.
-          </Text>
-          <Pressable style={({ pressed }) => [styles.nextBtn, { width: '100%', opacity: pressed ? 0.85 : 1 }]} onPress={() => router.push('/auth/login' as never)}>
-            <Text style={[styles.nextBtnText, { fontFamily: 'Cairo_700Bold' }]}>تسجيل الدخول</Text>
-            <Ionicons name="log-in-outline" size={20} color={colors.umrahGreen} />
+          <Pressable style={({ pressed }) => [styles.primaryBtn, { backgroundColor: colors.umrahGreen, opacity: pressed ? 0.9 : 1, marginTop: 24 }]} onPress={leaveToHome}>
+            <Ionicons name="home-outline" size={20} color="#FFFFFF" />
+            <Text style={[styles.primaryBtnText, { fontFamily: 'Cairo_700Bold' }]}>{tr(lang, 'العودة للرئيسية', 'Back to Home')}</Text>
           </Pressable>
-        </View>
-      </View>
-    );
-  }
-
-  // ── Success screen — renders ONLY from the API response ─────────────────────
-  if (result) {
-    return (
-      <View style={[styles.container, { backgroundColor: c.background }]}>
-        <LinearGradient colors={['#042D1C', colors.umrahGreen]} style={[styles.header, { paddingTop: topInset + 8, paddingBottom: 16 }]}>
-          <View style={styles.headerTop}>
-            <View style={{ width: 40 }} />
-            <View style={styles.headerCenter}><Text style={[styles.headerTitle, { fontFamily: 'Cairo_700Bold' }]}>تأكيد الطلب</Text></View>
-            <View style={{ width: 40 }} />
-          </View>
-        </LinearGradient>
-
-        <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: bottomInset + 40, alignItems: 'center' }} showsVerticalScrollIndicator={false}>
-          <Animated.View style={{ transform: [{ scale: successScale }], opacity: successOpacity, alignItems: 'center', width: '100%' }}>
-            <View style={[styles.successIcon, { backgroundColor: c.success + '20', borderColor: c.success + '66' }]}>
-              <Ionicons name="checkmark-circle" size={72} color={c.success} />
-            </View>
-            <Text style={[styles.successTitle, { color: c.foreground, fontFamily: 'Cairo_700Bold' }]}>تم تقديم طلبك بنجاح</Text>
-            <Text style={[styles.successSub, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-              احتفظ برقم التتبع لمتابعة حالة طلبك في أي وقت
-            </Text>
-
-            <View style={[styles.refCard, { backgroundColor: c.card, borderColor: colors.gold + '66' }]}>
-              <Text style={[styles.refLabel, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>رقم التتبع</Text>
-              <Text style={[styles.refValue, { color: colors.gold, fontFamily: 'Cairo_700Bold' }]}>
-                {result.trackingNumber ?? `#${result.id}`}
-              </Text>
-              <View style={[styles.divider, { backgroundColor: c.border }]} />
-              <View style={styles.refRow}>
-                <Text style={[styles.refRowVal, { color: c.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{result.fullName || 'المتقدم'}</Text>
-                <Text style={[styles.refRowKey, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>اسم المتقدم</Text>
-              </View>
-              {selectedVisa ? (
-                <View style={styles.refRow}>
-                  <Text style={[styles.refRowVal, { color: c.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{`${selectedVisa.countryAr} — ${selectedVisa.visaType}`}</Text>
-                  <Text style={[styles.refRowKey, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>التأشيرة</Text>
-                </View>
-              ) : null}
-              {selectedVisa ? (
-                <View style={styles.refRow}>
-                  <Text style={[styles.refRowVal, { color: colors.gold, fontFamily: 'Cairo_700Bold' }]}>{`${selectedVisa.fee} ${selectedVisa.currency}`}</Text>
-                  <Text style={[styles.refRowKey, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>المبلغ</Text>
-                </View>
-              ) : null}
-              <View style={styles.refRow}>
-                <View style={[styles.statusBadge, { backgroundColor: colors.gold + '22' }]}>
-                  <Text style={[styles.statusBadgeText, { color: colors.gold, fontFamily: 'Cairo_700Bold' }]}>قيد المراجعة</Text>
-                </View>
-                <Text style={[styles.refRowKey, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>حالة الطلب</Text>
-              </View>
-            </View>
-
-            <Pressable
-              style={({ pressed }) => [styles.nextBtn, { width: '100%', opacity: pressed ? 0.85 : 1 }]}
-              onPress={() => { exitRef.current = true; disarmWebBackTrap(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.replace(`/visa-tracking/${result.id}` as never); }}
-            >
-              <Text style={[styles.nextBtnText, { fontFamily: 'Cairo_700Bold' }]}>عرض الطلب</Text>
-              <Ionicons name="document-text-outline" size={20} color={colors.umrahGreen} />
-            </Pressable>
-            <Pressable style={styles.secondaryBtn} onPress={() => { exitRef.current = true; disarmWebBackTrap(); router.replace('/(tabs)/' as never); }}>
-              <Ionicons name="home-outline" size={18} color={c.mutedForeground} />
-              <Text style={[styles.secondaryBtnText, { color: c.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>العودة للرئيسية</Text>
-            </Pressable>
-          </Animated.View>
         </ScrollView>
       </View>
     );
   }
 
-  // ── Wizard shell ────────────────────────────────────────────────────────────
+  // ═══ WIZARD ════════════════════════════════════════════════════════════════
+  const fee = umrahConfig?.feeForNationality ?? (created ? { amount: created.feeAmount ?? 0, currency: created.feeCurrency } : undefined);
+
   return (
     <View style={[styles.container, { backgroundColor: c.background }]}>
-      <LinearGradient colors={['#042D1C', colors.umrahGreen]} style={[styles.header, { paddingTop: topInset + 8 }]}>
-        <View style={styles.headerTop}>
-          <Pressable style={styles.backBtn} onPress={back}><Ionicons name="arrow-forward" size={22} color="rgba(255,255,255,0.85)" /></Pressable>
-          <View style={styles.headerCenter}>
-            <Ionicons name="document-text-outline" size={18} color={colors.gold} />
-            <Text style={[styles.headerTitle, { fontFamily: 'Cairo_700Bold' }]}>طلب تأشيرة</Text>
-          </View>
+      <LinearGradient colors={[colors.umrahGreen, '#0A3D28']} style={[styles.header, { paddingTop: topInset + 12 }]}>
+        <View style={styles.headerRow}>
+          <Pressable onPress={back} hitSlop={10} style={styles.backBtn}>
+            <Ionicons name="arrow-forward" size={22} color="#FFFFFF" />
+          </Pressable>
+          <Text style={[styles.headerTitle, { fontFamily: 'Cairo_700Bold' }]}>{tr(lang, 'تأشيرة العمرة', 'Umrah Visa')}</Text>
           <View style={{ width: 40 }} />
         </View>
-        <WizardStepper steps={stepLabels} current={step} />
+        <WizardStepper steps={STEP_LABELS} current={step} />
       </LinearGradient>
 
-      {userLoading && !seededRef.current ? (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ActivityIndicator color={colors.gold} size="large" />
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <ScrollView
+          ref={scroll}
+          contentContainerStyle={{ padding: 18, paddingBottom: bottomInset + 40, gap: 4 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* ── STEP 0: HOST ─────────────────────────────────────────────── */}
+          {step === 0 && (
+            <View style={styles.stepWrap}>
+              <StepHead icon="business-outline" title={tr(lang, 'بيانات المستضيف', 'Host details')} sub={tr(lang, 'تأشيرة العمرة تتطلب مستضيفاً في المملكة العربية السعودية', 'Umrah visa requires a host in Saudi Arabia')} />
+
+              <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
+                <Text style={[styles.questionText, { color: c.foreground, fontFamily: 'Cairo_700Bold' }]}>
+                  {tr(lang, 'هل لديك مستضيف في المملكة العربية السعودية؟', 'Do you have a host in Saudi Arabia?')}
+                </Text>
+                <View style={styles.choiceRow}>
+                  <Pressable
+                    onPress={() => { setHasHost(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                    style={[styles.choiceBtn, { borderColor: hasHost === true ? colors.umrahGreen : c.border, backgroundColor: hasHost === true ? colors.umrahGreen + '12' : c.card }]}
+                  >
+                    <Ionicons name="checkmark-circle" size={20} color={hasHost === true ? colors.umrahGreen : c.mutedForeground} />
+                    <Text style={[styles.choiceText, { color: hasHost === true ? colors.umrahGreen : c.foreground, fontFamily: 'Cairo_700Bold' }]}>{tr(lang, 'نعم', 'Yes')}</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => { setHasHost(false); setNoHostModal(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); }}
+                    style={[styles.choiceBtn, { borderColor: hasHost === false ? c.destructive : c.border, backgroundColor: hasHost === false ? c.destructive + '12' : c.card }]}
+                  >
+                    <Ionicons name="close-circle" size={20} color={hasHost === false ? c.destructive : c.mutedForeground} />
+                    <Text style={[styles.choiceText, { color: hasHost === false ? c.destructive : c.foreground, fontFamily: 'Cairo_700Bold' }]}>{tr(lang, 'لا', 'No')}</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              {hasHost === true && (
+                <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border, gap: 16 }]}>
+                  <DocField
+                    lang={lang}
+                    label={tr(lang, 'صورة إقامة المستضيف', 'Host residency image')}
+                    hint={tr(lang, 'صورة أو ملف PDF واضح للإقامة', 'Clear image or PDF of the residency')}
+                    icon="id-card-outline"
+                    required
+                    value={sponsorResidencyImageUrl}
+                    busy={busyDoc === 'sponsorResidency'}
+                    onPick={(a) => uploadDoc(setSponsorResidencyImageUrl, 'sponsorResidency', a)}
+                    onRemove={() => setSponsorResidencyImageUrl('')}
+                  />
+
+                  {!!sponsorResidencyImageUrl && (
+                    <View style={f.wrap}>
+                      <Text style={[f.label, { color: c.foreground, fontFamily: 'Cairo_600SemiBold' }]}>
+                        {tr(lang, 'رقم جوال المستضيف المسجل في أبشر', 'Host phone registered in Absher')}<Text style={{ color: c.destructive }}> *</Text>
+                      </Text>
+                      <View style={[styles.phoneRow, { backgroundColor: c.muted, borderColor: c.border }]}>
+                        <TextInput
+                          value={hostPhoneDigits}
+                          onChangeText={(v) => setHostPhoneDigits(v.replace(/[^0-9]/g, '').slice(0, 9))}
+                          placeholder="5XXXXXXXX"
+                          placeholderTextColor={c.mutedForeground}
+                          keyboardType="number-pad"
+                          maxLength={9}
+                          style={[styles.phoneInput, { color: c.foreground, fontFamily: 'Cairo_400Regular' }]}
+                        />
+                        <View style={[styles.phonePrefix, { borderColor: c.border }]}>
+                          <Text style={[styles.phonePrefixText, { color: c.foreground, fontFamily: 'Cairo_700Bold' }]}>+966</Text>
+                        </View>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              <NextButton label={tr(lang, 'التالي', 'Next')} onPress={handleNext} />
+            </View>
+          )}
+
+          {/* ── STEP 1: APPLICANT ───────────────────────────────────────── */}
+          {step === 1 && (
+            <View style={styles.stepWrap}>
+              <StepHead icon="person-outline" title={tr(lang, 'بيانات المعتمر', 'Pilgrim details')} sub={tr(lang, 'أرفق صورة الجواز لاستخراج البيانات تلقائياً', 'Upload the passport to auto-extract data')} />
+
+              <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border, gap: 16 }]}>
+                <DocField
+                  lang={lang}
+                  label={tr(lang, 'صورة الجواز', 'Passport image')}
+                  hint={tr(lang, 'الصفحة الأولى مع البيانات', 'The main data page')}
+                  icon="card-outline"
+                  required
+                  value={passportImageUrl}
+                  busy={busyDoc === 'passport'}
+                  onPick={handlePassportScan}
+                  onRemove={() => { setPassportImageUrl(''); setOcrDone(false); }}
+                />
+                {ocrRunning && (
+                  <View style={styles.ocrRow}>
+                    <ActivityIndicator color={colors.gold} />
+                    <Text style={[styles.ocrText, { color: c.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>{tr(lang, 'جارٍ استخراج بيانات الجواز...', 'Extracting passport data...')}</Text>
+                  </View>
+                )}
+                {ocrDone && !ocrRunning && (
+                  <View style={styles.ocrRow}>
+                    <Ionicons name="sparkles" size={16} color={c.success} />
+                    <Text style={[styles.ocrText, { color: c.success, fontFamily: 'Cairo_600SemiBold' }]}>{tr(lang, 'تم استخراج البيانات — راجعها وعدّلها إن لزم', 'Data extracted — review and edit if needed')}</Text>
+                  </View>
+                )}
+
+                <DocField
+                  lang={lang}
+                  label={tr(lang, 'الصورة الشخصية', 'Personal photo')}
+                  hint={tr(lang, 'صورة حديثة بخلفية بيضاء', 'Recent photo, white background')}
+                  icon="person-circle-outline"
+                  required
+                  allowPdf={false}
+                  value={personalPhotoUrl}
+                  busy={busyDoc === 'personalPhoto'}
+                  onPick={(a) => uploadDoc(setPersonalPhotoUrl, 'personalPhoto', a)}
+                  onRemove={() => setPersonalPhotoUrl('')}
+                />
+              </View>
+
+              <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border, gap: 14 }]}>
+                <Field label={tr(lang, 'الاسم الكامل', 'Full name')} value={fullName} onChangeText={setFullName} required />
+                <Field label={tr(lang, 'رقم الجواز', 'Passport number')} value={passportNumber} onChangeText={setPassportNumber} ltr autoCapitalize="characters" />
+                <Field label={tr(lang, 'الجنسية', 'Nationality')} value={nationality} onChangeText={setNationality} required />
+                <View style={{ flexDirection: 'row-reverse', gap: 12 }}>
+                  <View style={{ flex: 1 }}><Field label={tr(lang, 'تاريخ الميلاد', 'Date of birth')} value={dateOfBirth} onChangeText={setDateOfBirth} placeholder="YYYY-MM-DD" ltr /></View>
+                </View>
+                <View style={{ flexDirection: 'row-reverse', gap: 12 }}>
+                  <View style={{ flex: 1 }}><Field label={tr(lang, 'تاريخ الإصدار', 'Issue date')} value={passportIssueDate} onChangeText={setPassportIssueDate} placeholder="YYYY-MM-DD" ltr /></View>
+                  <View style={{ flex: 1 }}><Field label={tr(lang, 'تاريخ الانتهاء', 'Expiry date')} value={passportExpiryDate} onChangeText={setPassportExpiryDate} placeholder="YYYY-MM-DD" ltr /></View>
+                </View>
+                <View style={f.wrap}>
+                  <Text style={[f.label, { color: c.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{tr(lang, 'الجنس', 'Gender')}</Text>
+                  <View style={{ flexDirection: 'row-reverse', gap: 10 }}>
+                    {(['male', 'female'] as Gender[]).map((g) => (
+                      <Pressable key={g} onPress={() => setGender(g)} style={[styles.genderBtn, { backgroundColor: gender === g ? colors.umrahGreen : c.muted, borderColor: c.border }]}>
+                        <Text style={[styles.genderText, { color: gender === g ? '#FFFFFF' : c.foreground, fontFamily: 'Cairo_600SemiBold' }]}>
+                          {g === 'male' ? tr(lang, 'ذكر', 'Male') : tr(lang, 'أنثى', 'Female')}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              </View>
+
+              <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border, gap: 14 }]}>
+                <Field label={tr(lang, 'رقم جوال المعتمر', 'Pilgrim phone')} value={phone} onChangeText={setPhone} keyboardType="phone-pad" ltr required placeholder="+966 5X XXX XXXX" />
+                <Field label={tr(lang, 'بريد التواصل (اختياري)', 'Contact email (optional)')} value={contactEmail} onChangeText={setContactEmail} keyboardType="email-address" ltr autoCapitalize="none" placeholder="example@email.com" />
+                <Field label={tr(lang, 'رقم جوال قريب أو صديق للطوارئ', 'Emergency contact phone (relative/friend)')} value={emergencyPhone} onChangeText={setEmergencyPhone} keyboardType="phone-pad" ltr required placeholder="+966 5X XXX XXXX" />
+              </View>
+
+              <NextButton label={tr(lang, 'التالي', 'Next')} onPress={handleNext} />
+            </View>
+          )}
+
+          {/* ── STEP 2: DECLARATION ─────────────────────────────────────── */}
+          {step === 2 && (
+            <View style={styles.stepWrap}>
+              <StepHead icon="document-text-outline" title={tr(lang, 'الإقرار والتعهد', 'Declaration & Undertaking')} sub={tr(lang, 'يرجى قراءة الإقرار بعناية قبل الموافقة', 'Please read the declaration carefully before accepting')} />
+
+              <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
+                {configLoading ? (
+                  <ActivityIndicator color={colors.gold} style={{ marginVertical: 20 }} />
+                ) : (
+                  <ScrollView style={styles.declarationBox} nestedScrollEnabled showsVerticalScrollIndicator>
+                    <Text style={[styles.declarationText, { color: c.foreground, fontFamily: 'Cairo_400Regular' }]}>
+                      {(lang === 'en' ? umrahConfig?.declarationEn : umrahConfig?.declarationAr) ||
+                        umrahConfig?.declarationAr ||
+                        tr(lang, 'يقر المعتمر والمستضيف بالالتزام بأنظمة وتعليمات العمرة والأنظمة المعمول بها في المملكة العربية السعودية.', 'The pilgrim and host acknowledge compliance with Umrah regulations and applicable laws in Saudi Arabia.')}
+                    </Text>
+                  </ScrollView>
+                )}
+              </View>
+
+              <Pressable
+                onPress={() => setDeclared((v) => !v)}
+                style={[styles.checkRow, { backgroundColor: c.card, borderColor: declared ? colors.umrahGreen : c.border }]}
+              >
+                <Ionicons name={declared ? 'checkbox' : 'square-outline'} size={24} color={declared ? colors.umrahGreen : c.mutedForeground} />
+                <Text style={[styles.checkText, { color: c.foreground, fontFamily: 'Cairo_600SemiBold' }]}>
+                  {tr(lang, 'أقر بأنني قرأت ووافقت على إقرار وتعهد تأشيرة العمرة.', 'I acknowledge that I have read and agreed to the Umrah visa declaration and undertaking.')}
+                </Text>
+              </Pressable>
+
+              <NextButton label={tr(lang, 'التالي', 'Next')} onPress={handleNext} />
+            </View>
+          )}
+
+          {/* ── STEP 3: PAYMENT ─────────────────────────────────────────── */}
+          {step === 3 && (
+            <View style={styles.stepWrap}>
+              <StepHead icon="card-outline" title={tr(lang, 'الدفع', 'Payment')} sub={tr(lang, 'تأشيرة العمرة تتطلب الدفع مقدماً', 'The Umrah visa requires payment upfront')} />
+
+              <View style={[styles.card, { backgroundColor: c.goldTint, borderColor: colors.gold, alignItems: 'center', gap: 6 }]}>
+                <Text style={[styles.feeLabel, { color: c.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>{tr(lang, 'رسوم تأشيرة العمرة', 'Umrah visa fee')}</Text>
+                {fee ? (
+                  <Text style={[styles.feeAmount, { color: colors.umrahGreen, fontFamily: 'Cairo_700Bold' }]}>
+                    {fee.amount} {fee.currency}
+                  </Text>
+                ) : (
+                  <Text style={[styles.feeAmount, { color: colors.umrahGreen, fontFamily: 'Cairo_700Bold' }]}>—</Text>
+                )}
+                <Text style={[styles.stepSub, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular', textAlign: 'center' }]}>
+                  {tr(lang, 'الرسوم محددة حسب جنسية المعتمر', 'The fee is set according to the pilgrim nationality')}
+                </Text>
+              </View>
+
+              {!created ? (
+                <Pressable
+                  style={({ pressed }) => [styles.primaryBtn, { backgroundColor: colors.navy, opacity: pressed || createMutation.isPending ? 0.85 : 1 }]}
+                  onPress={submitCreate}
+                  disabled={createMutation.isPending}
+                >
+                  {createMutation.isPending ? <ActivityIndicator color="#FFFFFF" /> : (
+                    <>
+                      <Ionicons name="document-attach-outline" size={20} color="#FFFFFF" />
+                      <Text style={[styles.primaryBtnText, { fontFamily: 'Cairo_700Bold' }]}>{tr(lang, 'إنشاء الطلب والمتابعة للدفع', 'Create application & continue to payment')}</Text>
+                    </>
+                  )}
+                </Pressable>
+              ) : (
+                <>
+                  <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
+                    <View style={[styles.reviewRow, { borderBottomColor: c.border }]}>
+                      <Text style={[styles.reviewVal, { color: c.foreground, fontFamily: 'Cairo_700Bold' }]}>{created.trackingNumber}</Text>
+                      <Text style={[styles.reviewKey, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{tr(lang, 'رقم الطلب', 'Tracking number')}</Text>
+                    </View>
+                    <View style={[styles.reviewRow, { borderBottomColor: c.border, borderBottomWidth: 0 }]}>
+                      <Text style={[styles.reviewVal, { color: colors.umrahGreen, fontFamily: 'Cairo_700Bold' }]}>
+                        {created.feeAmount ?? fee?.amount ?? '—'} {created.feeCurrency}
+                      </Text>
+                      <Text style={[styles.reviewKey, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{tr(lang, 'المبلغ المستحق', 'Amount due')}</Text>
+                    </View>
+                  </View>
+                  <Pressable
+                    style={({ pressed }) => [styles.primaryBtn, { backgroundColor: colors.umrahGreen, opacity: pressed || payMutation.isPending ? 0.85 : 1 }]}
+                    onPress={submitPay}
+                    disabled={payMutation.isPending}
+                  >
+                    {payMutation.isPending ? <ActivityIndicator color="#FFFFFF" /> : (
+                      <>
+                        <Ionicons name="card" size={20} color="#FFFFFF" />
+                        <Text style={[styles.primaryBtnText, { fontFamily: 'Cairo_700Bold' }]}>{tr(lang, 'ادفع الآن', 'Pay now')}</Text>
+                      </>
+                    )}
+                  </Pressable>
+                </>
+              )}
+            </View>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* ── NO-HOST BLOCK MODAL (spec §3) ──────────────────────────────────── */}
+      {noHostModal && (
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { backgroundColor: c.card, borderColor: c.border }]}>
+            <View style={[styles.modalIcon, { backgroundColor: c.destructive + '15', borderColor: c.destructive + '40' }]}>
+              <Ionicons name="alert-circle-outline" size={34} color={c.destructive} />
+            </View>
+            <Text style={[styles.modalTitle, { color: c.foreground, fontFamily: 'Cairo_700Bold' }]}>{tr(lang, 'عذراً', 'Sorry')}</Text>
+            <Text style={[styles.modalMsg, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
+              {tr(lang,
+                'لا يمكنك التقديم على تأشيرة العمرة لعدم وجود مستضيف في المملكة العربية السعودية.',
+                'You cannot apply for an Umrah visa because you do not have a host in Saudi Arabia.')}
+            </Text>
+            <Pressable
+              style={({ pressed }) => [styles.primaryBtn, { backgroundColor: colors.navy, opacity: pressed ? 0.9 : 1, width: '100%' }]}
+              onPress={() => { setNoHostModal(false); router.replace('/(tabs)' as never); }}
+            >
+              <Ionicons name="home-outline" size={20} color="#FFFFFF" />
+              <Text style={[styles.primaryBtnText, { fontFamily: 'Cairo_700Bold' }]}>{tr(lang, 'العودة للرئيسية', 'Back to Home')}</Text>
+            </Pressable>
+          </View>
         </View>
-      ) : (
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <ScrollView ref={scroll} contentContainerStyle={{ padding: 20, paddingBottom: bottomInset + 40 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            {renderStep()}
-          </ScrollView>
-        </KeyboardAvoidingView>
       )}
-
-      <ConfirmDialog
-        visible={!!leaveDialog}
-        icon="warning-outline"
-        confirmStyle="destructive"
-        title="لديك بيانات غير محفوظة"
-        message="إذا غادرت الآن، قد تفقد البيانات التي أدخلتها."
-        cancelLabel="البقاء وإكمال الطلب"
-        confirmLabel="مغادرة الصفحة"
-        onCancel={() => setLeaveDialog(null)}
-        onConfirm={() => {
-          const proceed = leaveDialog?.proceed;
-          setLeaveDialog(null);
-          proceed?.();
-        }}
-      />
-
-      {/* PROFILE GATE — the customer cannot apply until the profile is complete. */}
-      <ConfirmDialog
-        visible={gateDialog}
-        icon="person-circle-outline"
-        confirmStyle="brand"
-        title="أكمل ملفك الشخصي أولاً"
-        message="لا يمكنك التقديم على تأشيرة قبل استكمال بيانات ملفك الشخصي (البيانات الشخصية، الجواز، والمستندات). أكمل ملفك ثم عد للتقديم."
-        cancelLabel="رجوع"
-        confirmLabel="إكمال الملف الشخصي"
-        onCancel={() => { setGateDialog(false); leaveWizard(); }}
-        onConfirm={() => { setGateDialog(false); router.replace('/profile-edit' as never); }}
-      />
-
-      {/* DEFERRED-PAYMENT NOTICE — shown when there is no immediate payment flow. */}
-      <ConfirmDialog
-        visible={payNotice}
-        icon="card-outline"
-        confirmStyle="brand"
-        title="الدفع بعد الموافقة المبدئية"
-        message={
-          selectedVisa
-            ? `ستدفع بعد الموافقة الأولية على التأشيرة.\nقيمة الرسوم: ${selectedVisa.fee} ${selectedVisa.currency}`
-            : 'ستدفع بعد الموافقة الأولية على التأشيرة.'
-        }
-        cancelLabel="إلغاء"
-        confirmLabel="موافق"
-        onCancel={() => setPayNotice(false)}
-        onConfirm={() => { setPayNotice(false); submitApplication(); }}
-      />
     </View>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { paddingHorizontal: 16, paddingBottom: 4 },
-  headerTop: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
+  headerRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  headerCenter: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
-  headerTitle: { fontSize: 18, color: '#FFFFFF' },
+  headerTitle: { color: '#FFFFFF', fontSize: 18, flex: 1, textAlign: 'center' },
 
-  stepWrap: { gap: 18 },
-  stepHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
+  stepWrap: { gap: 16 },
+  stepHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12, marginTop: 4 },
   stepHeadIcon: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  stepTitle: { fontSize: 20, textAlign: 'right' },
+  stepTitle: { fontSize: 18, textAlign: 'right' },
   stepSub: { fontSize: 13, textAlign: 'right', marginTop: 2, lineHeight: 19 },
 
-  fields: { gap: 14 },
-  genderRow: { flexDirection: 'row-reverse', gap: 10 },
-  genderBtn: { flex: 1, borderRadius: 12, borderWidth: 1, paddingVertical: 13, alignItems: 'center' },
+  card: { borderRadius: 18, borderWidth: 1, padding: 18, gap: 12 },
+
+  questionText: { fontSize: 16, textAlign: 'right', lineHeight: 24 },
+  choiceRow: { flexDirection: 'row-reverse', gap: 12 },
+  choiceBtn: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1.5, borderRadius: 14, paddingVertical: 16 },
+  choiceText: { fontSize: 16 },
+
+  phoneRow: { flexDirection: 'row-reverse', alignItems: 'center', borderWidth: 1, borderRadius: 12, overflow: 'hidden' },
+  phoneInput: { flex: 1, paddingHorizontal: 14, paddingVertical: 13, fontSize: 16, textAlign: 'left', writingDirection: 'ltr' },
+  phonePrefix: { paddingHorizontal: 14, paddingVertical: 13, borderRightWidth: 1 },
+  phonePrefixText: { fontSize: 15 },
+
+  ocrRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
+  ocrText: { fontSize: 12.5, textAlign: 'right', flex: 1 },
+
+  genderBtn: { flex: 1, borderWidth: 1, borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
   genderText: { fontSize: 15 },
 
-  // Visa selection
-  visaCard: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12, borderRadius: 16, borderWidth: 1.5, padding: 14 },
-  visaRadio: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  visaTitle: { fontSize: 15, textAlign: 'right' },
-  visaMeta: { fontSize: 12.5, textAlign: 'right', marginTop: 2 },
-  visaFlag: { fontSize: 26 },
+  declarationBox: { maxHeight: 320 },
+  declarationText: { fontSize: 14, textAlign: 'right', lineHeight: 24 },
 
-  // Buttons
-  nextBtn: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.gold, borderRadius: 16, paddingVertical: 16, gap: 10, marginTop: 4 },
-  nextBtnText: { fontSize: 16, color: colors.umrahGreen },
-  secondaryBtn: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12 },
-  secondaryBtnText: { fontSize: 14 },
+  checkRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12, borderWidth: 1.5, borderRadius: 14, padding: 16 },
+  checkText: { flex: 1, fontSize: 14, textAlign: 'right', lineHeight: 22 },
 
-  // OCR scan
-  scanCard: { borderRadius: 18, borderWidth: 1, padding: 14, gap: 12 },
-  ocrBadge: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, borderRadius: 12, padding: 12, borderWidth: 1 },
-  ocrText: { fontSize: 13, flex: 1, textAlign: 'right' },
+  feeLabel: { fontSize: 14 },
+  feeAmount: { fontSize: 30, lineHeight: 38 },
 
-  // Review / data card
-  reviewCard: { borderRadius: 18, borderWidth: 1, padding: 18, gap: 4 },
-  reviewHeader: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
-  reviewHeaderRight: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
-  reviewCardTitle: { fontSize: 15 },
-  reviewRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 9, borderBottomWidth: StyleSheet.hairlineWidth },
+  reviewRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   reviewKey: { fontSize: 13 },
-  reviewVal: { fontSize: 14, flex: 1, textAlign: 'left', marginLeft: 12 },
-  editLink: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4 },
-  editLinkText: { fontSize: 13, color: colors.gold },
-  dataCardHint: { fontSize: 12.5, textAlign: 'right', lineHeight: 19, marginBottom: 6 },
-  dataDocsWrap: { borderTopWidth: 1, marginTop: 8, paddingTop: 10, gap: 2 },
-  dataDocsTitle: { fontSize: 14, textAlign: 'right', marginBottom: 4 },
-  dataDocBadge: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5 },
+  reviewVal: { fontSize: 15, writingDirection: 'ltr', textAlign: 'left' },
 
-  // Visa details card
-  visaDetailCard: { borderRadius: 18, borderWidth: 1.5, padding: 18, gap: 14 },
-  visaDetailHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
-  visaDetailIcon: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  visaDetailTitle: { fontSize: 17, textAlign: 'right' },
-  visaDetailSub: { fontSize: 12.5, textAlign: 'right', marginTop: 2 },
-  visaDetailStats: { flexDirection: 'row-reverse', gap: 10 },
-  visaStat: { flex: 1, borderRadius: 14, borderWidth: 1, paddingVertical: 12, paddingHorizontal: 10, alignItems: 'center', gap: 4 },
-  visaStatLabel: { fontSize: 12 },
-  visaStatValue: { fontSize: 15, textAlign: 'center' },
+  nextBtn: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.static.premiumGold, paddingVertical: 16, borderRadius: 14, marginTop: 4 },
+  nextBtnText: { fontSize: 16, color: colors.umrahGreen },
 
-  // Declaration (الإقرار)
-  declareRow: { flexDirection: 'row-reverse', alignItems: 'flex-start', gap: 12, borderRadius: 16, borderWidth: 1.5, padding: 16 },
-  declareBox: { width: 24, height: 24, borderRadius: 7, borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
-  declareText: { flex: 1, fontSize: 13.5, textAlign: 'right', lineHeight: 21 },
+  primaryBtn: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16, borderRadius: 14 },
+  primaryBtnText: { fontSize: 16, color: '#FFFFFF' },
 
-  // Submit summary
-  summaryCard: { borderRadius: 18, borderWidth: 1.5, padding: 22, alignItems: 'center', gap: 8 },
-  summaryTitle: { fontSize: 18, textAlign: 'center' },
-  summaryName: { fontSize: 14, textAlign: 'center' },
-  summaryNote: { fontSize: 13, textAlign: 'center', lineHeight: 21 },
-  divider: { width: '100%', height: 1, marginVertical: 8 },
+  successIcon: { width: 96, height: 96, borderRadius: 30, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  successTitle: { fontSize: 20, textAlign: 'center', marginTop: 16, lineHeight: 30 },
 
-  // Error box
-  errorBox: { borderRadius: 16, borderWidth: 1, padding: 16, gap: 10 },
-  errorHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
-  errorTitle: { fontSize: 15, textAlign: 'right' },
-  errorMsg: { fontSize: 13.5, textAlign: 'right', lineHeight: 21 },
-  errorCta: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 12, paddingVertical: 12 },
-  errorCtaText: { color: '#FFFFFF', fontSize: 14 },
-
-  // Guest
-  guestWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 12 },
-  guestIcon: { width: 92, height: 92, borderRadius: 46, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  guestTitle: { fontSize: 22, textAlign: 'center' },
-  guestSub: { fontSize: 14, textAlign: 'center', lineHeight: 22, marginBottom: 12 },
-
-  // Success
-  successIcon: { width: 128, height: 128, borderRadius: 64, alignItems: 'center', justifyContent: 'center', borderWidth: 2, marginBottom: 16, marginTop: 8 },
-  successTitle: { fontSize: 24, textAlign: 'center' },
-  successSub: { fontSize: 14, textAlign: 'center', lineHeight: 22, marginTop: 8, marginBottom: 8 },
-  refCard: { width: '100%', borderRadius: 20, borderWidth: 1.5, padding: 22, gap: 12, marginVertical: 16 },
-  refLabel: { fontSize: 13, textAlign: 'center' },
-  refValue: { fontSize: 26, textAlign: 'center', letterSpacing: 1, writingDirection: 'ltr' },
-  refRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
-  refRowKey: { fontSize: 13 },
-  refRowVal: { fontSize: 14 },
-  statusBadge: { paddingHorizontal: 14, paddingVertical: 5, borderRadius: 20 },
-  statusBadgeText: { fontSize: 13 },
+  // No-host modal
+  modalBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(3,27,58,0.6)', alignItems: 'center', justifyContent: 'center', padding: 28 },
+  modalCard: { width: '100%', maxWidth: 360, borderRadius: 24, borderWidth: 1, paddingHorizontal: 22, paddingTop: 26, paddingBottom: 20, alignItems: 'center', gap: 12, boxShadow: '0px 8px 24px rgba(0,0,0,0.15)', elevation: 12 },
+  modalIcon: { width: 70, height: 70, borderRadius: 35, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  modalTitle: { fontSize: 19, textAlign: 'center' },
+  modalMsg: { fontSize: 14.5, textAlign: 'center', lineHeight: 23, marginBottom: 8 },
 });

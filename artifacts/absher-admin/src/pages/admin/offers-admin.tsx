@@ -172,7 +172,7 @@ export default function OffersAdmin() {
               <div className="p-4">
                 <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{ar ? offer.descriptionAr : offer.descriptionEn}</p>
                 <div className="flex items-center justify-between">
-                  <div className="font-bold text-primary text-lg">{offer.price.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">{offer.currency}</span></div>
+                  <div className="font-bold text-primary text-lg">{(offer.price ?? 0).toLocaleString()} <span className="text-sm font-normal text-muted-foreground">{offer.currency}</span></div>
                   <div className="flex gap-2">
                     <button onClick={() => openEdit(offer)} className="p-2 rounded-xl hover:bg-muted transition-colors text-muted-foreground hover:text-primary"><Edit2 className="h-4 w-4" /></button>
                     <button onClick={() => setDeleteConfirm(offer.id)} className="p-2 rounded-xl hover:bg-red-50 transition-colors text-muted-foreground hover:text-red-500"><Trash2 className="h-4 w-4" /></button>

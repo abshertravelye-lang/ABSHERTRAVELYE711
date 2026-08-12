@@ -79,6 +79,19 @@ function NotifItem({ notification, onMarkRead }: { notification: Notification; o
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           onMarkRead(notification.id);
         }
+        const entityId = notification.relatedEntityId;
+        if (notification.relatedEntityType === 'visa_application' && entityId) {
+          router.push(`/visa-tracking/${entityId}` as never);
+          return;
+        }
+        if (notification.relatedEntityType === 'umrah_application' && entityId) {
+          router.push(`/umrah-tracking/${entityId}` as never);
+          return;
+        }
+        const url = (notification as any).url;
+        if (typeof url === 'string' && url.length > 0) {
+          router.push(url as never);
+        }
       }}
     >
       {/* Unread dot - positioned at the start edge */}

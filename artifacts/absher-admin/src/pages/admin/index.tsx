@@ -4,7 +4,8 @@ import { useAdminAuth } from "@/hooks/use-admin-auth";
 import {
   LayoutDashboard, Ticket, Map, MessageSquare, Briefcase, FileText,
   Users, Globe, Wrench, Building2, Languages, Flag,
-  UserCog, CreditCard, BarChart3, Bell, Settings, ScrollText, LogOut, ShieldAlert
+  UserCog, CreditCard, BarChart3, Bell, Settings, ScrollText, LogOut, ShieldAlert,
+  Megaphone, Landmark, Sliders
 } from "lucide-react";
 import { lazy, Suspense, useState, type ComponentType } from "react";
 import DashboardOverview from "./dashboard-overview";
@@ -25,6 +26,9 @@ const ReportsAdmin = lazy(() => import("./reports-admin"));
 const NotificationsAdmin = lazy(() => import("./notifications-admin"));
 const SettingsAdmin = lazy(() => import("./settings-admin"));
 const AuditLogsAdmin = lazy(() => import("./audit-logs"));
+const UmrahApplicationsAdmin = lazy(() => import("./umrah-applications-admin"));
+const UmrahSettingsAdmin = lazy(() => import("./umrah-settings-admin"));
+const PromotionalOffersAdmin = lazy(() => import("./promotional-offers-admin"));
 
 function LoadingSpinner() {
   return (
@@ -84,15 +88,18 @@ export default function AdminLayout() {
     { href: "/admin/payments",           icon: CreditCard,      labelAr: "المدفوعات",         labelEn: "Payments",           perm: "payments" },
     { href: "/admin/reports",            icon: BarChart3,       labelAr: "التقارير",          labelEn: "Reports",            perm: "reports" },
     { href: "/admin/visa-applications",  icon: FileText,        labelAr: "طلبات التأشيرة",    labelEn: "Visa Applications",  perm: "visa_applications" },
+    { href: "/admin/umrah-applications", icon: Landmark,        labelAr: "طلبات تأشيرة العمرة",labelEn: "Umrah Applications", perm: "visa_applications" },
     { href: "/admin/visa-countries",     icon: Flag,            labelAr: "دول التأشيرة",      labelEn: "Visa Countries",     perm: "visa_config" },
     { href: "/admin/visas",              icon: Globe,           labelAr: "أنواع التأشيرات",   labelEn: "Visa Types",         perm: "visa_config" },
     { href: "/admin/programs",           icon: Map,             labelAr: "البرامج السياحية",  labelEn: "Programs",           perm: "visa_config" },
     { href: "/admin/offers",             icon: Briefcase,       labelAr: "العروض",            labelEn: "Offers",             perm: "visa_config" },
+    { href: "/admin/promotional-offers", icon: Megaphone,       labelAr: "العروض الترويجية",  labelEn: "Promotional Offers", perm: "visa_config" },
     { href: "/admin/destinations",       icon: Building2,       labelAr: "الوجهات",           labelEn: "Destinations",       perm: "visa_config" },
     { href: "/admin/customers",          icon: Users,           labelAr: "العملاء",           labelEn: "Customers",          perm: "customers" },
     { href: "/admin/employees",          icon: UserCog,         labelAr: "الموظفون",         labelEn: "Employees",          perm: "employees", show: isSuperAdmin || hasPermission("employees") },
     { href: "/admin/messages",           icon: MessageSquare,   labelAr: "الرسائل",           labelEn: "Messages",           perm: "messages" },
     { href: "/admin/notifications",      icon: Bell,            labelAr: "الإشعارات",         labelEn: "Notifications",      perm: "notifications" },
+    { href: "/admin/umrah-settings",      icon: Sliders,         labelAr: "إعدادات العمرة",    labelEn: "Umrah Settings",     perm: "settings" },
     { href: "/admin/settings",           icon: Settings,        labelAr: "الإعدادات",         labelEn: "Settings",           perm: "settings" },
     { href: "/admin/audit-logs",         icon: ScrollText,      labelAr: "سجل النشاط",        labelEn: "Audit Log",          perm: "audit_logs" },
   ];
@@ -221,15 +228,18 @@ export default function AdminLayout() {
               <Route path="/admin/payments" component={guard("payments", PaymentsAdmin)} />
               <Route path="/admin/reports" component={guard("reports", ReportsAdmin)} />
               <Route path="/admin/visa-applications" component={guard("visa_applications", VisaApplicationsAdmin)} />
+              <Route path="/admin/umrah-applications" component={guard("visa_applications", UmrahApplicationsAdmin)} />
               <Route path="/admin/visa-countries" component={guard("visa_config", VisaCountriesAdmin)} />
               <Route path="/admin/visas" component={guard("visa_config", VisasAdmin)} />
               <Route path="/admin/programs" component={guard("visa_config", ProgramsAdmin)} />
               <Route path="/admin/offers" component={guard("visa_config", OffersAdmin)} />
+              <Route path="/admin/promotional-offers" component={guard("visa_config", PromotionalOffersAdmin)} />
               <Route path="/admin/destinations" component={guard("visa_config", DestinationsAdmin)} />
               <Route path="/admin/customers" component={guard("customers", CustomersAdmin)} />
               <Route path="/admin/employees" component={guard("employees", EmployeesAdmin)} />
               <Route path="/admin/messages" component={guard("messages", MessagesAdmin)} />
               <Route path="/admin/notifications" component={guard("notifications", NotificationsAdmin)} />
+              <Route path="/admin/umrah-settings" component={guard("settings", UmrahSettingsAdmin)} />
               <Route path="/admin/settings" component={guard("settings", SettingsAdmin)} />
               <Route path="/admin/audit-logs" component={guard("audit_logs", AuditLogsAdmin)} />
               <Route path="/admin/:rest*">

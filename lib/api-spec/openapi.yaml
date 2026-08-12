@@ -102,6 +102,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/Offer"
 
+  /offers/admin/list:
+    get:
+      operationId: listOffersAdmin
+      tags: [offers]
+      summary: List all offers (admin, includes inactive)
+      responses:
+        "200":
+          description: List of all offers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Offer"
+
   /offers/{id}:
     get:
       operationId: getOffer
@@ -1804,33 +1819,46 @@ components:
 
     Offer:
       type: object
-      required: [id, titleAr, titleEn, descriptionAr, descriptionEn, price, duration, imageUrl, featured, createdAt]
+      required: [id, titleAr, titleEn, descriptionAr, descriptionEn, imageUrl, isActive, sortOrder, featured, createdAt, updatedAt]
       properties:
         id: { type: integer }
         titleAr: { type: string }
         titleEn: { type: string }
         descriptionAr: { type: string }
         descriptionEn: { type: string }
-        price: { type: number }
-        currency: { type: string }
-        duration: { type: string }
         imageUrl: { type: string }
+        discountLabel: { type: ["string", "null"] }
+        linkUrl: { type: ["string", "null"] }
+        startDate: { type: ["string", "null"] }
+        endDate: { type: ["string", "null"] }
+        isActive: { type: boolean }
+        sortOrder: { type: integer }
+        price: { type: ["number", "null"] }
+        currency: { type: ["string", "null"] }
+        duration: { type: ["string", "null"] }
         destination: { type: ["string", "null"] }
         featured: { type: boolean }
         createdAt: { type: string }
+        updatedAt: { type: string }
 
     OfferInput:
       type: object
-      required: [titleAr, titleEn, descriptionAr, descriptionEn, price, duration, imageUrl]
+      required: [titleAr, titleEn, descriptionAr, descriptionEn, imageUrl]
       properties:
         titleAr: { type: string }
         titleEn: { type: string }
         descriptionAr: { type: string }
         descriptionEn: { type: string }
+        imageUrl: { type: string }
+        discountLabel: { type: string }
+        linkUrl: { type: string }
+        startDate: { type: string }
+        endDate: { type: string }
+        isActive: { type: boolean }
+        sortOrder: { type: integer }
         price: { type: number }
         currency: { type: string }
         duration: { type: string }
-        imageUrl: { type: string }
         destination: { type: string }
         featured: { type: boolean }
 
@@ -1841,10 +1869,16 @@ components:
         titleEn: { type: string }
         descriptionAr: { type: string }
         descriptionEn: { type: string }
+        imageUrl: { type: string }
+        discountLabel: { type: string }
+        linkUrl: { type: string }
+        startDate: { type: string }
+        endDate: { type: string }
+        isActive: { type: boolean }
+        sortOrder: { type: integer }
         price: { type: number }
         currency: { type: string }
         duration: { type: string }
-        imageUrl: { type: string }
         destination: { type: string }
         featured: { type: boolean }
 
@@ -2822,6 +2856,7 @@ components:
           enum: [in_app, email, whatsapp, sms]
         relatedEntityType: { type: ["string", "null"] }
         relatedEntityId: { type: ["string", "null"] }
+        url: { type: ["string", "null"] }
         isRead: { type: boolean }
         sentBy: { type: ["string", "null"] }
         createdAt: { type: string }

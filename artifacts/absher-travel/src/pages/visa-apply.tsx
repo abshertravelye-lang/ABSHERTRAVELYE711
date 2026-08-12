@@ -27,6 +27,8 @@ const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
 function getDisplayUrl(url?: string | null) {
   if (!url) return "";
+  // Storage object paths are served by the API at /api/storage/objects/*
+  if (url.startsWith("/objects/")) return `${BASE_URL}/api/storage${url}`;
   if (url.startsWith("/api")) return `${BASE_URL}${url}`;
   return url;
 }

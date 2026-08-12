@@ -423,10 +423,10 @@ function NotificationRow({ n, language, onRead }: { n: ApiNotification; language
 
 const getDisplayUrl = (url?: string | null) => {
   if (!url) return "";
-  if (url.startsWith('/api')) {
-    const base = import.meta.env.BASE_URL.replace(/\/$/, "");
-    return `${base}${url}`;
-  }
+  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  // Storage object paths are served by the API at /api/storage/objects/*
+  if (url.startsWith("/objects/")) return `${base}/api/storage${url}`;
+  if (url.startsWith("/api")) return `${base}${url}`;
   return url;
 };
 
@@ -959,7 +959,7 @@ export default function Account() {
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{ar ? "رقم الجواز" : "Passport Number"} *</Label>
-                        <Input className="bg-slate-50 focus:bg-white font-mono uppercase" value={profile.passportNumber || ""} onChange={e => setProfile({...profile, passportNumber: e.target.value})} placeholder="A1234567" dir="ltr" />
+                        <Input className="bg-slate-50 focus:bg-white font-mono uppercase" value={profile.passportNumber || ""} onChange={e => setProfile({...profile, passportNumber: e.target.value})} placeholder={ar ? "رقم الجواز" : "Passport number"} dir="ltr" />
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{ar ? "الجنسية" : "Nationality"} *</Label>

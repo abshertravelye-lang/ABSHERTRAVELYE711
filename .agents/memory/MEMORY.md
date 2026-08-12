@@ -7,4 +7,5 @@
 - [Duffel order flow](duffel-order-flow.md) — POST /api/flights/book creates real Duffel orders; passenger IDs come from GET /air/offers/{id}; payment type "balance"; falls back to pending DB record for mock/expired offers.
 - [Visa Center production rules](visa-center-rules.md) — auth gate, profile completeness, server-side eligibility, AT-YYYY-NNNNNN tracking format, Coming Soon for flights/hotels.
 - [Storage object URL conventions](storage-url-conventions.md) — always rewrite /objects/... → /api/storage/objects/... when displaying; AI image endpoints accept only internal paths, auth-gated, fail closed.
+- [GCS in task envs](gcs-task-env-limitation.md) — object storage sidecar 401s in isolated task envs; prod storage routes hard-fail instead of local fallback.
 - [OpenAI proxy setup](openai-proxy-setup.md) — user's OpenAI key has no credits; server uses Replit AI Integrations proxy (both env vars required) with key fallback.

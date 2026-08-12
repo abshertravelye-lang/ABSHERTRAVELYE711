@@ -31,7 +31,8 @@ export default function ReportsAdmin() {
 
   const { data: stats } = useGetDashboardStats();
   const { data: recentBookings } = useGetRecentBookings({ limit: 5 });
-  const { data: visaApps } = useListVisaApplications({ limit: 5 });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: visaApps } = useListVisaApplications({ limit: 5 } as any);
 
   const handleExport = () => {
     toast.info(ar ? "قريباً - سيتم تصدير التقرير" : "Coming Soon - Exporting report");
@@ -204,12 +205,13 @@ export default function ReportsAdmin() {
               {visaApps?.slice(0,5).map(v => (
                 <div key={v.id} className="p-4 flex items-center justify-between hover:bg-muted/30 transition-colors">
                   <div>
-                    <p className="font-semibold text-sm">{v.applicantName}</p>
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    <p className="font-semibold text-sm">{(v as any).applicantName ?? v.fullName ?? "—"}</p>
                     <p className="text-xs text-muted-foreground">ID: #{v.id}</p>
                   </div>
                   <Badge 
                     className={
-                      v.status === 'approved' ? 'bg-emerald-100 text-emerald-800' :
+                      (v.status === 'issued' || v.status === 'completed') ? 'bg-emerald-100 text-emerald-800' :
                       v.status === 'rejected' ? 'bg-red-100 text-red-800' :
                       'bg-amber-100 text-amber-800'
                     }

@@ -17,7 +17,15 @@ import path from "path";
 const router = Router();
 
 // ── OCR client ─────────────────────────────────────────────────────────────
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Uses Replit AI Integrations proxy when configured (no OpenAI credits needed),
+// otherwise falls back to the user's own OPENAI_API_KEY.
+const openai =
+  process.env.AI_INTEGRATIONS_OPENAI_BASE_URL && process.env.AI_INTEGRATIONS_OPENAI_API_KEY
+    ? new OpenAI({
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+      })
+    : new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // ── Status notification copy ───────────────────────────────────────────────
 const STATUS_MESSAGES: Record<string, { titleAr: string; titleEn: string; messageAr: string; messageEn: string }> = {
@@ -215,9 +223,10 @@ function checkEligibility(
 const LOCAL_UPLOAD_DIR = path.join(process.cwd(), ".local-uploads");
 
 async function resolveImageForOpenAI(imageUrl: string): Promise<string> {
-  // Already a data URL or external URL — use directly
-  if (imageUrl.startsWith("data:") || imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
-    return imageUrl;
+  // Security: only internal storage object paths are accepted.
+  // Arbitrary external URLs are rejected to prevent SSRF.
+  if (!/^\/objects\/uploads\/[A-Za-z0-9-]+$/.test(imageUrl)) {
+    throw new Error("Invalid image path");
   }
 
   // Internal path like /objects/uploads/<uuid> — read from local filesystem
@@ -248,7 +257,7 @@ async function resolveImageForOpenAI(imageUrl: string): Promise<string> {
 }
 
 // ── OCR endpoint ──────────────────────────────────────────────────────────
-router.post("/visa-applications/ocr", async (req, res) => {
+router.post("/visa-applications/ocr", requireAuth, async (req, res) => {
   try {
     const { imageUrl } = req.body;
     if (!imageUrl) return res.status(400).json({ error: "imageUrl is required" });
@@ -294,7 +303,15 @@ If a field cannot be read or is not visible, use null. Return only valid JSON, n
     const jsonText = text.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
     const data = JSON.parse(jsonText);
 
-    req.log.info({ passport: { ...data, passportNumber: data.passportNumber ? "REDACTED" : null } }, "OCR success");
+    // Only report success when a meaningful extraction actually happened —
+    // at minimum the passport number plus some identity data.
+    const hasIdentity = !!(data.fullNameEn || data.fullName || (data.firstName && data.lastName));
+    if (!data.passportNumber || !hasIdentity) {
+      req.log.warn({ extractedKeys: Object.keys(data).filter(k => data[k]) }, "OCR returned insufficient data");
+      return res.json({ success: false, error: "We couldn't read the passport. Please upload a clear image of the passport information page." });
+    }
+
+    req.log.info({ passport: { ...data, passportNumber: "REDACTED" } }, "OCR success");
     res.json({ success: true, ...data });
   } catch (e) {
     req.log.error({ err: e }, "OCR processing failed");
@@ -303,7 +320,7 @@ If a field cannot be read or is not visible, use null. Return only valid JSON, n
 });
 
 // ── Photo validation endpoint ──────────────────────────────────────────────
-router.post("/visa-applications/validate-photo", async (req, res) => {
+router.post("/visa-applications/validate-photo", requireAuth, async (req, res) => {
   try {
     const { imageUrl } = req.body;
     if (!imageUrl) return res.status(400).json({ error: "imageUrl is required" });
@@ -312,8 +329,8 @@ router.post("/visa-applications/validate-photo", async (req, res) => {
     try {
       imageData = await resolveImageForOpenAI(imageUrl);
     } catch {
-      // Can't load photo — allow it through
-      return res.json({ valid: true, reason: "Photo accepted", faceDetected: true, singleFace: true });
+      // Fail closed: never report success when the photo can't even be loaded
+      return res.json({ valid: false, reason: "Could not load the photo. Please try uploading again.", faceDetected: false, singleFace: false });
     }
 
     const prompt = `Analyze this image for use as a passport/ID photo. Return ONLY a JSON object with:
@@ -344,7 +361,8 @@ Accept the photo if: exactly one face, face clearly visible, no severe blur, fac
     res.json(data);
   } catch (e) {
     req.log.error({ err: e }, "Photo validation failed");
-    res.json({ valid: true, reason: "Photo accepted", faceDetected: true, singleFace: true });
+    // Fail closed: an AI/service error must not silently mark the photo as accepted
+    res.json({ valid: false, reason: "Photo validation is temporarily unavailable. Please try again.", faceDetected: false, singleFace: false });
   }
 });
 

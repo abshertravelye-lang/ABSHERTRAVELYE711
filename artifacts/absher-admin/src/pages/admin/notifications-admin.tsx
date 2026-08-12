@@ -24,7 +24,8 @@ export default function NotificationsAdmin() {
 
   // We use useListNotifications to see recent notifications received, 
   // but usually admin wants to see sent ones. We will just use it as reference or mock sent ones.
-  const { data: notifications } = useListNotifications({ limit: 10 });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: notifications } = useListNotifications({ limit: 10 } as any);
 
   const handleSend = async () => {
     if (!title || !message) {

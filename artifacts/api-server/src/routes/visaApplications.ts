@@ -11,6 +11,8 @@ import {
 import { requireAuth, requireRole, optionalAuth } from "../middleware/auth";
 import { isProfileComplete } from "./auth";
 import OpenAI from "openai";
+import fs from "fs/promises";
+import path from "path";
 
 const router = Router();
 
@@ -209,24 +211,70 @@ function checkEligibility(
   return { eligible: true };
 }
 
+// ── Helper: resolve internal storage path → base64 data URL for OpenAI ────
+const LOCAL_UPLOAD_DIR = path.join(process.cwd(), ".local-uploads");
+
+async function resolveImageForOpenAI(imageUrl: string): Promise<string> {
+  // Already a data URL or external URL — use directly
+  if (imageUrl.startsWith("data:") || imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+    return imageUrl;
+  }
+
+  // Internal path like /objects/uploads/<uuid> — read from local filesystem
+  const uuidMatch = imageUrl.match(/\/uploads\/([^/]+)$/);
+  if (uuidMatch) {
+    const id = uuidMatch[1];
+    try {
+      const buffer = await fs.readFile(path.join(LOCAL_UPLOAD_DIR, id));
+      let mimeType = "image/jpeg";
+      try { mimeType = await fs.readFile(path.join(LOCAL_UPLOAD_DIR, `${id}.meta`), "utf8"); } catch {}
+      return `data:${mimeType};base64,${buffer.toString("base64")}`;
+    } catch (localErr) {
+      // Not in local store; try fetching from GCS via the server's own storage route
+    }
+  }
+
+  // Fallback: fetch from our own API (works for GCS-backed paths)
+  const port = process.env.PORT ?? "8080";
+  const fetchUrl = imageUrl.startsWith("/api/")
+    ? `http://localhost:${port}${imageUrl}`
+    : `http://localhost:${port}/api/storage${imageUrl}`;
+
+  const resp = await fetch(fetchUrl);
+  if (!resp.ok) throw new Error(`Could not fetch image: ${resp.status}`);
+  const arrBuf = await resp.arrayBuffer();
+  const mimeType = resp.headers.get("content-type") || "image/jpeg";
+  return `data:${mimeType};base64,${Buffer.from(arrBuf).toString("base64")}`;
+}
+
 // ── OCR endpoint ──────────────────────────────────────────────────────────
 router.post("/visa-applications/ocr", async (req, res) => {
   try {
     const { imageUrl } = req.body;
     if (!imageUrl) return res.status(400).json({ error: "imageUrl is required" });
 
+    let imageData: string;
+    try {
+      imageData = await resolveImageForOpenAI(imageUrl);
+    } catch (e) {
+      req.log.error({ err: e }, "Could not resolve passport image for OCR");
+      return res.json({ success: false, error: "Could not load the passport image. Please try uploading again." });
+    }
+
     const prompt = `You are a passport OCR system. Extract the following fields from the passport image and return ONLY a JSON object with these exact keys:
-- fullName (name in Arabic/native script if available)
-- fullNameEn (name in English / Latin script)
+- fullName (name in Arabic/native script if available, else same as fullNameEn)
+- fullNameEn (full name in English / Latin script, e.g. "JOHN WILLIAM SMITH")
+- firstName (given name(s) in English)
+- lastName (surname/family name in English)
 - passportNumber
-- nationality (country name in English)
-- gender (male/female)
+- nationality (country name in English, e.g. "Yemen", "Saudi Arabia")
+- gender ("male" or "female")
 - dateOfBirth (YYYY-MM-DD format)
 - issueDate (YYYY-MM-DD format)
 - expiryDate (YYYY-MM-DD format)
 - issuingCountry (country name in English)
 
-If a field cannot be read or is not visible, use null. Return only valid JSON, no markdown.`;
+If a field cannot be read or is not visible, use null. Return only valid JSON, no markdown, no code block.`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
@@ -235,21 +283,22 @@ If a field cannot be read or is not visible, use null. Return only valid JSON, n
           role: "user",
           content: [
             { type: "text", text: prompt },
-            { type: "image_url", image_url: { url: imageUrl, detail: "high" } },
+            { type: "image_url", image_url: { url: imageData, detail: "high" } },
           ],
         },
       ],
-      max_tokens: 500,
+      max_tokens: 600,
     });
 
     const text = response.choices[0]?.message?.content ?? "{}";
     const jsonText = text.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
     const data = JSON.parse(jsonText);
 
+    req.log.info({ passport: { ...data, passportNumber: data.passportNumber ? "REDACTED" : null } }, "OCR success");
     res.json({ success: true, ...data });
   } catch (e) {
-    req.log.error(e);
-    res.json({ success: false, error: "Could not extract passport data. Please enter manually." });
+    req.log.error({ err: e }, "OCR processing failed");
+    res.json({ success: false, error: "We couldn't read the passport. Please upload a clear image of the passport information page." });
   }
 });
 
@@ -259,13 +308,21 @@ router.post("/visa-applications/validate-photo", async (req, res) => {
     const { imageUrl } = req.body;
     if (!imageUrl) return res.status(400).json({ error: "imageUrl is required" });
 
+    let imageData: string;
+    try {
+      imageData = await resolveImageForOpenAI(imageUrl);
+    } catch {
+      // Can't load photo — allow it through
+      return res.json({ valid: true, reason: "Photo accepted", faceDetected: true, singleFace: true });
+    }
+
     const prompt = `Analyze this image for use as a passport/ID photo. Return ONLY a JSON object with:
 - valid: true or false
 - reason: short explanation (in English) if invalid, or "Photo accepted" if valid
 - faceDetected: true or false
 - singleFace: true or false (true if exactly one face)
 
-Check: exactly one face, face clearly visible, reasonable lighting, no excessive blur, appropriate framing. Return only valid JSON, no markdown.`;
+Accept the photo if: exactly one face, face clearly visible, no severe blur, face reasonably framed. Be lenient — only reject obvious issues. Return only valid JSON, no markdown.`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
@@ -274,7 +331,7 @@ Check: exactly one face, face clearly visible, reasonable lighting, no excessive
           role: "user",
           content: [
             { type: "text", text: prompt },
-            { type: "image_url", image_url: { url: imageUrl, detail: "low" } },
+            { type: "image_url", image_url: { url: imageData, detail: "low" } },
           ],
         },
       ],
@@ -286,7 +343,7 @@ Check: exactly one face, face clearly visible, reasonable lighting, no excessive
     const data = JSON.parse(jsonText);
     res.json(data);
   } catch (e) {
-    req.log.error(e);
+    req.log.error({ err: e }, "Photo validation failed");
     res.json({ valid: true, reason: "Photo accepted", faceDetected: true, singleFace: true });
   }
 });

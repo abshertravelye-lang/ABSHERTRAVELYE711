@@ -405,6 +405,10 @@ export interface OcrResult {
   /** @nullable */
   fullNameEn?: string | null;
   /** @nullable */
+  firstName?: string | null;
+  /** @nullable */
+  lastName?: string | null;
+  /** @nullable */
   passportNumber?: string | null;
   /** @nullable */
   nationality?: string | null;

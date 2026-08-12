@@ -61,6 +61,38 @@ export default function VisaDetailScreen() {
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm(f => ({ ...f, [k]: v }));
 
+  /** Auth + profile-completeness gate before opening the application form. */
+  const openApplicationForm = () => {
+    if (!authUser) {
+      Alert.alert(
+        'تسجيل الدخول مطلوب',
+        'يجب تسجيل الدخول للتقديم على التأشيرة',
+        [
+          { text: 'إلغاء', style: 'cancel' },
+          { text: 'تسجيل الدخول', onPress: () => router.push('/auth/login') },
+        ],
+      );
+      return;
+    }
+    const profileComplete = !!(
+      authUser.firstName && authUser.lastName && authUser.phone &&
+      authUser.nationality && authUser.dateOfBirth &&
+      authUser.profilePhotoUrl && authUser.passportNumber && authUser.passportExpiryDate
+    );
+    if (!profileComplete) {
+      Alert.alert(
+        'الملف الشخصي غير مكتمل',
+        'يرجى إكمال بياناتك الشخصية قبل التقديم على التأشيرة',
+        [
+          { text: 'إلغاء', style: 'cancel' },
+          { text: 'إكمال الملف', onPress: () => router.push('/(tabs)/account') },
+        ],
+      );
+      return;
+    }
+    setShowForm(true);
+  };
+
   // Determine whether each doc section is required based on visa flags
   const needsPersonalPhoto  = visa?.requiresPersonalPhoto  !== false; // default true
   const needsPassportImage  = visa?.requiresPassportImage  !== false; // default true
@@ -227,7 +259,7 @@ export default function VisaDetailScreen() {
            <Text style={[s.cardTitle, { color: colors.primary, fontFamily: 'Cairo_700Bold' }]}>الجنسية</Text>
            <Text style={[s.cardSub, { color: colors.textSecondary, fontFamily: 'Cairo_400Regular' }]}>اختر جنسيتك لمعرفة إمكانية التقديم</Text>
            
-           <Pressable style={s.dropdown} onPress={() => setShowForm(true)}>
+           <Pressable style={s.dropdown} onPress={openApplicationForm}>
              <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
              <Text style={[s.dropdownText, { color: colors.textSecondary, fontFamily: 'Cairo_400Regular' }]}>اختر جنسيتك</Text>
              <Ionicons name="globe-outline" size={20} color={colors.primary} />
@@ -288,10 +320,10 @@ export default function VisaDetailScreen() {
       <View style={[s.footer, { paddingBottom: insets.bottom + 16, backgroundColor: colors.card, borderTopColor: colors.border }]}>
         <Pressable
           style={({ pressed }) => [s.applyBtn, { backgroundColor: colors.navy, opacity: pressed ? 0.9 : 1 }]}
-          onPress={() => setShowForm(true)}
+          onPress={openApplicationForm}
         >
           <Text style={[s.applyBtnText, { fontFamily: 'Cairo_700Bold' }]}>
-            ابدأ بتقديم طلبك
+            {!authUser ? 'سجل دخولك للتقديم' : 'ابدأ بتقديم طلبك'}
           </Text>
         </Pressable>
       </View>

@@ -20,6 +20,7 @@ import {
   getListApplicationDocumentsQueryKey,
   useUploadApplicationDocument,
 } from '@workspace/api-client-react';
+import { customFetch } from '@workspace/api-client-react';
 import type { ApplicationDocument, ApplicationDocumentStatus } from '@workspace/api-client-react';
 
 /**
@@ -377,7 +378,20 @@ export default function VisaTrackingScreen() {
       Alert.alert('التأشيرة غير متوفرة بعد', 'لم يتم إصدار ملف التأشيرة الخاص بك بعد. سنعلمك فور جاهزيته.');
       return;
     }
-    const url = toIssuedVisaUrl(issuedVisaUrl);
+    let url = toIssuedVisaUrl(issuedVisaUrl);
+    try {
+      // Private objects need a short-lived signed URL (Linking/window.open
+      // cannot attach the Authorization header).
+      if (issuedVisaUrl.startsWith('/objects/')) {
+        const signed = await customFetch<{ url: string }>(
+          `/api/storage/sign?path=${encodeURIComponent(issuedVisaUrl)}&download=1`,
+        );
+        url = toIssuedVisaUrl(signed.url);
+      }
+    } catch {
+      Alert.alert('تعذر فتح الملف', 'حدث خطأ أثناء تجهيز رابط التحميل. حاول مجدداً.');
+      return;
+    }
     try {
       if (Platform.OS === 'web') {
         window.open(url, '_blank');

@@ -119,7 +119,7 @@ export default function BookingsScreen() {
             style={({ pressed }) => [styles.detailsBtn, { borderColor: colors.border, opacity: pressed ? 0.7 : 1 }]} 
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push(`/tracking/${item.id}` as any);
+              router.push(`/booking/${item.id}` as any);
             }}
           >
             <Text style={[styles.detailsBtnText, { color: colors.textSecondary, fontFamily: 'Cairo_600SemiBold' }]}>

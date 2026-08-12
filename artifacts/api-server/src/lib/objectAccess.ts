@@ -68,6 +68,7 @@ export async function isVisaApplicationObject(objectPath: string): Promise<boole
         eq(visaApplicationSubmissionsTable.residencyImageUrl, objectPath),
         eq(visaApplicationSubmissionsTable.residencyBackImageUrl, objectPath),
         eq(visaApplicationSubmissionsTable.visaImageUrl, objectPath),
+        eq(visaApplicationSubmissionsTable.issuedVisaUrl, objectPath),
       ),
     )
     .limit(1);
@@ -115,10 +116,32 @@ export async function callerOwnsObject(userId: string, objectPath: string): Prom
 export async function isAuthorizedForObject(userId: string, objectPath: string): Promise<boolean> {
   try {
     if (await callerHasVisaDocAccess(userId, objectPath)) return true;
-    return await callerOwnsObject(userId, objectPath);
+    if (await callerOwnsObject(userId, objectPath)) return true;
+    return await callerOwnsIssuedVisa(userId, objectPath);
   } catch {
     return false;
   }
+}
+
+/**
+ * Customer read-grant for issued visa files: the admin uploads the file (so
+ * object_uploads ownership points at the admin), but the customer who owns the
+ * application must be able to download it. Grants ONLY when the path is stored
+ * as issuedVisaUrl on a submission that belongs to `userId` — issuedVisaUrl is
+ * written exclusively by staff, never by the customer, so it is not spoofable.
+ */
+async function callerOwnsIssuedVisa(userId: string, objectPath: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: visaApplicationSubmissionsTable.id })
+    .from(visaApplicationSubmissionsTable)
+    .where(
+      and(
+        eq(visaApplicationSubmissionsTable.issuedVisaUrl, objectPath),
+        eq(visaApplicationSubmissionsTable.userId, userId),
+      ),
+    )
+    .limit(1);
+  return !!row;
 }
 
 /**

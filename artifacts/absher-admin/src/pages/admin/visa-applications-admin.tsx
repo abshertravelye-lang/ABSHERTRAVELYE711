@@ -18,7 +18,12 @@ async function uploadFile(file: File): Promise<string | null> {
   const fd = new FormData();
   fd.append("file", file);
   try {
-    const res = await fetch(`${base}/api/storage/uploads`, { method: "POST", body: fd });
+    const token = localStorage.getItem(ADMIN_ACCESS_TOKEN_KEY);
+    const res = await fetch(`${base}/api/storage/uploads`, {
+      method: "POST",
+      body: fd,
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
     if (!res.ok) return null;
     const json = await res.json();
     return json.objectPath ?? json.url ?? null;
@@ -27,12 +32,26 @@ async function uploadFile(file: File): Promise<string | null> {
   }
 }
 
-/** Rewrite a stored /objects/... path to its served URL for direct links. */
-function toDocUrl(path: string): string {
-  if (/^https?:\/\//.test(path)) return path;
+/**
+ * Open a private storage object in a new tab. Objects require auth, so we
+ * first exchange the path for a short-lived signed URL (an <a href> cannot
+ * carry the Authorization header).
+ */
+async function openObjectInNewTab(path: string): Promise<void> {
   const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
-  if (path.startsWith("/objects/")) return `${base}/api/storage${path}`;
-  return path.startsWith("/") ? `${base}${path}` : `${base}/${path}`;
+  if (/^https?:\/\//.test(path)) { window.open(path, "_blank", "noopener"); return; }
+  if (!path.startsWith("/objects/")) { window.open(`${base}${path.startsWith("/") ? "" : "/"}${path}`, "_blank", "noopener"); return; }
+  try {
+    const token = localStorage.getItem(ADMIN_ACCESS_TOKEN_KEY);
+    const res = await fetch(`${base}/api/storage/sign?path=${encodeURIComponent(path)}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!res.ok) throw new Error(String(res.status));
+    const { url } = await res.json();
+    window.open(`${base}${url}`, "_blank", "noopener");
+  } catch {
+    toast.error("تعذر فتح الملف");
+  }
 }
 
 const STATUS_META: Record<string, { arLabel: string; enLabel: string; color: string; icon: React.ReactNode }> = {
@@ -697,15 +716,14 @@ function DetailModal({ app, onClose, onUpdate, updating, ar, canViewDocs, canReq
               <label className="block text-sm font-medium mb-2">{ar ? "إرفاق ملف التأشيرة" : "Attach Visa File"}</label>
               {issuedVisaUrl ? (
                 <div className="flex items-center justify-between gap-3 border rounded-xl px-4 py-2.5 bg-white">
-                  <a
-                    href={toDocUrl(issuedVisaUrl)}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    type="button"
+                    onClick={() => openObjectInNewTab(issuedVisaUrl)}
                     className="flex items-center gap-2 text-sm text-[#0d2351] font-medium truncate hover:underline"
                   >
                     <Paperclip className="w-4 h-4 shrink-0" />
                     <span className="truncate" dir="ltr">{issuedVisaUrl.split("/").pop()}</span>
-                  </a>
+                  </button>
                   <div className="flex gap-2 shrink-0">
                     <button type="button" onClick={() => fileRef.current?.click()} className="text-xs text-[#0d2351] hover:underline font-medium">
                       {ar ? "استبدال" : "Replace"}

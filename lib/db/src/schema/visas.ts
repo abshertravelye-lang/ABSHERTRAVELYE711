@@ -81,6 +81,12 @@ export const visasTable = pgTable("visas", {
   requiresPersonalPhoto: boolean("requires_personal_photo").notNull().default(true),
   requiresResidencyImage: boolean("requires_residency_image").notNull().default(false),
   requiresVisaImage: boolean("requires_visa_image").notNull().default(false),
+  requiresEuropeanDoc: boolean("requires_european_doc").notNull().default(false),
+  requiresSchengenDoc: boolean("requires_schengen_doc").notNull().default(false),
+  // Structured eligibility (replaces loose booleans + requiredResidencies)
+  gccResidencyRequirement: text("gcc_residency_requirement").notNull().default("not_required"),
+  acceptedGccCountries: text("accepted_gcc_countries").array().notNull().default([]),
+  europeanSchengenLogic: text("european_schengen_logic").notNull().default("neither"),
   ineligibleMessageAr: text("ineligible_message_ar"),
   ineligibleMessageEn: text("ineligible_message_en"),
   createdAt: timestamp("created_at").notNull().defaultNow(),

@@ -795,6 +795,11 @@ export const CreateVisaBody = zod.object({
   "requiresPersonalPhoto": zod.boolean().optional(),
   "requiresResidencyImage": zod.boolean().optional(),
   "requiresVisaImage": zod.boolean().optional(),
+  "requiresEuropeanDoc": zod.boolean().optional(),
+  "requiresSchengenDoc": zod.boolean().optional(),
+  "gccResidencyRequirement": zod.string().optional(),
+  "acceptedGccCountries": zod.array(zod.string()).optional(),
+  "europeanSchengenLogic": zod.string().optional(),
   "ineligibleMessageAr": zod.string().optional(),
   "ineligibleMessageEn": zod.string().optional()
 })
@@ -930,6 +935,11 @@ export const UpdateVisaBody = zod.object({
   "requiresPersonalPhoto": zod.boolean().optional(),
   "requiresResidencyImage": zod.boolean().optional(),
   "requiresVisaImage": zod.boolean().optional(),
+  "requiresEuropeanDoc": zod.boolean().optional(),
+  "requiresSchengenDoc": zod.boolean().optional(),
+  "gccResidencyRequirement": zod.string().optional(),
+  "acceptedGccCountries": zod.array(zod.string()).optional(),
+  "europeanSchengenLogic": zod.string().optional(),
   "ineligibleMessageAr": zod.string().optional(),
   "ineligibleMessageEn": zod.string().optional()
 })

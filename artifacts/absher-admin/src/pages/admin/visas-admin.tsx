@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListVisas, useCreateVisa, useUpdateVisa, useDeleteVisa, getListVisasQueryKey,
@@ -6,9 +6,193 @@ import {
   getListVisaCustomFieldsQueryKey,
 } from "@workspace/api-client-react";
 import { useTranslation } from "@/hooks/use-translation";
-import { Plus, Edit2, Trash2, X, Globe, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Edit2, Trash2, X, Globe, ChevronDown, ChevronRight, Upload, Image as ImageIcon, CheckCircle2, ShieldCheck, FileText, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+
+// ── Compact world country list (English name + Arabic name + ISO code) ────────
+const ALL_COUNTRIES = [
+  { code: "AF", en: "Afghanistan", ar: "أفغانستان" },
+  { code: "AL", en: "Albania", ar: "ألبانيا" },
+  { code: "DZ", en: "Algeria", ar: "الجزائر" },
+  { code: "AD", en: "Andorra", ar: "أندورا" },
+  { code: "AO", en: "Angola", ar: "أنغولا" },
+  { code: "AR", en: "Argentina", ar: "الأرجنتين" },
+  { code: "AM", en: "Armenia", ar: "أرمينيا" },
+  { code: "AU", en: "Australia", ar: "أستراليا" },
+  { code: "AT", en: "Austria", ar: "النمسا" },
+  { code: "AZ", en: "Azerbaijan", ar: "أذربيجان" },
+  { code: "BH", en: "Bahrain", ar: "البحرين" },
+  { code: "BD", en: "Bangladesh", ar: "بنغلاديش" },
+  { code: "BY", en: "Belarus", ar: "بيلاروسيا" },
+  { code: "BE", en: "Belgium", ar: "بلجيكا" },
+  { code: "BJ", en: "Benin", ar: "بنين" },
+  { code: "BT", en: "Bhutan", ar: "بوتان" },
+  { code: "BO", en: "Bolivia", ar: "بوليفيا" },
+  { code: "BA", en: "Bosnia and Herzegovina", ar: "البوسنة والهرسك" },
+  { code: "BW", en: "Botswana", ar: "بوتسوانا" },
+  { code: "BR", en: "Brazil", ar: "البرازيل" },
+  { code: "BN", en: "Brunei", ar: "بروناي" },
+  { code: "BG", en: "Bulgaria", ar: "بلغاريا" },
+  { code: "BF", en: "Burkina Faso", ar: "بوركينا فاسو" },
+  { code: "BI", en: "Burundi", ar: "بوروندي" },
+  { code: "KH", en: "Cambodia", ar: "كمبوديا" },
+  { code: "CM", en: "Cameroon", ar: "الكاميرون" },
+  { code: "CA", en: "Canada", ar: "كندا" },
+  { code: "CV", en: "Cape Verde", ar: "الرأس الأخضر" },
+  { code: "CF", en: "Central African Republic", ar: "جمهورية أفريقيا الوسطى" },
+  { code: "TD", en: "Chad", ar: "تشاد" },
+  { code: "CL", en: "Chile", ar: "تشيلي" },
+  { code: "CN", en: "China", ar: "الصين" },
+  { code: "CO", en: "Colombia", ar: "كولومبيا" },
+  { code: "KM", en: "Comoros", ar: "جزر القمر" },
+  { code: "CG", en: "Congo", ar: "الكونغو" },
+  { code: "HR", en: "Croatia", ar: "كرواتيا" },
+  { code: "CU", en: "Cuba", ar: "كوبا" },
+  { code: "CY", en: "Cyprus", ar: "قبرص" },
+  { code: "CZ", en: "Czech Republic", ar: "جمهورية التشيك" },
+  { code: "DK", en: "Denmark", ar: "الدنمارك" },
+  { code: "DJ", en: "Djibouti", ar: "جيبوتي" },
+  { code: "DO", en: "Dominican Republic", ar: "جمهورية الدومينيكان" },
+  { code: "CD", en: "DR Congo", ar: "الكونغو الديمقراطية" },
+  { code: "EC", en: "Ecuador", ar: "الإكوادور" },
+  { code: "EG", en: "Egypt", ar: "مصر" },
+  { code: "SV", en: "El Salvador", ar: "السلفادور" },
+  { code: "GQ", en: "Equatorial Guinea", ar: "غينيا الاستوائية" },
+  { code: "ER", en: "Eritrea", ar: "إريتريا" },
+  { code: "EE", en: "Estonia", ar: "إستونيا" },
+  { code: "ET", en: "Ethiopia", ar: "إثيوبيا" },
+  { code: "FJ", en: "Fiji", ar: "فيجي" },
+  { code: "FI", en: "Finland", ar: "فنلندا" },
+  { code: "FR", en: "France", ar: "فرنسا" },
+  { code: "GA", en: "Gabon", ar: "الغابون" },
+  { code: "GM", en: "Gambia", ar: "غامبيا" },
+  { code: "GE", en: "Georgia", ar: "جورجيا" },
+  { code: "DE", en: "Germany", ar: "ألمانيا" },
+  { code: "GH", en: "Ghana", ar: "غانا" },
+  { code: "GR", en: "Greece", ar: "اليونان" },
+  { code: "GT", en: "Guatemala", ar: "غواتيمالا" },
+  { code: "GN", en: "Guinea", ar: "غينيا" },
+  { code: "GW", en: "Guinea-Bissau", ar: "غينيا بيساو" },
+  { code: "GY", en: "Guyana", ar: "غيانا" },
+  { code: "HT", en: "Haiti", ar: "هايتي" },
+  { code: "HN", en: "Honduras", ar: "هندوراس" },
+  { code: "HU", en: "Hungary", ar: "هنغاريا" },
+  { code: "IS", en: "Iceland", ar: "أيسلندا" },
+  { code: "IN", en: "India", ar: "الهند" },
+  { code: "ID", en: "Indonesia", ar: "إندونيسيا" },
+  { code: "IR", en: "Iran", ar: "إيران" },
+  { code: "IQ", en: "Iraq", ar: "العراق" },
+  { code: "IE", en: "Ireland", ar: "أيرلندا" },
+  { code: "IL", en: "Israel", ar: "إسرائيل" },
+  { code: "IT", en: "Italy", ar: "إيطاليا" },
+  { code: "CI", en: "Ivory Coast", ar: "ساحل العاج" },
+  { code: "JM", en: "Jamaica", ar: "جامايكا" },
+  { code: "JP", en: "Japan", ar: "اليابان" },
+  { code: "JO", en: "Jordan", ar: "الأردن" },
+  { code: "KZ", en: "Kazakhstan", ar: "كازاخستان" },
+  { code: "KE", en: "Kenya", ar: "كينيا" },
+  { code: "KW", en: "Kuwait", ar: "الكويت" },
+  { code: "KG", en: "Kyrgyzstan", ar: "قيرغيزستان" },
+  { code: "LA", en: "Laos", ar: "لاوس" },
+  { code: "LV", en: "Latvia", ar: "لاتفيا" },
+  { code: "LB", en: "Lebanon", ar: "لبنان" },
+  { code: "LS", en: "Lesotho", ar: "ليسوتو" },
+  { code: "LR", en: "Liberia", ar: "ليبيريا" },
+  { code: "LY", en: "Libya", ar: "ليبيا" },
+  { code: "LI", en: "Liechtenstein", ar: "ليختنشتاين" },
+  { code: "LT", en: "Lithuania", ar: "ليتوانيا" },
+  { code: "LU", en: "Luxembourg", ar: "لوكسمبورغ" },
+  { code: "MG", en: "Madagascar", ar: "مدغشقر" },
+  { code: "MW", en: "Malawi", ar: "ملاوي" },
+  { code: "MY", en: "Malaysia", ar: "ماليزيا" },
+  { code: "MV", en: "Maldives", ar: "جزر المالديف" },
+  { code: "ML", en: "Mali", ar: "مالي" },
+  { code: "MT", en: "Malta", ar: "مالطا" },
+  { code: "MR", en: "Mauritania", ar: "موريتانيا" },
+  { code: "MU", en: "Mauritius", ar: "موريشيوس" },
+  { code: "MX", en: "Mexico", ar: "المكسيك" },
+  { code: "MD", en: "Moldova", ar: "مولدوفا" },
+  { code: "MC", en: "Monaco", ar: "موناكو" },
+  { code: "MN", en: "Mongolia", ar: "منغوليا" },
+  { code: "ME", en: "Montenegro", ar: "الجبل الأسود" },
+  { code: "MA", en: "Morocco", ar: "المغرب" },
+  { code: "MZ", en: "Mozambique", ar: "موزمبيق" },
+  { code: "MM", en: "Myanmar", ar: "ميانمار" },
+  { code: "NA", en: "Namibia", ar: "ناميبيا" },
+  { code: "NP", en: "Nepal", ar: "نيبال" },
+  { code: "NL", en: "Netherlands", ar: "هولندا" },
+  { code: "NZ", en: "New Zealand", ar: "نيوزيلندا" },
+  { code: "NI", en: "Nicaragua", ar: "نيكاراغوا" },
+  { code: "NE", en: "Niger", ar: "النيجر" },
+  { code: "NG", en: "Nigeria", ar: "نيجيريا" },
+  { code: "KP", en: "North Korea", ar: "كوريا الشمالية" },
+  { code: "MK", en: "North Macedonia", ar: "مقدونيا الشمالية" },
+  { code: "NO", en: "Norway", ar: "النرويج" },
+  { code: "OM", en: "Oman", ar: "عُمان" },
+  { code: "PK", en: "Pakistan", ar: "باكستان" },
+  { code: "PS", en: "Palestine", ar: "فلسطين" },
+  { code: "PA", en: "Panama", ar: "بنما" },
+  { code: "PG", en: "Papua New Guinea", ar: "بابوا غينيا الجديدة" },
+  { code: "PY", en: "Paraguay", ar: "باراغواي" },
+  { code: "PE", en: "Peru", ar: "بيرو" },
+  { code: "PH", en: "Philippines", ar: "الفلبين" },
+  { code: "PL", en: "Poland", ar: "بولندا" },
+  { code: "PT", en: "Portugal", ar: "البرتغال" },
+  { code: "QA", en: "Qatar", ar: "قطر" },
+  { code: "RO", en: "Romania", ar: "رومانيا" },
+  { code: "RU", en: "Russia", ar: "روسيا" },
+  { code: "RW", en: "Rwanda", ar: "رواندا" },
+  { code: "SA", en: "Saudi Arabia", ar: "المملكة العربية السعودية" },
+  { code: "SN", en: "Senegal", ar: "السنغال" },
+  { code: "RS", en: "Serbia", ar: "صربيا" },
+  { code: "SL", en: "Sierra Leone", ar: "سيراليون" },
+  { code: "SG", en: "Singapore", ar: "سنغافورة" },
+  { code: "SK", en: "Slovakia", ar: "سلوفاكيا" },
+  { code: "SI", en: "Slovenia", ar: "سلوفينيا" },
+  { code: "SO", en: "Somalia", ar: "الصومال" },
+  { code: "ZA", en: "South Africa", ar: "جنوب أفريقيا" },
+  { code: "KR", en: "South Korea", ar: "كوريا الجنوبية" },
+  { code: "SS", en: "South Sudan", ar: "جنوب السودان" },
+  { code: "ES", en: "Spain", ar: "إسبانيا" },
+  { code: "LK", en: "Sri Lanka", ar: "سريلانكا" },
+  { code: "SD", en: "Sudan", ar: "السودان" },
+  { code: "SR", en: "Suriname", ar: "سورينام" },
+  { code: "SE", en: "Sweden", ar: "السويد" },
+  { code: "CH", en: "Switzerland", ar: "سويسرا" },
+  { code: "SY", en: "Syria", ar: "سوريا" },
+  { code: "TW", en: "Taiwan", ar: "تايوان" },
+  { code: "TJ", en: "Tajikistan", ar: "طاجيكستان" },
+  { code: "TZ", en: "Tanzania", ar: "تنزانيا" },
+  { code: "TH", en: "Thailand", ar: "تايلاند" },
+  { code: "TL", en: "Timor-Leste", ar: "تيمور الشرقية" },
+  { code: "TG", en: "Togo", ar: "توغو" },
+  { code: "TN", en: "Tunisia", ar: "تونس" },
+  { code: "TR", en: "Turkey", ar: "تركيا" },
+  { code: "TM", en: "Turkmenistan", ar: "تركمانستان" },
+  { code: "UG", en: "Uganda", ar: "أوغندا" },
+  { code: "UA", en: "Ukraine", ar: "أوكرانيا" },
+  { code: "AE", en: "United Arab Emirates", ar: "الإمارات العربية المتحدة" },
+  { code: "GB", en: "United Kingdom", ar: "المملكة المتحدة" },
+  { code: "US", en: "United States", ar: "الولايات المتحدة" },
+  { code: "UY", en: "Uruguay", ar: "أوروغواي" },
+  { code: "UZ", en: "Uzbekistan", ar: "أوزبكستان" },
+  { code: "VE", en: "Venezuela", ar: "فنزويلا" },
+  { code: "VN", en: "Vietnam", ar: "فيتنام" },
+  { code: "YE", en: "Yemen", ar: "اليمن" },
+  { code: "ZM", en: "Zambia", ar: "زامبيا" },
+  { code: "ZW", en: "Zimbabwe", ar: "زيمبابوي" },
+];
+
+const GCC_COUNTRIES = ["Saudi Arabia", "United Arab Emirates", "Kuwait", "Qatar", "Bahrain", "Oman"];
+const GCC_LABELS: Record<string, string> = {
+  "Saudi Arabia": "المملكة العربية السعودية",
+  "United Arab Emirates": "الإمارات العربية المتحدة",
+  "Kuwait": "الكويت",
+  "Qatar": "قطر",
+  "Bahrain": "البحرين",
+  "Oman": "عُمان",
+};
 
 const CATEGORIES = [
   { value: "tourist",  ar: "سياحية",  en: "Tourist" },
@@ -32,6 +216,183 @@ const FIELD_TYPES = [
   { value: "date",     ar: "تاريخ",      en: "Date" },
 ];
 
+const EU_SCHENGEN_OPTIONS = [
+  { value: "neither",       ar: "غير مطلوب",                           en: "Not Required" },
+  { value: "european_only", ar: "إقامة أوروبية فقط (EU/UK)",           en: "European Residency Only" },
+  { value: "schengen_only", ar: "تأشيرة شنغن/بريطانية فقط",           en: "Schengen/UK Visa Only" },
+  { value: "either",        ar: "إقامة أوروبية أو تأشيرة شنغن",       en: "European Residency OR Schengen Visa" },
+  { value: "both",          ar: "إقامة أوروبية وتأشيرة شنغن معاً",    en: "Both Required" },
+];
+
+// ── Storage upload helper ──────────────────────────────────────────────────
+async function uploadFile(file: File): Promise<string | null> {
+  const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+  const fd = new FormData();
+  fd.append("file", file);
+  try {
+    const res = await fetch(`${base}/api/storage/uploads`, { method: "POST", body: fd });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.objectPath ?? json.url ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function getDisplayUrl(path: string | null | undefined): string | undefined {
+  if (!path) return undefined;
+  if (path.startsWith("http")) return path;
+  const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+  return `${base}/api/storage/object/${path}`;
+}
+
+// ── NationalityPicker (searchable multi-select) ───────────────────────────
+function NationalityPicker({
+  value: valueProp, onChange, placeholder, ar,
+}: { value: string[]; onChange: (v: string[]) => void; placeholder?: string; ar: boolean }) {
+  const value = valueProp ?? [];
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+
+  const filtered = ALL_COUNTRIES.filter(c =>
+    c.en.toLowerCase().includes(search.toLowerCase()) ||
+    c.ar.includes(search)
+  ).slice(0, 60);
+
+  const toggle = (en: string) => {
+    if (value.includes(en)) onChange(value.filter(v => v !== en));
+    else onChange([...value, en]);
+  };
+
+  return (
+    <div className="space-y-2">
+      {value.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50 rounded-xl border border-slate-100 min-h-[40px]">
+          {value.map(v => {
+            const c = ALL_COUNTRIES.find(c => c.en === v);
+            return (
+              <span key={v} className="flex items-center gap-1 bg-[#0d2351] text-white text-xs px-2 py-1 rounded-lg">
+                {ar ? (c?.ar || v) : v}
+                <button type="button" onClick={() => toggle(v)} className="hover:text-red-300 ml-1">×</button>
+              </span>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => onChange([])}
+            className="text-xs text-red-500 hover:underline px-1"
+          >
+            {ar ? "مسح الكل" : "Clear all"}
+          </button>
+        </div>
+      )}
+      <div className="relative">
+        <input
+          className="w-full border rounded-xl px-4 py-2.5 text-sm"
+          placeholder={placeholder || (ar ? "ابحث عن دولة..." : "Search country...")}
+          value={search}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 200)}
+          onChange={e => { setSearch(e.target.value); setOpen(true); }}
+          dir="auto"
+        />
+        {open && (
+          <div className="absolute top-full left-0 right-0 z-50 bg-white border rounded-xl shadow-xl max-h-52 overflow-y-auto mt-1">
+            {filtered.length === 0 ? (
+              <div className="px-4 py-3 text-xs text-slate-400">{ar ? "لا توجد نتائج" : "No results"}</div>
+            ) : filtered.map(c => (
+              <button
+                key={c.code}
+                type="button"
+                className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 flex items-center justify-between ${value.includes(c.en) ? "bg-[#0d2351]/5 text-[#0d2351] font-medium" : ""}`}
+                onMouseDown={() => { toggle(c.en); setSearch(""); }}
+              >
+                <span dir="auto">{ar ? `${c.ar}` : c.en} <span className="text-slate-400 text-xs">({ar ? c.en : c.ar})</span></span>
+                {value.includes(c.en) && <CheckCircle2 className="w-4 h-4 text-[#0d2351] shrink-0" />}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      {value.length > 0 && (
+        <p className="text-xs text-slate-400">{value.length} {ar ? "دولة محددة" : "countries selected"}</p>
+      )}
+    </div>
+  );
+}
+
+// ── Visa Image Upload ──────────────────────────────────────────────────────
+function VisaImageUpload({ value, onChange, ar }: { value: string; onChange: (v: string) => void; ar: boolean }) {
+  const [uploading, setUploading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = async (file: File) => {
+    setUploading(true);
+    const path = await uploadFile(file);
+    setUploading(false);
+    if (path) {
+      onChange(path);
+      toast.success(ar ? "تم رفع الصورة بنجاح" : "Image uploaded successfully");
+    } else {
+      toast.error(ar ? "فشل رفع الصورة" : "Image upload failed");
+    }
+  };
+
+  if (value) {
+    return (
+      <div className="border-2 border-slate-200 rounded-xl overflow-hidden">
+        <img src={getDisplayUrl(value)} className="w-full h-44 object-cover bg-slate-100" />
+        <div className="flex items-center justify-between p-3 bg-slate-50">
+          <p className="text-xs text-slate-500 truncate" dir="ltr">{value.split("/").pop()}</p>
+          <div className="flex gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              className="text-xs text-[#0d2351] hover:underline font-medium"
+            >
+              {ar ? "استبدال" : "Replace"}
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange("")}
+              className="text-xs text-red-500 hover:underline"
+            >
+              {ar ? "حذف" : "Remove"}
+            </button>
+          </div>
+        </div>
+        <input ref={inputRef} type="file" className="hidden" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+      </div>
+    );
+  }
+
+  return (
+    <label className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-slate-300 rounded-xl p-8 cursor-pointer hover:border-[#0d2351]/50 hover:bg-[#0d2351]/3 transition-colors">
+      <input type="file" className="hidden" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} disabled={uploading} />
+      {uploading ? (
+        <div className="flex flex-col items-center gap-2">
+          <div className="w-8 h-8 border-4 border-[#0d2351]/20 border-t-[#0d2351] rounded-full animate-spin" />
+          <p className="text-sm text-slate-500">{ar ? "جاري الرفع..." : "Uploading..."}</p>
+        </div>
+      ) : (
+        <>
+          <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center">
+            <ImageIcon className="w-7 h-7 text-slate-400" />
+          </div>
+          <div className="text-center">
+            <p className="font-semibold text-sm text-slate-700">{ar ? "اضغط لرفع صورة التأشيرة" : "Click to upload visa image"}</p>
+            <p className="text-xs text-slate-400 mt-1">{ar ? "PNG, JPG, WEBP حتى 10MB" : "PNG, JPG, WEBP up to 10MB"}</p>
+          </div>
+          <div className="flex items-center gap-2 text-[#0d2351] text-xs font-semibold bg-[#0d2351]/10 px-4 py-2 rounded-xl">
+            <Upload className="w-4 h-4" />
+            {ar ? "اختر ملفاً" : "Choose File"}
+          </div>
+        </>
+      )}
+    </label>
+  );
+}
+
 // ── Custom Fields Panel ────────────────────────────────────────────────────
 function CustomFieldsPanel({ visaId, ar }: { visaId: number; ar: boolean }) {
   const qc = useQueryClient();
@@ -48,19 +409,14 @@ function CustomFieldsPanel({ visaId, ar }: { visaId: number; ar: boolean }) {
 
   async function save() {
     try {
-      const payload = {
-        ...form,
-        visaId,
-        options: form.options ? form.options.split(",").map(s => s.trim()) : [],
-      };
+      const payload = { ...form, visaId, options: form.options ? form.options.split(",").map(s => s.trim()) : [] };
       if (editId !== null) {
         await updateMut.mutateAsync({ id: editId, data: payload as never });
       } else {
         await createMut.mutateAsync({ id: visaId, data: payload as never });
       }
       await invalidate();
-      setAdding(false);
-      setEditId(null);
+      setAdding(false); setEditId(null);
       setForm({ labelAr: "", labelEn: "", fieldType: "text", isRequired: false, options: "", placeholderAr: "", placeholderEn: "", sortOrder: 0 });
       toast.success(ar ? "تم حفظ الحقل بنجاح" : "Field saved successfully");
     } catch {
@@ -134,32 +490,60 @@ function CustomFieldsPanel({ visaId, ar }: { visaId: number; ar: boolean }) {
   );
 }
 
-// ── Main Visa Admin ────────────────────────────────────────────────────────
+// ── Form Interface ─────────────────────────────────────────────────────────
 interface VisaForm {
   countryId: string; countryAr: string; countryEn: string; countryCode: string;
   visaType: string; category: string; fee: number; currency: string;
   processingDays: number; stayDuration: number; validityDays: number;
   entryType: string; isActive: boolean;
-  requiresPassportImage: boolean; requiresPersonalPhoto: boolean;
-  requiresResidencyImage: boolean; requiresVisaImage: boolean;
-  acceptsGccResidency: boolean; acceptsSchengenResidency: boolean;
-  acceptsUkResidency: boolean; acceptsUsVisa: boolean;
+  imageUrl: string;
+  // ── Eligibility ──
+  allowedNationalities: string[];
+  blockedNationalities: string[];
+  gccResidencyRequirement: string;   // "not_required" | "required"
+  acceptedGccCountries: string[];
+  europeanSchengenLogic: string;     // "neither" | "european_only" | "schengen_only" | "either" | "both"
+  // ── Required Documents ──
+  requiresPassportImage: boolean;
+  requiresPersonalPhoto: boolean;
+  requiresResidencyImage: boolean;   // GCC residence permit
+  requiresEuropeanDoc: boolean;      // European residence permit
+  requiresSchengenDoc: boolean;      // Schengen visa
+  requiresVisaImage: boolean;        // Other
+  // ── Descriptions / Messages ──
   descriptionAr: string; descriptionEn: string;
   ineligibleMessageAr: string; ineligibleMessageEn: string;
 }
+
 const emptyVisa = (): VisaForm => ({
   countryId: "", countryAr: "", countryEn: "", countryCode: "",
-  visaType: "", category: "tourist", fee: 0, currency: "SAR",
+  visaType: "", category: "tourist", fee: 0, currency: "USD",
   processingDays: 5, stayDuration: 30, validityDays: 90,
   entryType: "single", isActive: true,
+  imageUrl: "",
+  allowedNationalities: [], blockedNationalities: [],
+  gccResidencyRequirement: "not_required", acceptedGccCountries: [],
+  europeanSchengenLogic: "neither",
   requiresPassportImage: true, requiresPersonalPhoto: true,
-  requiresResidencyImage: false, requiresVisaImage: false,
-  acceptsGccResidency: true, acceptsSchengenResidency: false,
-  acceptsUkResidency: false, acceptsUsVisa: false,
+  requiresResidencyImage: false, requiresEuropeanDoc: false,
+  requiresSchengenDoc: false, requiresVisaImage: false,
   descriptionAr: "", descriptionEn: "",
   ineligibleMessageAr: "", ineligibleMessageEn: "",
 });
 
+// ── Section Header ──────────────────────────────────────────────────────────
+function SectionHeader({ icon, title }: { icon: React.ReactNode; title: string }) {
+  return (
+    <div className="flex items-center gap-2.5 mb-4 pb-2 border-b border-slate-100">
+      <div className="w-8 h-8 rounded-lg bg-[#0d2351]/10 flex items-center justify-center text-[#0d2351]">
+        {icon}
+      </div>
+      <h3 className="text-sm font-bold text-[#0d2351] uppercase tracking-wide">{title}</h3>
+    </div>
+  );
+}
+
+// ── Visa Modal ─────────────────────────────────────────────────────────────
 function VisaModal({ initial, onSave, onCancel, loading, ar, countries }: {
   initial: VisaForm; onSave: (d: VisaForm) => void; onCancel: () => void; loading: boolean; ar: boolean;
   countries: Array<{ id: number; nameAr: string; nameEn: string; countryCode: string }>;
@@ -171,11 +555,7 @@ function VisaModal({ initial, onSave, onCancel, loading, ar, countries }: {
   function handleCountryChange(id: string) {
     const c = countries.find(c => String(c.id) === id);
     set("countryId", id);
-    if (c) {
-      set("countryAr", c.nameAr);
-      set("countryEn", c.nameEn);
-      set("countryCode", c.countryCode);
-    }
+    if (c) { set("countryAr", c.nameAr); set("countryEn", c.nameEn); set("countryCode", c.countryCode); }
   }
 
   const canSave = !loading && !!form.visaType && !!form.countryAr;
@@ -189,15 +569,17 @@ function VisaModal({ initial, onSave, onCancel, loading, ar, countries }: {
           <button onClick={onCancel} className="p-2 hover:bg-slate-100 rounded-lg"><X className="w-5 h-5" /></button>
         </div>
 
-        {/* Body — scrolls on mobile */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-8">
 
-          {/* ── Country ── */}
+          {/* ── A: Basic Info ── */}
           <section>
-            <h3 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">{ar ? "معلومات الدولة" : "Country Info"}</h3>
-            <div className="space-y-3">
+            <SectionHeader icon={<Globe className="w-4 h-4" />} title={ar ? "أ. المعلومات الأساسية" : "A. Basic Information"} />
+
+            {/* Country */}
+            <div className="space-y-3 mb-5">
               <div>
-                <label className="block text-sm font-medium mb-1">{ar ? "اختر الدولة من القائمة" : "Select Country"}</label>
+                <label className="block text-sm font-medium mb-1">{ar ? "اختر الدولة" : "Select Country"}</label>
                 <select className="w-full border rounded-xl px-4 py-2.5 text-sm bg-white" value={form.countryId} onChange={e => handleCountryChange(e.target.value)}>
                   <option value="">{ar ? "-- اختر دولة --" : "-- Select country --"}</option>
                   {countries.map(c => <option key={c.id} value={c.id}>{ar ? c.nameAr : c.nameEn}</option>)}
@@ -205,25 +587,22 @@ function VisaModal({ initial, onSave, onCancel, loading, ar, countries }: {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs text-muted-foreground mb-1">{ar ? "اسم الدولة (عربي)" : "Country Name (AR)"} *</label>
-                  <input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.countryAr} onChange={e => set("countryAr", e.target.value)} placeholder={ar ? "مثال: المملكة العربية السعودية" : "e.g. Saudi Arabia"} />
+                  <label className="block text-xs text-muted-foreground mb-1">{ar ? "اسم الدولة (عربي)" : "Country (AR)"} *</label>
+                  <input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.countryAr} onChange={e => set("countryAr", e.target.value)} />
                 </div>
                 <div>
-                  <label className="block text-xs text-muted-foreground mb-1">{ar ? "اسم الدولة (إنجليزي)" : "Country Name (EN)"}</label>
-                  <input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.countryEn} onChange={e => set("countryEn", e.target.value)} dir="ltr" placeholder="e.g. Saudi Arabia" />
+                  <label className="block text-xs text-muted-foreground mb-1">{ar ? "اسم الدولة (إنجليزي)" : "Country (EN)"}</label>
+                  <input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.countryEn} onChange={e => set("countryEn", e.target.value)} dir="ltr" />
                 </div>
                 <div>
                   <label className="block text-xs text-muted-foreground mb-1">{ar ? "رمز الدولة" : "Country Code"}</label>
-                  <input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.countryCode} onChange={e => set("countryCode", e.target.value)} dir="ltr" placeholder="e.g. SA" />
+                  <input className="w-full border rounded-lg px-3 py-2 text-sm" value={form.countryCode} onChange={e => set("countryCode", e.target.value)} dir="ltr" placeholder="e.g. AE" />
                 </div>
               </div>
             </div>
-          </section>
 
-          {/* ── Visa Details ── */}
-          <section>
-            <h3 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">{ar ? "تفاصيل التأشيرة" : "Visa Details"}</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Visa core details */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
               <div className="sm:col-span-2">
                 <label className="block text-sm font-medium mb-1">{ar ? "نوع التأشيرة" : "Visa Type"} *</label>
                 <input className="w-full border rounded-xl px-4 py-2.5 text-sm" placeholder={ar ? "مثال: تأشيرة سياحية إلكترونية" : "e.g. Tourist E-Visa"} value={form.visaType} onChange={e => set("visaType", e.target.value)} />
@@ -241,13 +620,13 @@ function VisaModal({ initial, onSave, onCancel, loading, ar, countries }: {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">{ar ? "الرسوم" : "Fee"} *</label>
+                <label className="block text-sm font-medium mb-1">{ar ? "الرسوم" : "Fee"}</label>
                 <input type="number" min="0" className="w-full border rounded-xl px-4 py-2.5 text-sm" value={form.fee} onChange={e => set("fee", Number(e.target.value))} />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">{ar ? "العملة" : "Currency"}</label>
                 <select className="w-full border rounded-xl px-4 py-2.5 text-sm bg-white" value={form.currency} onChange={e => set("currency", e.target.value)}>
-                  {["SAR", "USD", "EUR", "AED"].map(c => <option key={c} value={c}>{c}</option>)}
+                  {["USD", "SAR", "EUR", "AED"].map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div>
@@ -263,64 +642,176 @@ function VisaModal({ initial, onSave, onCancel, loading, ar, countries }: {
                 <input type="number" min="0" className="w-full border rounded-xl px-4 py-2.5 text-sm" value={form.validityDays} onChange={e => set("validityDays", Number(e.target.value))} />
               </div>
             </div>
-          </section>
 
-          {/* ── Descriptions ── */}
-          <section>
-            <h3 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">{ar ? "الوصف" : "Description"}</h3>
-            <div className="space-y-4">
+            {/* Descriptions */}
+            <div className="space-y-3 mb-5">
               <div>
                 <label className="block text-sm font-medium mb-1">{ar ? "الوصف بالعربية" : "Description (Arabic)"}</label>
-                <textarea rows={3} className="w-full border rounded-xl px-4 py-2.5 text-sm resize-none" value={form.descriptionAr} onChange={e => set("descriptionAr", e.target.value)} />
+                <textarea rows={2} className="w-full border rounded-xl px-4 py-2.5 text-sm resize-none" value={form.descriptionAr} onChange={e => set("descriptionAr", e.target.value)} />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">{ar ? "الوصف بالإنجليزية" : "Description (English)"}</label>
-                <textarea rows={3} className="w-full border rounded-xl px-4 py-2.5 text-sm resize-none" value={form.descriptionEn} onChange={e => set("descriptionEn", e.target.value)} dir="ltr" />
+                <textarea rows={2} className="w-full border rounded-xl px-4 py-2.5 text-sm resize-none" value={form.descriptionEn} onChange={e => set("descriptionEn", e.target.value)} dir="ltr" />
+              </div>
+            </div>
+
+            {/* Visa image upload */}
+            <div>
+              <label className="block text-sm font-semibold mb-2">{ar ? "صورة التأشيرة" : "Visa Image"}</label>
+              <VisaImageUpload value={form.imageUrl} onChange={v => set("imageUrl", v)} ar={ar} />
+            </div>
+          </section>
+
+          {/* ── B: Eligibility ── */}
+          <section>
+            <SectionHeader icon={<ShieldCheck className="w-4 h-4" />} title={ar ? "ب. الأهلية والجنسيات" : "B. Eligibility"} />
+
+            {/* Allowed nationalities */}
+            <div className="mb-5">
+              <label className="block text-sm font-semibold mb-1 text-green-700">
+                {ar ? "الجنسيات المسموح بها" : "Allowed Nationalities"}
+                <span className="font-normal text-slate-400 ms-2 text-xs">{ar ? "(فارغ = مفتوح لجميع الجنسيات غير المحظورة)" : "(empty = open to all non-blocked)"}</span>
+              </label>
+              <NationalityPicker value={form.allowedNationalities} onChange={v => set("allowedNationalities", v)} ar={ar} placeholder={ar ? "ابحث وأضف جنسية مسموحة..." : "Search allowed nationality..."} />
+            </div>
+
+            {/* Blocked nationalities */}
+            <div className="mb-5 p-4 bg-red-50 rounded-xl border border-red-100">
+              <label className="block text-sm font-semibold mb-1 text-red-700">
+                🚫 {ar ? "الجنسيات المحظورة (أولوية قصوى)" : "Prohibited Nationalities (Highest Priority)"}
+              </label>
+              <p className="text-xs text-red-500 mb-3">
+                {ar ? "الجنسية المحظورة تحجب التقديم دائماً، حتى مع إقامة خليجية أو أوروبية كاملة." : "A blocked nationality always prevents application, regardless of any other document or residency."}
+              </p>
+              <NationalityPicker value={form.blockedNationalities} onChange={v => set("blockedNationalities", v)} ar={ar} placeholder={ar ? "ابحث وأضف جنسية محظورة..." : "Search blocked nationality..."} />
+            </div>
+
+            {/* GCC residency */}
+            <div className="mb-5 p-4 bg-amber-50 rounded-xl border border-amber-100">
+              <label className="block text-sm font-semibold mb-3 text-amber-800">
+                {ar ? "متطلب الإقامة الخليجية (GCC)" : "GCC Residency Requirement"}
+              </label>
+              <div className="space-y-2 mb-4">
+                {[
+                  { value: "not_required", ar: "غير مطلوب", en: "Not Required" },
+                  { value: "required", ar: "مطلوب (الإقامة الخليجية إلزامية)", en: "Required (GCC residency mandatory)" },
+                ].map(opt => (
+                  <label key={opt.value} className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="gccReq"
+                      value={opt.value}
+                      checked={form.gccResidencyRequirement === opt.value}
+                      onChange={() => set("gccResidencyRequirement", opt.value)}
+                      className="w-4 h-4 accent-amber-600"
+                    />
+                    <span className="text-sm font-medium">{ar ? opt.ar : opt.en}</span>
+                  </label>
+                ))}
+              </div>
+              {form.gccResidencyRequirement === "required" && (
+                <div>
+                  <p className="text-xs font-semibold text-amber-700 mb-2">
+                    {ar ? "الدول الخليجية المقبولة (فارغ = كل دول الخليج)" : "Accepted GCC Countries (empty = all GCC)"}
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {GCC_COUNTRIES.map(c => (
+                      <label key={c} className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 cursor-pointer transition-colors ${form.acceptedGccCountries.includes(c) ? "border-amber-500 bg-amber-50" : "border-slate-200 bg-white hover:border-amber-200"}`}>
+                        <input
+                          type="checkbox"
+                          checked={form.acceptedGccCountries.includes(c)}
+                          onChange={() => {
+                            if (form.acceptedGccCountries.includes(c))
+                              set("acceptedGccCountries", form.acceptedGccCountries.filter(x => x !== c));
+                            else
+                              set("acceptedGccCountries", [...form.acceptedGccCountries, c]);
+                          }}
+                          className="w-4 h-4 accent-amber-600"
+                        />
+                        <span className="text-xs font-medium">{ar ? GCC_LABELS[c] : c}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {form.acceptedGccCountries.length > 0 && (
+                    <p className="text-xs text-amber-600 mt-2">
+                      ✓ {ar ? `المقبولة: ${form.acceptedGccCountries.map(c => ar ? GCC_LABELS[c] : c).join("، ")}` : `Accepted: ${form.acceptedGccCountries.join(", ")}`}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* European / Schengen logic */}
+            <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
+              <label className="block text-sm font-semibold mb-3 text-blue-800">
+                {ar ? "متطلب الإقامة الأوروبية / تأشيرة شنغن" : "European Residency / Schengen Visa Requirement"}
+              </label>
+              <div className="space-y-2">
+                {EU_SCHENGEN_OPTIONS.map(opt => (
+                  <label key={opt.value} className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="euLogic"
+                      value={opt.value}
+                      checked={form.europeanSchengenLogic === opt.value}
+                      onChange={() => set("europeanSchengenLogic", opt.value)}
+                      className="w-4 h-4 accent-blue-600"
+                    />
+                    <span className="text-sm">{ar ? opt.ar : opt.en}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Ineligible messages */}
+            <div className="mt-5 space-y-3">
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">{ar ? "رسالة رفض مخصصة (عربي)" : "Custom Rejection Message (Arabic)"}</label>
+                <input className="w-full border rounded-xl px-4 py-2.5 text-sm" value={form.ineligibleMessageAr} onChange={e => set("ineligibleMessageAr", e.target.value)} placeholder={ar ? "تُعرض عند حجب الطلب" : "Shown when application is blocked"} />
+              </div>
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">{ar ? "رسالة رفض مخصصة (إنجليزي)" : "Custom Rejection Message (English)"}</label>
+                <input className="w-full border rounded-xl px-4 py-2.5 text-sm" value={form.ineligibleMessageEn} onChange={e => set("ineligibleMessageEn", e.target.value)} dir="ltr" />
               </div>
             </div>
           </section>
 
-          {/* ── Documents ── */}
+          {/* ── C: Required Documents ── */}
           <section>
-            <h3 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">{ar ? "المستندات المطلوبة" : "Required Documents"}</h3>
+            <SectionHeader icon={<FileText className="w-4 h-4" />} title={ar ? "ج. المستندات المطلوبة" : "C. Required Documents"} />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {[
-                { key: "requiresPassportImage", arLabel: "صورة جواز السفر", enLabel: "Passport Image" },
-                { key: "requiresPersonalPhoto", arLabel: "صورة شخصية", enLabel: "Personal Photo" },
-                { key: "requiresResidencyImage", arLabel: "صورة الإقامة", enLabel: "Residency Image" },
-                { key: "requiresVisaImage", arLabel: "صورة تأشيرة بديلة", enLabel: "Alternative Visa Image" },
+                { key: "requiresPassportImage",  arLabel: "✓ صورة جواز السفر",          enLabel: "✓ Passport Image",          note: "" },
+                { key: "requiresPersonalPhoto",  arLabel: "✓ صورة شخصية",               enLabel: "✓ Personal Photo",          note: "" },
+                { key: "requiresResidencyImage", arLabel: "إقامة خليجية (GCC)",          enLabel: "GCC Residence Permit",      note: "" },
+                { key: "requiresEuropeanDoc",    arLabel: "إقامة أوروبية (EU/UK)",       enLabel: "European Residence Permit", note: "" },
+                { key: "requiresSchengenDoc",    arLabel: "تأشيرة شنغن / بريطانية",     enLabel: "Schengen / UK Visa",        note: "" },
+                { key: "requiresVisaImage",      arLabel: "وثيقة تأشيرة أخرى",          enLabel: "Other Visa Document",       note: "" },
               ].map(item => (
-                <label key={item.key} className="flex items-center gap-3 bg-slate-50 rounded-xl px-4 py-3 cursor-pointer hover:bg-slate-100">
-                  <input type="checkbox" checked={form[item.key as keyof VisaForm] as boolean} onChange={chk(item.key as keyof VisaForm)} className="w-4 h-4 accent-primary" />
-                  <span className="text-sm">{ar ? item.arLabel : item.enLabel}</span>
+                <label key={item.key} className={`flex items-center gap-3 rounded-xl px-4 py-3 cursor-pointer border-2 transition-colors ${(form as unknown as Record<string, unknown>)[item.key] ? "border-[#0d2351] bg-[#0d2351]/5" : "border-slate-200 bg-slate-50 hover:border-slate-300"}`}>
+                  <input
+                    type="checkbox"
+                    checked={(form as unknown as Record<string, unknown>)[item.key] as boolean}
+                    onChange={chk(item.key as keyof VisaForm)}
+                    className="w-4 h-4 accent-[#0d2351]"
+                  />
+                  <span className="text-sm font-medium">{ar ? item.arLabel : item.enLabel}</span>
                 </label>
               ))}
             </div>
           </section>
 
-          {/* ── Accepted Residencies ── */}
+          {/* ── D: Status ── */}
           <section>
-            <h3 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">{ar ? "الإقامات المقبولة" : "Accepted Residencies"}</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {[
-                { key: "acceptsGccResidency", arLabel: "إقامة خليجية (GCC)", enLabel: "GCC Residency" },
-                { key: "acceptsSchengenResidency", arLabel: "إقامة شنغن", enLabel: "Schengen Residency" },
-                { key: "acceptsUkResidency", arLabel: "إقامة بريطانيا", enLabel: "UK Residency" },
-                { key: "acceptsUsVisa", arLabel: "تأشيرة أمريكية", enLabel: "US Visa" },
-              ].map(item => (
-                <label key={item.key} className="flex items-center gap-3 bg-slate-50 rounded-xl px-4 py-3 cursor-pointer hover:bg-slate-100">
-                  <input type="checkbox" checked={form[item.key as keyof VisaForm] as boolean} onChange={chk(item.key as keyof VisaForm)} className="w-4 h-4 accent-primary" />
-                  <span className="text-sm">{ar ? item.arLabel : item.enLabel}</span>
-                </label>
-              ))}
-            </div>
+            <SectionHeader icon={<Settings className="w-4 h-4" />} title={ar ? "د. الحالة" : "D. Status"} />
+            <label className={`flex items-center gap-3 rounded-xl px-4 py-4 cursor-pointer border-2 transition-colors ${form.isActive ? "border-green-400 bg-green-50" : "border-slate-200 bg-slate-50"}`}>
+              <input type="checkbox" checked={form.isActive} onChange={chk("isActive")} className="w-5 h-5 accent-green-600" />
+              <div>
+                <div className="font-semibold text-sm">{ar ? "نشط (يظهر للعملاء)" : "Active (visible to customers)"}</div>
+                <div className="text-xs text-slate-400">{ar ? "عطّل هذا الخيار لإخفاء التأشيرة مؤقتاً دون حذفها" : "Disable to hide the visa temporarily without deleting it"}</div>
+              </div>
+            </label>
           </section>
-
-          {/* ── Status ── */}
-          <label className="flex items-center gap-3 bg-green-50 border border-green-100 rounded-xl px-4 py-3 cursor-pointer">
-            <input type="checkbox" id="isActiveV" checked={form.isActive} onChange={chk("isActive")} className="w-4 h-4 accent-green-600" />
-            <span className="text-sm font-medium text-green-800">{ar ? "نشط (يظهر للعملاء)" : "Active (visible to customers)"}</span>
-          </label>
 
           {!canSave && (
             <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
@@ -332,8 +823,8 @@ function VisaModal({ initial, onSave, onCancel, loading, ar, countries }: {
         {/* Footer */}
         <div className="p-4 sm:p-6 border-t flex gap-3 justify-end sticky bottom-0 bg-white sm:rounded-b-2xl">
           <Button variant="outline" onClick={onCancel}>{ar ? "إلغاء" : "Cancel"}</Button>
-          <Button onClick={() => onSave(form)} disabled={!canSave}>
-            {loading ? (ar ? "جارٍ الحفظ..." : "Saving...") : (ar ? "حفظ التأشيرة" : "Save Visa")}
+          <Button onClick={() => onSave(form)} disabled={!canSave} className="bg-[#0d2351] hover:bg-[#0d2351]/90">
+            {loading ? (ar ? "جارٍ الحفظ..." : "Saving...") : (ar ? "💾 حفظ التأشيرة" : "💾 Save Visa")}
           </Button>
         </div>
       </div>
@@ -341,6 +832,43 @@ function VisaModal({ initial, onSave, onCancel, loading, ar, countries }: {
   );
 }
 
+// ── Helper: visa to form ───────────────────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function visaToForm(v: any): VisaForm {
+  return {
+    countryId: v.countryId ? String(v.countryId) : "",
+    countryAr: v.countryAr ?? "",
+    countryEn: v.countryEn ?? "",
+    countryCode: v.countryCode ?? "",
+    visaType: v.visaType ?? "",
+    category: v.category ?? "tourist",
+    fee: Number(v.fee ?? 0),
+    currency: v.currency ?? "USD",
+    processingDays: v.processingDays ?? 5,
+    stayDuration: v.stayDuration ?? 30,
+    validityDays: v.validityDays ?? 90,
+    entryType: v.entryType ?? "single",
+    isActive: v.isActive ?? true,
+    imageUrl: v.imageUrl ?? "",
+    allowedNationalities: v.allowedNationalities ?? [],
+    blockedNationalities: v.blockedNationalities ?? [],
+    gccResidencyRequirement: v.gccResidencyRequirement ?? "not_required",
+    acceptedGccCountries: v.acceptedGccCountries ?? [],
+    europeanSchengenLogic: v.europeanSchengenLogic ?? "neither",
+    requiresPassportImage: v.requiresPassportImage ?? true,
+    requiresPersonalPhoto: v.requiresPersonalPhoto ?? true,
+    requiresResidencyImage: v.requiresResidencyImage ?? false,
+    requiresEuropeanDoc: v.requiresEuropeanDoc ?? false,
+    requiresSchengenDoc: v.requiresSchengenDoc ?? false,
+    requiresVisaImage: v.requiresVisaImage ?? false,
+    descriptionAr: v.descriptionAr ?? "",
+    descriptionEn: v.descriptionEn ?? "",
+    ineligibleMessageAr: v.ineligibleMessageAr ?? "",
+    ineligibleMessageEn: v.ineligibleMessageEn ?? "",
+  };
+}
+
+// ── Main Page ──────────────────────────────────────────────────────────────
 export default function VisasAdmin() {
   const { language } = useTranslation();
   const ar = language === "ar";
@@ -358,7 +886,18 @@ export default function VisasAdmin() {
   async function handleSave(form: VisaForm) {
     if (!modal) return;
     try {
-      const payload = { ...form, countryId: form.countryId ? Number(form.countryId) : null };
+      const payload = {
+        ...form,
+        countryId: form.countryId ? Number(form.countryId) : undefined,
+        // Coerce for the API
+        allowedNationalities: form.allowedNationalities,
+        blockedNationalities: form.blockedNationalities,
+        gccResidencyRequirement: form.gccResidencyRequirement,
+        acceptedGccCountries: form.acceptedGccCountries,
+        europeanSchengenLogic: form.europeanSchengenLogic,
+        requiresEuropeanDoc: form.requiresEuropeanDoc,
+        requiresSchengenDoc: form.requiresSchengenDoc,
+      };
       const invalidate = () => qc.invalidateQueries({ queryKey: getListVisasQueryKey() });
       if (modal.mode === "create") {
         await createMut.mutateAsync(payload as never);
@@ -391,7 +930,7 @@ export default function VisasAdmin() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">{ar ? "إدارة التأشيرات" : "Visa Management"}</h1>
-          <p className="text-sm text-muted-foreground mt-1">{ar ? "أنواع التأشيرات والحقول المخصصة" : "Visa types and custom form fields"}</p>
+          <p className="text-sm text-muted-foreground mt-1">{ar ? "إعداد التأشيرات وقواعد الأهلية والمستندات المطلوبة" : "Configure visas, eligibility rules, and required documents"}</p>
         </div>
         <Button onClick={() => setModal({ mode: "create", initial: emptyVisa() })} className="gap-2">
           <Plus className="w-4 h-4" />
@@ -411,32 +950,58 @@ export default function VisasAdmin() {
           ) : visas.map(v => {
             const isExpanded = expandedId === v.id;
             const cat = CATEGORIES.find(c => c.value === v.category);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const va = v as any;
+            const allowedCount = (va.allowedNationalities ?? []).length;
+            const blockedCount = (va.blockedNationalities ?? []).length;
+            const gccReq = va.gccResidencyRequirement ?? "not_required";
+            const euLogic = va.europeanSchengenLogic ?? "neither";
             return (
               <div key={v.id} className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-5 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : v.id)}>
-                  <div className="flex items-center gap-4">
-                    {isExpanded ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
-                    <div>
-                      <div className="font-semibold">{v.countryAr} — {v.visaType}</div>
+                  <div className="flex items-center gap-4 min-w-0">
+                    {isExpanded ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
+                    {va.imageUrl && (
+                      <img src={getDisplayUrl(va.imageUrl)} className="w-10 h-10 rounded-lg object-cover border border-slate-100 shrink-0" />
+                    )}
+                    <div className="min-w-0">
+                      <div className="font-semibold truncate">{v.countryAr} — {v.visaType}</div>
                       <div className="text-xs text-muted-foreground">{v.countryEn} · {ar ? cat?.ar : cat?.en} · {Number(v.fee).toLocaleString()} {v.currency}</div>
+                      {/* Eligibility badges */}
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {allowedCount > 0 && <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-md">{allowedCount} {ar ? "جنسية مسموحة" : "allowed"}</span>}
+                        {blockedCount > 0 && <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-md">{blockedCount} {ar ? "محظورة" : "blocked"}</span>}
+                        {gccReq === "required" && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-md">GCC {ar ? "مطلوب" : "required"}</span>}
+                        {euLogic !== "neither" && <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-md">{ar ? "شنغن/أوروبي" : "EU/Schengen"}</span>}
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
                     <span className={`hidden sm:inline px-2 py-1 rounded-lg text-xs font-medium ${v.isActive ? "bg-green-50 text-green-700" : "bg-slate-100 text-slate-500"}`}>
                       {v.isActive ? (ar ? "نشط" : "Active") : (ar ? "معطل" : "Inactive")}
                     </span>
-                    <button onClick={() => setModal({ mode: "edit", id: v.id, initial: { countryId: v.countryId ? String(v.countryId) : "", countryAr: v.countryAr, countryEn: v.countryEn, countryCode: v.countryCode ?? "", visaType: v.visaType, category: v.category ?? "tourist", fee: Number(v.fee), currency: v.currency ?? "SAR", processingDays: v.processingDays, stayDuration: v.stayDuration ?? 30, validityDays: v.validityDays ?? 90, entryType: v.entryType, isActive: v.isActive, requiresPassportImage: v.requiresPassportImage ?? false, requiresPersonalPhoto: v.requiresPersonalPhoto ?? false, requiresResidencyImage: v.requiresResidencyImage ?? false, requiresVisaImage: v.requiresVisaImage ?? false, acceptsGccResidency: v.acceptsGccResidency ?? false, acceptsSchengenResidency: v.acceptsSchengenResidency ?? false, acceptsUkResidency: v.acceptsUkResidency ?? false, acceptsUsVisa: v.acceptsUsVisa ?? false, descriptionAr: v.descriptionAr ?? "", descriptionEn: v.descriptionEn ?? "", ineligibleMessageAr: v.ineligibleMessageAr ?? "", ineligibleMessageEn: v.ineligibleMessageEn ?? "" } })} className="p-2 hover:bg-slate-100 rounded-lg"><Edit2 className="w-4 h-4" /></button>
+                    <button onClick={() => setModal({ mode: "edit", id: v.id, initial: visaToForm(v) })} className="p-2 hover:bg-slate-100 rounded-lg"><Edit2 className="w-4 h-4" /></button>
                     <button onClick={() => setDeleteConfirm(v.id)} className="p-2 hover:bg-red-50 text-red-500 rounded-lg"><Trash2 className="w-4 h-4" /></button>
                   </div>
                 </div>
                 {isExpanded && (
                   <div className="px-5 pb-5 border-t border-border/50">
-                    <div className="pt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div><span className="text-muted-foreground">{ar ? "المعالجة" : "Processing"}</span><div className="font-medium">{v.processingDays} {ar ? "يوم" : "days"}</div></div>
-                      <div><span className="text-muted-foreground">{ar ? "مدة الإقامة" : "Stay"}</span><div className="font-medium">{v.stayDuration ?? "—"} {ar ? "يوم" : "days"}</div></div>
-                      <div><span className="text-muted-foreground">{ar ? "نوع الدخول" : "Entry"}</span><div className="font-medium">{v.entryType}</div></div>
-                      <div><span className="text-muted-foreground">{ar ? "الرسوم" : "Fee"}</span><div className="font-medium">{Number(v.fee).toLocaleString()} {v.currency}</div></div>
+                    <div className="pt-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-3">
+                      <div><span className="text-muted-foreground text-xs">{ar ? "المعالجة" : "Processing"}</span><div className="font-medium">{v.processingDays} {ar ? "يوم" : "days"}</div></div>
+                      <div><span className="text-muted-foreground text-xs">{ar ? "مدة الإقامة" : "Stay"}</span><div className="font-medium">{v.stayDuration ?? "—"} {ar ? "يوم" : "days"}</div></div>
+                      <div><span className="text-muted-foreground text-xs">{ar ? "نوع الدخول" : "Entry"}</span><div className="font-medium">{v.entryType}</div></div>
+                      <div><span className="text-muted-foreground text-xs">{ar ? "الرسوم" : "Fee"}</span><div className="font-medium">{Number(v.fee).toLocaleString()} {v.currency}</div></div>
                     </div>
+                    {/* Eligibility summary */}
+                    {(allowedCount > 0 || blockedCount > 0 || gccReq !== "not_required" || euLogic !== "neither") && (
+                      <div className="bg-slate-50 rounded-xl p-3 text-xs space-y-1 mb-3 border border-slate-100">
+                        <p className="font-semibold text-slate-600 mb-1">{ar ? "قواعد الأهلية:" : "Eligibility rules:"}</p>
+                        {allowedCount > 0 && <p className="text-green-600">✓ {ar ? `الجنسيات المسموحة: ${(va.allowedNationalities ?? []).join("، ")}` : `Allowed: ${(va.allowedNationalities ?? []).join(", ")}`}</p>}
+                        {blockedCount > 0 && <p className="text-red-600">🚫 {ar ? `المحظورة: ${(va.blockedNationalities ?? []).join("، ")}` : `Blocked: ${(va.blockedNationalities ?? []).join(", ")}`}</p>}
+                        {gccReq === "required" && <p className="text-amber-600">🏠 {ar ? `إقامة خليجية مطلوبة${va.acceptedGccCountries?.length ? ` من: ${va.acceptedGccCountries.join("، ")}` : " (أي دولة خليجية)"}` : `GCC residency required${va.acceptedGccCountries?.length ? ` from: ${va.acceptedGccCountries.join(", ")}` : " (any GCC)"}`}</p>}
+                        {euLogic !== "neither" && <p className="text-blue-600">🌍 {ar ? EU_SCHENGEN_OPTIONS.find(o => o.value === euLogic)?.ar : EU_SCHENGEN_OPTIONS.find(o => o.value === euLogic)?.en}</p>}
+                      </div>
+                    )}
                     <CustomFieldsPanel visaId={v.id} ar={ar} />
                   </div>
                 )}

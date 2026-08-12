@@ -86,27 +86,30 @@ function generateApplicationNumber(): string {
   return `AT-${year}-${rand}`;
 }
 
-/** Core eligibility engine — called by both the pre-check endpoint and submission */
+/** Core eligibility engine — called by both the pre-check endpoint and submission.
+ *  Priority order (as per admin spec):
+ *  1. Prohibited nationality → BLOCK immediately (cannot be overridden)
+ *  2. Allowed nationalities list (if non-empty) → must be in list
+ *  3. GCC residency requirement → check stored profile + accepted GCC countries
+ *  4. European/Schengen logic → check stored profile document type
+ */
 function checkEligibility(
   user: typeof usersTable.$inferSelect,
   visa: typeof visasTable.$inferSelect,
   ar: boolean,
 ): { eligible: boolean; reason?: string } {
   const nationality = normalize(user.nationality ?? "");
+  const ineligibleAr = visa.ineligibleMessageAr || "لا يمكنك التقديم على هذه التأشيرة";
+  const ineligibleEn = visa.ineligibleMessageEn || "You cannot apply for this visa.";
 
-  // 1. Prohibited nationality ALWAYS wins
+  // ── Step 1: Prohibited nationality ALWAYS wins ─────────────────────────────
   const blocked = visa.blockedNationalities.some((n) => normalize(n) === nationality);
   if (blocked) {
-    return {
-      eligible: false,
-      reason: ar
-        ? (visa.ineligibleMessageAr || "لا يمكنك التقديم على هذه التأشيرة")
-        : (visa.ineligibleMessageEn || "You cannot apply for this visa."),
-    };
+    return { eligible: false, reason: ar ? ineligibleAr : ineligibleEn };
   }
 
-  // 2. Allowed nationalities list (empty = open to all non-blocked)
-  const allowedList = visa.allowedNationalities;
+  // ── Step 2: Allowed nationalities list (empty = open to all non-blocked) ───
+  const allowedList = visa.allowedNationalities ?? [];
   if (allowedList.length > 0) {
     const allowed = allowedList.some((n) => normalize(n) === nationality);
     if (!allowed) {
@@ -119,9 +122,14 @@ function checkEligibility(
     }
   }
 
-  // 3. GCC residency requirement — check user's STORED profile
-  if (visa.acceptsGccResidency && visa.requiredResidencies?.includes("gcc")) {
-    if (!user.isGccResident || !user.gccResidenceCountry || !user.gccResidenceFrontUrl) {
+  // ── Step 3: GCC residency requirement ─────────────────────────────────────
+  // New field: gccResidencyRequirement ("not_required" | "required")
+  // Fallback to legacy fields for backwards compatibility
+  const gccReq: string = (visa as unknown as Record<string, unknown>).gccResidencyRequirement as string ??
+    (visa.acceptsGccResidency && (visa.requiredResidencies ?? []).includes("gcc") ? "required" : "not_required");
+
+  if (gccReq === "required" || gccReq === "required_for_nationalities") {
+    if (!user.isGccResident || !user.gccResidenceCountry) {
       return {
         eligible: false,
         reason: ar
@@ -129,17 +137,71 @@ function checkEligibility(
           : "This visa requires a valid GCC residence. Please add your GCC residency details to your profile.",
       };
     }
+    // Check that user's GCC country is in the accepted list (if specified)
+    const acceptedGcc: string[] = ((visa as unknown as Record<string, unknown>).acceptedGccCountries as string[]) ?? [];
+    if (acceptedGcc.length > 0) {
+      const userCountry = normalize(user.gccResidenceCountry ?? "");
+      const accepted = acceptedGcc.some((c) => {
+        const nc = normalize(c);
+        return nc === userCountry || nc.includes(userCountry) || userCountry.includes(nc);
+      });
+      if (!accepted) {
+        const list = acceptedGcc.join(ar ? "، " : ", ");
+        return {
+          eligible: false,
+          reason: ar
+            ? `إقامتك الخليجية غير مقبولة لهذه التأشيرة. الدول المقبولة: ${list}`
+            : `Your GCC residence country is not accepted for this visa. Accepted: ${list}`,
+        };
+      }
+    }
   }
 
-  // 4. European / Schengen requirements — check stored profile
-  const needsEuropean = visa.acceptsSchengenResidency || visa.acceptsUkResidency;
-  if (needsEuropean && visa.requiredResidencies?.includes("schengen")) {
-    if (!user.isEuropeanResident || !user.europeanDocumentUrl) {
+  // ── Step 4: European / Schengen logic ──────────────────────────────────────
+  // europeanSchengenLogic: "neither" | "european_only" | "schengen_only" | "either" | "both"
+  const euLogic: string = ((visa as unknown as Record<string, unknown>).europeanSchengenLogic as string) ?? "neither";
+
+  if (euLogic !== "neither") {
+    const docType = (user.europeanDocumentType ?? "").toLowerCase();
+    const hasDoc = !!(user as unknown as Record<string, unknown>).europeanDocumentUrl;
+    const isEuResident = !!(user as unknown as Record<string, unknown>).isEuropeanResident;
+
+    const isEuResidencyType = hasDoc && isEuResident &&
+      (docType === "eu_residency" || docType === "uk_residency");
+    const isSchengenType = hasDoc && isEuResident &&
+      (docType === "schengen_visa" || docType === "uk_visa");
+    const hasAnyEuDoc = hasDoc && isEuResident;
+
+    if (euLogic === "european_only" && !isEuResidencyType) {
       return {
         eligible: false,
         reason: ar
-          ? "هذه التأشيرة تتطلب تأشيرة شنغن أو إقامة أوروبية سارية في ملفك الشخصي."
-          : "This visa requires a valid Schengen/European visa or residency in your profile.",
+          ? "هذه التأشيرة تتطلب إقامة أوروبية سارية (UK Residency أو EU Residency) في ملفك الشخصي."
+          : "This visa requires a valid European residency (EU or UK) in your profile.",
+      };
+    }
+    if (euLogic === "schengen_only" && !isSchengenType) {
+      return {
+        eligible: false,
+        reason: ar
+          ? "هذه التأشيرة تتطلب تأشيرة شنغن أو بريطانية سارية في ملفك الشخصي."
+          : "This visa requires a valid Schengen or UK visa in your profile.",
+      };
+    }
+    if (euLogic === "either" && !hasAnyEuDoc) {
+      return {
+        eligible: false,
+        reason: ar
+          ? "هذه التأشيرة تتطلب إقامة أوروبية أو تأشيرة شنغن سارية في ملفك الشخصي."
+          : "This visa requires a valid European residency or Schengen visa in your profile.",
+      };
+    }
+    if (euLogic === "both" && !(isEuResidencyType && isSchengenType)) {
+      return {
+        eligible: false,
+        reason: ar
+          ? "هذه التأشيرة تتطلب إقامة أوروبية وتأشيرة شنغن معاً في ملفك الشخصي."
+          : "This visa requires both a European residency and a Schengen visa in your profile.",
       };
     }
   }

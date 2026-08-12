@@ -19,6 +19,11 @@ const toResponse = (r: typeof visasTable.$inferSelect) => ({
   updatedAt: r.updatedAt.toISOString(),
   allowedNationalities: r.allowedNationalities ?? [],
   blockedNationalities: r.blockedNationalities ?? [],
+  gccResidencyRequirement: (r as unknown as Record<string, unknown>).gccResidencyRequirement ?? "not_required",
+  acceptedGccCountries: (r as unknown as Record<string, unknown>).acceptedGccCountries ?? [],
+  europeanSchengenLogic: (r as unknown as Record<string, unknown>).europeanSchengenLogic ?? "neither",
+  requiresEuropeanDoc: (r as unknown as Record<string, unknown>).requiresEuropeanDoc ?? false,
+  requiresSchengenDoc: (r as unknown as Record<string, unknown>).requiresSchengenDoc ?? false,
 });
 
 /** Broadcast an in-app notification to every active user. Fire-and-forget. */

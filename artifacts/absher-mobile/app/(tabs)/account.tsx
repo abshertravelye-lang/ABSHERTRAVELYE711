@@ -136,6 +136,7 @@ const themeStyles = StyleSheet.create({
 // ─────────────────────────────────────────────────────────────────────────────
 
 const MENU_ITEMS = [
+  { icon: 'person-circle-outline' as const, label: 'الملف الشخصي', route: '/profile-edit', color: '#D4AF37' },
   { icon: 'calendar-outline' as const, label: 'حجوزاتي', route: '/(tabs)/bookings', color: '#0A2342' },
   { icon: 'document-text-outline' as const, label: 'طلبات التأشيرة', route: null, color: '#D4AF37' },
   { icon: 'wallet-outline' as const, label: 'المحفظة', route: '/wallet', color: '#7C3AED' },
@@ -238,6 +239,25 @@ export default function AccountScreen() {
         </View>
       </LinearGradient>
 
+      {/* Profile completion prompt */}
+      {!user.isProfileComplete && (
+        <Pressable
+          style={({ pressed }) => [styles.completeBanner, { opacity: pressed ? 0.9 : 1 }]}
+          onPress={() => router.push('/profile-edit' as never)}
+        >
+          <Ionicons name="chevron-back" size={18} color="#92400E" />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.completeBannerTitle, { fontFamily: 'Cairo_700Bold' }]}>أكمل ملفك الشخصي</Text>
+            <Text style={[styles.completeBannerSub, { fontFamily: 'Cairo_400Regular' }]}>
+              ارفع صورتك وجواز سفرك للتمكن من التقديم على التأشيرات
+            </Text>
+          </View>
+          <View style={styles.completeBannerIcon}>
+            <Ionicons name="alert-circle" size={24} color="#D97706" />
+          </View>
+        </Pressable>
+      )}
+
       {/* Menu */}
       <View style={[styles.menuCard, { backgroundColor: colors.card, shadowColor: colors.primary }]}>
         {MENU_ITEMS.map((item, i) => (
@@ -299,6 +319,10 @@ const styles = StyleSheet.create({
   menuItem: { flexDirection: 'row', alignItems: 'center', padding: 18, borderBottomWidth: 1, gap: 14 },
   menuIcon: { width: 44, height: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   menuLabel: { flex: 1, fontSize: 16, textAlign: 'right' },
+  completeBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginTop: 16, backgroundColor: '#FFFBEB', borderColor: '#FDE68A', borderWidth: 1.5, borderRadius: 16, padding: 14 },
+  completeBannerTitle: { fontSize: 14, color: '#92400E', textAlign: 'right' },
+  completeBannerSub: { fontSize: 11.5, color: '#B45309', textAlign: 'right', marginTop: 2 },
+  completeBannerIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center' },
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginHorizontal: 16, marginTop: 4, borderRadius: 16, borderWidth: 2, paddingVertical: 16, gap: 10 },
   logoutText: { fontSize: 16 },
 });

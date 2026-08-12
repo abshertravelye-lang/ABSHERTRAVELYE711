@@ -46,6 +46,7 @@ function RootLayoutNav() {
       <Stack.Screen name="auth/register" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="auth/otp" options={{ headerShown: false }} />
       <Stack.Screen name="auth/forgot-password" options={{ headerShown: false }} />
+      <Stack.Screen name="profile-edit" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen name="settings" options={{ headerShown: false }} />
       <Stack.Screen name="wallet" options={{ headerShown: false }} />
       <Stack.Screen name="booking/[id]" options={{ headerShown: false }} />

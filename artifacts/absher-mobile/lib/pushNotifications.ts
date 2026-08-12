@@ -81,9 +81,19 @@ export async function registerForPush(): Promise<void> {
       platform,
       deviceName: Device.deviceName ?? undefined,
     });
-  } catch {
-    // Fail silently — remote push is unsupported in some environments (Expo Go
-    // on Android SDK 53+), and a registration failure must never crash the app.
+  } catch (err) {
+    // Never crash the app on registration failure — remote push is unsupported
+    // in some environments (Expo Go on Android SDK 53+, missing EAS projectId).
+    // But surface the failure loudly in development so a broken push
+    // configuration cannot silently ship.
+    if (__DEV__) {
+      console.warn(
+        '[push] registration failed — push notifications will NOT be delivered to this device. ' +
+          'A development/production build with a linked EAS projectId and FCM/APNs credentials is required. ' +
+          'Cause:',
+        err,
+      );
+    }
   }
 }
 

@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { setAuthTokenGetter } from '@workspace/api-client-react';
+import { setAuthTokenGetter, setAuthRefreshHandler } from '@workspace/api-client-react';
 import type { SafeUser } from '@workspace/api-client-react';
 
 type AuthState = {
@@ -31,6 +31,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Wire up auth token getter for the API client
   useEffect(() => {
     setAuthTokenGetter(() => tokenRef.current);
+    // Auto-refresh expired access tokens (15 min TTL) with the stored
+    // refresh token so long-lived sessions don't start failing with 401s.
+    setAuthRefreshHandler(async () => {
+      try {
+        const raw = await AsyncStorage.getItem(STORAGE_KEY);
+        if (!raw) return false;
+        const stored = JSON.parse(raw);
+        if (!stored.refreshToken) return false;
+        const res = await fetch(`https://${process.env.EXPO_PUBLIC_DOMAIN}/api/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: stored.refreshToken }),
+        });
+        if (!res.ok) {
+          // Refresh token invalid/expired — clear the stale session
+          tokenRef.current = null;
+          await AsyncStorage.removeItem(STORAGE_KEY);
+          setState({ user: null, accessToken: null, isLoading: false });
+          return false;
+        }
+        const data = await res.json();
+        tokenRef.current = data.accessToken;
+        await AsyncStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({ ...stored, accessToken: data.accessToken, refreshToken: data.refreshToken }),
+        );
+        setState((s) => ({ ...s, accessToken: data.accessToken }));
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    return () => setAuthRefreshHandler(null);
   }, []);
 
   // Load persisted auth on startup

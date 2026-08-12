@@ -19,8 +19,11 @@ const upload = multer({
   limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
 });
 
-// Local fallback directory (used when GCS is unavailable in dev)
+// Local fallback directory (used when GCS is unavailable in dev).
+// NEVER used in production: files on the local filesystem are lost on redeploy,
+// so in production a GCS failure is a hard error instead of a silent fallback.
 const LOCAL_UPLOAD_DIR = path.join(process.cwd(), '.local-uploads');
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 async function saveLocally(id: string, buffer: Buffer, mimeType: string): Promise<void> {
   await fs.mkdir(LOCAL_UPLOAD_DIR, { recursive: true });
@@ -79,10 +82,16 @@ router.post(
       res.json({ objectPath: `/objects/uploads/${objectId}` });
       return;
     } catch (gcsError) {
-      req.log.warn({ err: gcsError }, 'GCS upload failed — falling back to local filesystem');
+      if (IS_PRODUCTION) {
+        // In production the local filesystem is ephemeral — never fall back.
+        req.log.error({ err: gcsError }, 'GCS upload failed in production');
+        res.status(500).json({ error: 'Failed to upload file to object storage' });
+        return;
+      }
+      req.log.warn({ err: gcsError }, 'GCS upload failed — falling back to local filesystem (dev only)');
     }
 
-    // --- Local filesystem fallback ---
+    // --- Local filesystem fallback (development only) ---
     try {
       await saveLocally(objectId, file.buffer, file.mimetype || 'application/octet-stream');
       res.json({ objectPath: `/objects/uploads/${objectId}`, _local: true });
@@ -194,10 +203,10 @@ router.get('/storage/objects/*path', async (req: Request, res: Response) => {
     }
   }
 
-  // --- Local filesystem fallback ---
+  // --- Local filesystem fallback (development only) ---
   // wildcardPath is like "uploads/<uuid>"
   const localId = wildcardPath.replace(/^uploads\//, '');
-  const local = await readLocally(localId);
+  const local = IS_PRODUCTION ? null : await readLocally(localId);
   if (local) {
     res.set('Content-Type', local.mimeType);
     res.set('Cache-Control', 'public, max-age=31536000, immutable');

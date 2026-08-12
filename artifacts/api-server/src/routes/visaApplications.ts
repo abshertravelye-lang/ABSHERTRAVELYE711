@@ -325,17 +325,23 @@ router.post("/visa-applications/validate-photo", requireAuth, async (req, res) =
     const { imageUrl } = req.body;
     if (!imageUrl) return res.status(400).json({ error: "imageUrl is required" });
 
+    const ar = req.headers["x-lang"] === "ar";
+
     let imageData: string;
     try {
       imageData = await resolveImageForOpenAI(imageUrl);
     } catch {
-      // Fail closed: never report success when the photo can't even be loaded
-      return res.json({ valid: false, reason: "Could not load the photo. Please try uploading again.", faceDetected: false, singleFace: false });
+      // Service failure, NOT a photo rejection — use 503 so clients can
+      // distinguish "couldn't check" from "checked and rejected".
+      return res.status(503).json({
+        error: ar ? "تعذر تحميل الصورة للتحقق. حاول مرة أخرى." : "Could not load the photo for verification. Please try again.",
+      });
     }
 
+    const reasonLang = req.headers["x-lang"] === "ar" ? "Arabic" : "English";
     const prompt = `Analyze this image for use as a passport/ID photo. Return ONLY a JSON object with:
 - valid: true or false
-- reason: short explanation (in English) if invalid, or "Photo accepted" if valid
+- reason: short explanation (in ${reasonLang}) if invalid, or "Photo accepted" if valid
 - faceDetected: true or false
 - singleFace: true or false (true if exactly one face)
 
@@ -361,8 +367,11 @@ Accept the photo if: exactly one face, face clearly visible, no severe blur, fac
     res.json(data);
   } catch (e) {
     req.log.error({ err: e }, "Photo validation failed");
-    // Fail closed: an AI/service error must not silently mark the photo as accepted
-    res.json({ valid: false, reason: "Photo validation is temporarily unavailable. Please try again.", faceDetected: false, singleFace: false });
+    // Service failure, NOT a photo rejection — 503 keeps the two cases distinct.
+    const arErr = req.headers["x-lang"] === "ar";
+    res.status(503).json({
+      error: arErr ? "التحقق الآلي من الصورة غير متاح مؤقتاً. حاول مرة أخرى." : "Photo validation is temporarily unavailable. Please try again.",
+    });
   }
 });
 

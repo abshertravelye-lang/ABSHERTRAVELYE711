@@ -1,5 +1,7 @@
 import { randomUUID } from 'crypto';
 import { Readable } from 'stream';
+import fs from 'fs/promises';
+import path from 'path';
 import {
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
@@ -17,6 +19,26 @@ const upload = multer({
   limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
 });
 
+// Local fallback directory (used when GCS is unavailable in dev)
+const LOCAL_UPLOAD_DIR = path.join(process.cwd(), '.local-uploads');
+
+async function saveLocally(id: string, buffer: Buffer, mimeType: string): Promise<void> {
+  await fs.mkdir(LOCAL_UPLOAD_DIR, { recursive: true });
+  await fs.writeFile(path.join(LOCAL_UPLOAD_DIR, id), buffer);
+  await fs.writeFile(path.join(LOCAL_UPLOAD_DIR, `${id}.meta`), mimeType);
+}
+
+async function readLocally(id: string): Promise<{ buffer: Buffer; mimeType: string } | null> {
+  try {
+    const buffer = await fs.readFile(path.join(LOCAL_UPLOAD_DIR, id));
+    let mimeType = 'application/octet-stream';
+    try { mimeType = await fs.readFile(path.join(LOCAL_UPLOAD_DIR, `${id}.meta`), 'utf8'); } catch {}
+    return { buffer, mimeType };
+  } catch {
+    return null;
+  }
+}
+
 function parseObjectPath(path: string): { bucketName: string; objectName: string } {
   const p = path.startsWith('/') ? path.slice(1) : path;
   const slashIdx = p.indexOf('/');
@@ -27,12 +49,8 @@ function parseObjectPath(path: string): { bucketName: string; objectName: string
 /**
  * POST /storage/uploads
  *
- * Direct multipart file upload — the client sends the file as multipart/form-data.
- * The server stores it in GCS via the sidecar-authenticated client and returns
- * the objectPath for later serving via GET /storage/objects/*.
- *
- * This avoids the CORS issue that occurs when browsers try to PUT directly to
- * a GCS presigned URL.
+ * Direct multipart file upload. Tries GCS first; falls back to local filesystem
+ * when GCS credentials are unavailable (e.g. in development).
  */
 router.post(
   '/storage/uploads',
@@ -44,9 +62,11 @@ router.post(
       return;
     }
 
+    const objectId = randomUUID();
+
+    // --- Try GCS first ---
     try {
       const privateObjectDir = objectStorageService.getPrivateObjectDir();
-      const objectId = randomUUID();
       const fullPath = `${privateObjectDir}/uploads/${objectId}`;
       const { bucketName, objectName } = parseObjectPath(fullPath);
 
@@ -56,10 +76,18 @@ router.post(
         resumable: false,
       });
 
-      const objectPath = `/objects/uploads/${objectId}`;
-      res.json({ objectPath });
-    } catch (error) {
-      req.log.error({ err: error }, 'Error uploading file');
+      res.json({ objectPath: `/objects/uploads/${objectId}` });
+      return;
+    } catch (gcsError) {
+      req.log.warn({ err: gcsError }, 'GCS upload failed — falling back to local filesystem');
+    }
+
+    // --- Local filesystem fallback ---
+    try {
+      await saveLocally(objectId, file.buffer, file.mimetype || 'application/octet-stream');
+      res.json({ objectPath: `/objects/uploads/${objectId}`, _local: true });
+    } catch (localError) {
+      req.log.error({ err: localError }, 'Local upload also failed');
       res.status(500).json({ error: 'Failed to upload file' });
     }
   },
@@ -67,16 +95,6 @@ router.post(
 
 /**
  * POST /storage/uploads/request-url
- *
- * Request a presigned URL for file upload.
- * The client sends JSON metadata (name, size, contentType) — NOT the file.
- * Then uploads the file directly to the returned presigned URL.
- *
- * NOTE: This app has no user-account/auth system (visa applicants and
- * customers submit forms anonymously, same as bookings/contact). The
- * endpoint is intentionally left public so anonymous applicants can attach
- * passport/photo documents to a visa application. If account-based auth is
- * ever added, gate this behind it.
  */
 router.post(
   '/storage/uploads/request-url',
@@ -110,10 +128,6 @@ router.post(
 
 /**
  * GET /storage/public-objects/*
- *
- * Serve public assets from PUBLIC_OBJECT_SEARCH_PATHS.
- * These are unconditionally public — no authentication or ACL checks.
- * IMPORTANT: Always provide this endpoint when object storage is set up.
  */
 router.get(
   '/storage/public-objects/*filePath',
@@ -150,33 +164,16 @@ router.get(
 /**
  * GET /storage/objects/*
  *
- * Serve object entities from PRIVATE_OBJECT_DIR.
- * These are served from a separate path from /public-objects and can optionally
- * be protected with authentication or ACL checks based on the use case.
+ * Serves files from GCS, falling back to the local filesystem when GCS is unavailable.
  */
 router.get('/storage/objects/*path', async (req: Request, res: Response) => {
+  const raw = req.params.path;
+  const wildcardPath = Array.isArray(raw) ? raw.join('/') : raw;
+  const objectPath = `/objects/${wildcardPath}`;
+
+  // --- Try GCS first ---
   try {
-    const raw = req.params.path;
-    const wildcardPath = Array.isArray(raw) ? raw.join('/') : raw;
-    const objectPath = `/objects/${wildcardPath}`;
-    const objectFile =
-      await objectStorageService.getObjectEntityFile(objectPath);
-
-    // --- Protected route example (uncomment when using replit-auth) ---
-    // if (!req.isAuthenticated()) {
-    //   res.status(401).json({ error: "Unauthorized" });
-    //   return;
-    // }
-    // const canAccess = await objectStorageService.canAccessObjectEntity({
-    //   userId: req.user.id,
-    //   objectFile,
-    //   requestedPermission: ObjectPermission.READ,
-    // });
-    // if (!canAccess) {
-    //   res.status(403).json({ error: "Forbidden" });
-    //   return;
-    // }
-
+    const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
     const response = await objectStorageService.downloadObject(objectFile);
 
     res.status(response.status);
@@ -190,15 +187,25 @@ router.get('/storage/objects/*path', async (req: Request, res: Response) => {
     } else {
       res.end();
     }
-  } catch (error) {
-    if (error instanceof ObjectNotFoundError) {
-      req.log.warn({ err: error }, 'Object not found');
-      res.status(404).json({ error: 'Object not found' });
-      return;
+    return;
+  } catch (gcsError) {
+    if (!(gcsError instanceof ObjectNotFoundError)) {
+      req.log.warn({ err: gcsError }, 'GCS serve failed — trying local fallback');
     }
-    req.log.error({ err: error }, 'Error serving object');
-    res.status(500).json({ error: 'Failed to serve object' });
   }
+
+  // --- Local filesystem fallback ---
+  // wildcardPath is like "uploads/<uuid>"
+  const localId = wildcardPath.replace(/^uploads\//, '');
+  const local = await readLocally(localId);
+  if (local) {
+    res.set('Content-Type', local.mimeType);
+    res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    res.send(local.buffer);
+    return;
+  }
+
+  res.status(404).json({ error: 'Object not found' });
 });
 
 export default router;

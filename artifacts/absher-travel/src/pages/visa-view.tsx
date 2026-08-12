@@ -374,27 +374,27 @@ export default function VisaView() {
                 ))}
               </div>
 
-              {(visa.allowedNationalities?.length > 0 || visa.blockedNationalities?.length > 0) && (
+              {((visa.allowedNationalities?.length ?? 0) > 0 || (visa.blockedNationalities?.length ?? 0) > 0) && (
                 <div className="mt-6 space-y-3">
-                  {visa.allowedNationalities?.length > 0 && (
+                  {(visa.allowedNationalities?.length ?? 0) > 0 && (
                     <div>
                       <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
                         {ar ? "الجنسيات المسموح بها" : "Allowed Nationalities"}
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        {visa.allowedNationalities.map(n => (
+                        {(visa.allowedNationalities ?? []).map(n => (
                           <span key={n} className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-full text-xs font-semibold">{n}</span>
                         ))}
                       </div>
                     </div>
                   )}
-                  {visa.blockedNationalities?.length > 0 && (
+                  {(visa.blockedNationalities?.length ?? 0) > 0 && (
                     <div>
                       <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
                         {ar ? "الجنسيات المحظورة" : "Blocked Nationalities"}
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        {visa.blockedNationalities.map(n => (
+                        {(visa.blockedNationalities ?? []).map(n => (
                           <span key={n} className="px-2.5 py-1 bg-red-50 text-red-700 border border-red-100 rounded-full text-xs font-semibold">{n}</span>
                         ))}
                       </div>

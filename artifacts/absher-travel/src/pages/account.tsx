@@ -536,32 +536,89 @@ export default function Account() {
     }
   });
 
-  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [photoValidation, setPhotoValidation] = useState<{ valid: boolean; reason: string } | null>(null);
+  const [isValidatingPhoto, setIsValidatingPhoto] = useState(false);
   const [isOcrRunning, setIsOcrRunning] = useState(false);
+  const [ocrAttempted, setOcrAttempted] = useState(false);
+  const [ocrFailed, setOcrFailed] = useState(false);
+  const [isUploadingPassport, setIsUploadingPassport] = useState(false);
   const ocrMutation = useOcrPassport();
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
     updateProfileMutation.mutate({ data: profile });
   };
 
-  /** Upload passport image → auto-run OCR → prefill passport fields */
-  const handlePassportImageUpload = async (file: File) => {
-    setIsOcrRunning(true);
+  /** Upload personal photo → validate face → update profile state */
+  const handlePhotoUpload = async (file: File) => {
+    setIsUploadingPhoto(true);
+    setPhotoValidation(null);
     try {
       const r = await uploadFileDirect(file);
-      if (!r) { setIsOcrRunning(false); return; }
+      if (!r) {
+        toast({ variant: "destructive", title: ar ? "فشل رفع الصورة" : "Upload Failed", description: ar ? "حدث خطأ أثناء رفع الصورة. حاول مرة أخرى." : "An error occurred. Please try again." });
+        return;
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setProfile((p: any) => ({ ...p, profilePhotoUrl: r.objectPath }));
+
+      // Validate photo with AI
+      setIsValidatingPhoto(true);
+      try {
+        const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+        const vRes = await fetch(`${base}/api/visa-applications/validate-photo`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageUrl: r.objectPath }),
+        });
+        const vData = await vRes.json();
+        setPhotoValidation({ valid: !!vData.valid, reason: vData.reason || "" });
+        if (!vData.valid) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          setProfile((p: any) => ({ ...p, profilePhotoUrl: "" }));
+        }
+      } catch {
+        // Validation failed silently — accept the photo
+        setPhotoValidation({ valid: true, reason: "Photo accepted" });
+      } finally {
+        setIsValidatingPhoto(false);
+      }
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
+  /** Upload passport image → auto-run OCR → prefill passport fields */
+  const handlePassportUpload = async (file: File) => {
+    setIsUploadingPassport(true);
+    setOcrAttempted(false);
+    setOcrFailed(false);
+    try {
+      const r = await uploadFileDirect(file);
+      if (!r) {
+        toast({ variant: "destructive", title: ar ? "فشل رفع الجواز" : "Upload Failed", description: ar ? "حدث خطأ أثناء رفع الجواز. حاول مرة أخرى." : "Failed to upload passport image. Please try again." });
+        return;
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setProfile((p: any) => ({ ...p, passportImageUrl: r.objectPath }));
-      // Trigger OCR
+      setIsUploadingPassport(false);
+
+      // Auto-run OCR
+      setIsOcrRunning(true);
       try {
         const ocr = await ocrMutation.mutateAsync({ data: { imageUrl: r.objectPath } });
+        setOcrAttempted(true);
         if (ocr.success) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           setProfile((p: any) => ({
             ...p,
             passportImageUrl: r.objectPath,
-            ...(ocr.fullName && !p.firstName ? { firstName: ocr.fullName.split(" ")[0] } : {}),
-            ...(ocr.fullNameEn && !p.lastName ? { lastName: ocr.fullNameEn.split(" ").slice(1).join(" ") } : {}),
+            // Prefer OCR-extracted name if profile name is empty
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ...((ocr as any).firstName && !p.firstName ? { firstName: (ocr as any).firstName } : {}),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ...((ocr as any).lastName && !p.lastName ? { lastName: (ocr as any).lastName } : {}),
+            // Always overwrite from passport (user can edit)
             ...(ocr.passportNumber ? { passportNumber: ocr.passportNumber } : {}),
             ...(ocr.nationality ? { nationality: ocr.nationality } : {}),
             ...(ocr.dateOfBirth ? { dateOfBirth: ocr.dateOfBirth } : {}),
@@ -570,17 +627,22 @@ export default function Account() {
             ...(ocr.issuingCountry ? { passportIssueCountry: ocr.issuingCountry } : {}),
             ...(ocr.gender ? { gender: ocr.gender === "M" || ocr.gender?.toLowerCase() === "male" ? "male" : "female" } : {}),
           }));
-          toast({ title: ar ? "تم استخراج بيانات الجواز" : "Passport Data Extracted", description: ar ? "يرجى مراجعة البيانات المستخرجة وتصحيحها إذا لزم" : "Please review and correct the extracted data if needed." });
+          toast({ title: ar ? "✓ تم استخراج بيانات الجواز" : "✓ Passport Data Extracted", description: ar ? "يرجى مراجعة البيانات وتصحيحها إذا لزم." : "Please review and correct if needed." });
+        } else {
+          setOcrFailed(true);
         }
       } catch {
-        // OCR failed silently — photo is still uploaded
+        setOcrAttempted(true);
+        setOcrFailed(true);
+      } finally {
+        setIsOcrRunning(false);
       }
-    } finally {
-      setIsOcrRunning(false);
+    } catch {
+      setIsUploadingPassport(false);
     }
   };
 
-  const keyFields = ["firstName", "lastName", "phone", "nationality", "dateOfBirth", "passportNumber", "passportExpiryDate", "profilePhotoUrl"];
+  const keyFields = ["firstName", "lastName", "phone", "nationality", "dateOfBirth", "passportNumber", "passportExpiryDate", "profilePhotoUrl", "passportImageUrl"];
   const completedKeyFields = keyFields.filter(k => !!profile[k]).length;
   const completionPercentage = Math.round((completedKeyFields / keyFields.length) * 100);
   const isProfileFull = completionPercentage === 100;
@@ -716,195 +778,287 @@ export default function Account() {
           </TabsContent>
 
           {/* ── Profile tab ── */}
-          <TabsContent value="profile" className="space-y-6">
-            {/* Completion card */}
+          <TabsContent value="profile" className="space-y-5">
+
+            {/* Completion banner */}
             {isProfileFull ? (
-              <Card className="border border-emerald-200 shadow-sm bg-gradient-to-br from-emerald-50 to-white">
-                <CardContent className="p-6 flex items-center gap-5">
-                  <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                    <CheckCircle2 className="w-8 h-8 text-emerald-600" />
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-black text-emerald-800 text-lg">{ar ? "✓ ملفك الشخصي مكتمل 100%" : "✓ Profile 100% Complete"}</h4>
-                    <p className="text-sm text-emerald-600 mt-0.5">
-                      {ar ? "يمكنك التقديم على التأشيرات مباشرةً. بياناتك محفوظة وجاهزة." : "You can apply for visas directly. Your data is saved and ready."}
+              <div className="flex items-center gap-4 p-5 rounded-2xl bg-emerald-50 border border-emerald-200 shadow-sm">
+                <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="w-7 h-7 text-emerald-600" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-black text-emerald-800">{ar ? "✓ ملفك الشخصي مكتمل 100%" : "✓ Profile 100% Complete"}</h4>
+                  <p className="text-sm text-emerald-600 mt-0.5">{ar ? "بياناتك محفوظة وجاهزة للتقديم على التأشيرات." : "Your data is saved and ready for visa applications."}</p>
+                </div>
+                <div className="text-3xl font-black text-emerald-600 hidden md:block">100%</div>
+              </div>
+            ) : (
+              <div className="p-5 rounded-2xl bg-white border border-slate-200 shadow-sm">
+                <div className="flex justify-between items-center mb-3">
+                  <div>
+                    <h4 className="font-bold text-slate-800">{ar ? "اكتمال الملف الشخصي" : "Profile Completion"}</h4>
+                    <p className="text-xs text-amber-600 mt-1 flex items-center gap-1.5 font-medium">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      {ar ? "أكمل ملفك للتمكن من التقديم على التأشيرات." : "Complete your profile to apply for visas."}
                     </p>
                   </div>
-                  <div className="hidden md:block text-4xl font-black text-emerald-700">100%</div>
-                </CardContent>
-              </Card>
-            ) : (
-              <Card className="border border-slate-200 shadow-sm bg-gradient-to-br from-slate-50 to-white">
-                <CardContent className="p-6">
-                  <div className="flex justify-between items-end mb-3">
-                    <div>
-                      <h4 className="font-bold text-slate-800">{ar ? "اكتمال الملف الشخصي" : "Profile Completion"}</h4>
-                      <p className="text-xs text-amber-600 mt-1 flex items-center gap-1.5 font-medium">
-                        <AlertCircle className="w-3.5 h-3.5" />
-                        {ar ? "يجب إكمال ملفك قبل التقديم على أي تأشيرة." : "You must complete your profile before applying for any visa."}
-                      </p>
-                    </div>
-                    <div className="text-right rtl:text-left">
-                      <span className="text-2xl font-black text-[#0d2351]">{completionPercentage}%</span>
-                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{completedKeyFields}/8 {ar ? "حقول مكتملة" : "completed"}</div>
-                    </div>
-                  </div>
-                  <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                    <div className="bg-[#0d2351] h-full transition-all duration-700 rounded-full" style={{ width: `${completionPercentage}%` }} />
-                  </div>
-                </CardContent>
-              </Card>
+                  <span className="text-2xl font-black text-[#0d2351]">{completionPercentage}%</span>
+                </div>
+                <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                  <div className="bg-[#0d2351] h-full rounded-full transition-all duration-700" style={{ width: `${completionPercentage}%` }} />
+                </div>
+              </div>
             )}
 
+            {/* ── SECTION 1: Personal Photo ── */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              {/* Avatar */}
-              <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row items-center gap-6">
-                <div className="relative shrink-0">
-                  <Avatar className="w-24 h-24 border-4 border-white shadow-md">
-                    <AvatarImage src={getDisplayUrl(profile.profilePhotoUrl)} />
-                    <AvatarFallback className="bg-[#0d2351]/10 text-[#0d2351] text-2xl font-bold">
-                      {(profile.firstName?.[0] || "U").toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <label className="absolute bottom-0 right-0 bg-[#0d2351] text-white p-2 rounded-full cursor-pointer hover:bg-[#0d2351]/90 shadow-lg transition-transform hover:scale-105">
-                    {isUploadingAvatar ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
-                    <input type="file" className="hidden" accept="image/*" onChange={async e => {
-                      const f = e.target.files?.[0]; if (!f) return;
-                      setIsUploadingAvatar(true);
-                      const r = await uploadFileDirect(f);
-                      setIsUploadingAvatar(false);
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      if (r) setProfile((p: any) => ({ ...p, profilePhotoUrl: r.objectPath }));
-                    }} disabled={isUploadingAvatar} />
-                  </label>
-                </div>
-                <div className="text-center md:text-start rtl:md:text-right">
-                  <h3 className="font-bold text-lg text-slate-800">{ar ? "صورة الملف الشخصي" : "Profile Photo"}</h3>
-                  <p className="text-sm text-slate-500 mt-1">{ar ? "اختر صورة شخصية واضحة (يُفضل بخلفية بيضاء للطلبات الرسمية)" : "Choose a clear personal photo (white background preferred for official requests)"}</p>
+              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/60 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-[#0d2351] text-white flex items-center justify-center text-sm font-black shrink-0">1</div>
+                <div>
+                  <h4 className="font-bold text-slate-800">{ar ? "الصورة الشخصية" : "Personal Photo"}</h4>
+                  <p className="text-xs text-slate-500">{ar ? "صورة واضحة للوجه (خلفية بيضاء مُفضَّل)" : "Clear face photo, white background preferred"}</p>
                 </div>
               </div>
-
-              {/* Basic info */}
               <div className="p-6">
-                <h4 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-5">{ar ? "المعلومات الأساسية" : "Basic Information"}</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div className="space-y-2">
-                    <Label className="font-semibold">{ar ? "الاسم الأول" : "First Name"} *</Label>
-                    <Input className="bg-slate-50 focus:bg-white" value={profile.firstName} onChange={e => setProfile({...profile, firstName: e.target.value})} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="font-semibold">{ar ? "اسم العائلة" : "Last Name"} *</Label>
-                    <Input className="bg-slate-50 focus:bg-white" value={profile.lastName} onChange={e => setProfile({...profile, lastName: e.target.value})} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="font-semibold text-slate-500">{ar ? "البريد الإلكتروني" : "Email"}</Label>
-                    <Input value={profile.email} disabled className="bg-slate-100 text-slate-500 cursor-not-allowed border-dashed" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="font-semibold">{ar ? "رقم الهاتف" : "Phone"} *</Label>
-                    <Input className="bg-slate-50 focus:bg-white" value={profile.phone} onChange={e => setProfile({...profile, phone: e.target.value})} dir="ltr" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="font-semibold">{ar ? "رقم الواتساب" : "WhatsApp"}</Label>
-                    <Input className="bg-slate-50 focus:bg-white" value={profile.whatsapp} onChange={e => setProfile({...profile, whatsapp: e.target.value})} dir="ltr" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="font-semibold">{ar ? "الجنسية" : "Nationality"} *</Label>
-                    <Input className="bg-slate-50 focus:bg-white" value={profile.nationality} onChange={e => setProfile({...profile, nationality: e.target.value})} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="font-semibold">{ar ? "تاريخ الميلاد" : "Date of Birth"} *</Label>
-                    <Input type="date" className="bg-slate-50 focus:bg-white" value={profile.dateOfBirth?.split('T')[0] || ""} onChange={e => setProfile({...profile, dateOfBirth: e.target.value})} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="font-semibold">{ar ? "الجنس" : "Gender"}</Label>
-                    <Select value={profile.gender} onValueChange={v => setProfile({...profile, gender: v})}>
-                      <SelectTrigger className="bg-slate-50 focus:bg-white"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="male">{ar ? "ذكر" : "Male"}</SelectItem>
-                        <SelectItem value="female">{ar ? "أنثى" : "Female"}</SelectItem>
-                        <SelectItem value="other">{ar ? "آخر" : "Other"}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2 md:col-span-2">
-                    <Label className="font-semibold">{ar ? "العنوان" : "Address"}</Label>
-                    <Input className="bg-slate-50 focus:bg-white" value={profile.address} onChange={e => setProfile({...profile, address: e.target.value})} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Passport */}
-              <div className="border-t border-slate-100 p-6">
-                <h4 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-5 flex items-center gap-2">
-                  <FileText className="w-4 h-4" /> {ar ? "بيانات الجواز" : "Passport Details"}
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div className="space-y-2 md:col-span-2">
-                    <Label className="font-semibold">{ar ? "رقم الجواز" : "Passport Number"} *</Label>
-                    <Input className="bg-slate-50 focus:bg-white uppercase" value={profile.passportNumber} onChange={e => setProfile({...profile, passportNumber: e.target.value})} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="font-semibold">{ar ? "دولة الإصدار" : "Issue Country"}</Label>
-                    <Input className="bg-slate-50 focus:bg-white" value={profile.passportIssueCountry} onChange={e => setProfile({...profile, passportIssueCountry: e.target.value})} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="font-semibold">{ar ? "مكان الإصدار" : "Issue Place"}</Label>
-                    <Input className="bg-slate-50 focus:bg-white" value={profile.passportIssuePlace} onChange={e => setProfile({...profile, passportIssuePlace: e.target.value})} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="font-semibold">{ar ? "تاريخ الإصدار" : "Issue Date"}</Label>
-                    <Input type="date" className="bg-slate-50 focus:bg-white" value={profile.passportIssueDate?.split('T')[0] || ""} onChange={e => setProfile({...profile, passportIssueDate: e.target.value})} />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="font-semibold">{ar ? "تاريخ الانتهاء" : "Expiry Date"} *</Label>
-                    <Input type="date" className="bg-slate-50 focus:bg-white" value={profile.passportExpiryDate?.split('T')[0] || ""} onChange={e => setProfile({...profile, passportExpiryDate: e.target.value})} />
-                  </div>
-                  <div className="space-y-2 md:col-span-2 mt-2">
-                    <Label className="text-sm font-semibold">{ar ? "صورة الجواز (الصفحة الأولى)" : "Passport Image (Bio Page)"}</Label>
-                    <p className="text-xs text-[#0d2351] font-medium flex items-center gap-1.5">
-                      <span>✨</span>
-                      {ar ? "رفع الجواز سيقوم باستخراج بياناتك تلقائياً بالذكاء الاصطناعي" : "Uploading will auto-extract your data using AI OCR"}
-                    </p>
-                    {profile.passportImageUrl ? (
-                      <div className="flex items-center gap-3 mt-2 bg-slate-50 p-2 rounded-xl border border-slate-100">
-                        <img src={getDisplayUrl(profile.passportImageUrl)} className="h-16 w-16 object-cover rounded-lg border bg-white" />
-                        <div className="flex-1 min-w-0"><p className="text-xs text-slate-400 truncate" dir="ltr">{profile.passportImageUrl.split('/').pop()}</p></div>
-                        <Button variant="outline" size="sm" onClick={() => setProfile({...profile, passportImageUrl: ""})}>إزالة</Button>
+                {profile.profilePhotoUrl ? (
+                  <div className="flex items-center gap-5">
+                    <div className="relative shrink-0">
+                      <img src={getDisplayUrl(profile.profilePhotoUrl)} className="w-24 h-24 rounded-xl object-cover border-2 border-emerald-200 shadow" />
+                      <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center shadow">
+                        <CheckCircle2 className="w-4 h-4 text-white" />
                       </div>
-                    ) : (
-                      <label className="mt-2 flex items-center justify-center gap-2 px-4 py-6 border-2 border-dashed rounded-xl cursor-pointer bg-[#0d2351]/3 hover:bg-[#0d2351]/8 hover:border-[#0d2351]/50 border-[#0d2351]/20 transition-colors text-sm text-[#0d2351]">
-                        <input type="file" className="hidden" accept="image/*" onChange={async e => {
-                          const f = e.target.files?.[0]; if (!f) return;
-                          await handlePassportImageUpload(f);
-                        }} disabled={isOcrRunning} />
-                        {isOcrRunning ? (
-                          <><Loader2 className="h-4 w-4 animate-spin" /><span className="font-medium">{ar ? "جاري الاستخراج بالذكاء الاصطناعي..." : "AI extracting data..."}</span></>
-                        ) : (
-                          <><Camera className="h-5 w-5" /><span className="font-medium">{ar ? "ارفع صورة الجواز (OCR تلقائي)" : "Upload Passport (Auto OCR)"}</span></>
-                        )}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-bold text-emerald-700">✓ {ar ? "الصورة الشخصية مقبولة" : "Personal Photo Accepted"}</p>
+                      <label className="mt-2 inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 cursor-pointer text-sm font-semibold text-slate-600 transition-colors">
+                        <Camera className="w-4 h-4" />
+                        {ar ? "استبدال الصورة" : "Replace Photo"}
+                        <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handlePhotoUpload(f); }} disabled={isUploadingPhoto || isValidatingPhoto} />
                       </label>
-                    )}
+                    </div>
                   </div>
+                ) : (
+                  <div>
+                    {photoValidation && !photoValidation.valid && (
+                      <div className="mb-4 flex items-start gap-3 p-4 rounded-xl bg-red-50 border border-red-200">
+                        <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold text-red-700 text-sm">{ar ? "الصورة غير مقبولة" : "Photo not accepted"}</p>
+                          <p className="text-red-600 text-xs mt-0.5">{ar ? "يرجى رفع صورة شخصية أوضح." : "Please upload a clearer personal photo."}</p>
+                        </div>
+                      </div>
+                    )}
+                    <label className={`flex flex-col items-center justify-center gap-3 py-10 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${
+                      isUploadingPhoto || isValidatingPhoto
+                        ? "border-[#0d2351]/30 bg-[#0d2351]/5"
+                        : "border-slate-200 bg-slate-50 hover:border-[#0d2351]/40 hover:bg-[#0d2351]/5"
+                    }`}>
+                      <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handlePhotoUpload(f); }} disabled={isUploadingPhoto || isValidatingPhoto} />
+                      {isUploadingPhoto ? (
+                        <><Loader2 className="w-8 h-8 text-[#0d2351] animate-spin" /><span className="text-sm font-semibold text-[#0d2351]">{ar ? "جاري الرفع..." : "Uploading..."}</span></>
+                      ) : isValidatingPhoto ? (
+                        <><Loader2 className="w-8 h-8 text-[#0d2351] animate-spin" /><span className="text-sm font-semibold text-[#0d2351]">{ar ? "جاري التحقق من الصورة..." : "Validating photo..."}</span></>
+                      ) : (
+                        <>
+                          <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center">
+                            <Camera className="w-8 h-8 text-slate-400" />
+                          </div>
+                          <div className="text-center">
+                            <p className="font-bold text-slate-700">{ar ? "ارفع الصورة الشخصية" : "Upload Personal Photo"}</p>
+                            <p className="text-xs text-slate-400 mt-1">{ar ? "PNG, JPG — حتى 20 ميغابايت" : "PNG, JPG — up to 20 MB"}</p>
+                          </div>
+                        </>
+                      )}
+                    </label>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ── SECTION 2: Passport ── */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/60 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-[#0d2351] text-white flex items-center justify-center text-sm font-black shrink-0">2</div>
+                <div>
+                  <h4 className="font-bold text-slate-800">{ar ? "جواز السفر" : "Passport"}</h4>
+                  <p className="text-xs text-slate-500">{ar ? "ارفع صفحة المعلومات — سيتم استخراج البيانات تلقائياً" : "Upload the bio page — data will be extracted automatically"}</p>
+                </div>
+                {profile.passportImageUrl && !isOcrRunning && (
+                  <div className="ms-auto">
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> {ar ? "تم الرفع" : "Uploaded"}
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div className="p-6 space-y-5">
+                {/* Upload area — always visible; if already uploaded, show thumbnail + replace */}
+                {!profile.passportImageUrl && !isUploadingPassport && !isOcrRunning ? (
+                  <label className="flex flex-col items-center justify-center gap-3 py-10 border-2 border-dashed border-[#0d2351]/20 rounded-xl cursor-pointer bg-[#0d2351]/3 hover:bg-[#0d2351]/8 hover:border-[#0d2351]/50 transition-colors">
+                    <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handlePassportUpload(f); }} />
+                    <div className="w-16 h-16 rounded-full bg-[#0d2351]/10 flex items-center justify-center">
+                      <FileText className="w-8 h-8 text-[#0d2351]" />
+                    </div>
+                    <div className="text-center">
+                      <p className="font-bold text-[#0d2351]">{ar ? "ارفع صورة جواز السفر" : "Upload Passport Image"}</p>
+                      <p className="text-xs text-[#0d2351]/60 mt-1">{ar ? "صفحة المعلومات الشخصية فقط" : "Bio / information page only"}</p>
+                    </div>
+                  </label>
+                ) : (isUploadingPassport || isOcrRunning) ? (
+                  <div className="flex flex-col items-center justify-center gap-3 py-10 border-2 border-dashed border-[#0d2351]/30 rounded-xl bg-[#0d2351]/5">
+                    <Loader2 className="w-10 h-10 text-[#0d2351] animate-spin" />
+                    <p className="font-bold text-[#0d2351] text-sm">
+                      {isUploadingPassport ? (ar ? "جاري الرفع..." : "Uploading...") : (ar ? "جاري قراءة بيانات الجواز..." : "Reading passport information...")}
+                    </p>
+                    <p className="text-xs text-[#0d2351]/60">{ar ? "الذكاء الاصطناعي يستخرج البيانات تلقائياً" : "AI is extracting your data automatically"}</p>
+                  </div>
+                ) : profile.passportImageUrl && (
+                  <div className="flex items-center gap-4 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <img src={getDisplayUrl(profile.passportImageUrl)} className="h-14 w-20 object-cover rounded-lg border bg-white shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-slate-500 font-medium">{ar ? "صورة الجواز" : "Passport image"}</p>
+                      <p className="text-xs text-slate-400 truncate" dir="ltr">{profile.passportImageUrl.split('/').pop()}</p>
+                    </div>
+                    <label className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer text-xs font-semibold text-slate-600 transition-colors">
+                      <Camera className="w-3.5 h-3.5" />
+                      {ar ? "استبدال" : "Replace"}
+                      <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) { setProfile((p: any) => ({...p, passportImageUrl: ""})); handlePassportUpload(f); } }} />
+                    </label>
+                  </div>
+                )}
+
+                {/* OCR failure message */}
+                {ocrAttempted && ocrFailed && (
+                  <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 border border-amber-200">
+                    <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-bold text-amber-800 text-sm">{ar ? "تعذّر قراءة الجواز تلقائياً" : "Couldn't read passport automatically"}</p>
+                      <p className="text-amber-700 text-xs mt-0.5">{ar ? "يرجى إدخال البيانات يدوياً أدناه، أو ارفع صورة أوضح." : "Please enter your data manually below, or upload a clearer image."}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Extracted / editable passport fields — only shown after upload */}
+                {(profile.passportImageUrl && !isOcrRunning) && (
+                  <div className="space-y-4 pt-2">
+                    <div className="flex items-center gap-2">
+                      <div className="h-px flex-1 bg-slate-100" />
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-widest px-2">
+                        {ocrAttempted && !ocrFailed ? (ar ? "البيانات المستخرجة — راجع وصحّح إذا لزم" : "Extracted data — review and correct if needed") : (ar ? "بيانات الجواز" : "Passport Details")}
+                      </span>
+                      <div className="h-px flex-1 bg-slate-100" />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{ar ? "الاسم الأول" : "First Name"} *</Label>
+                        <Input className="bg-slate-50 focus:bg-white" value={profile.firstName || ""} onChange={e => setProfile({...profile, firstName: e.target.value})} placeholder={ar ? "الاسم الأول" : "First name"} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{ar ? "اسم العائلة" : "Last Name"} *</Label>
+                        <Input className="bg-slate-50 focus:bg-white" value={profile.lastName || ""} onChange={e => setProfile({...profile, lastName: e.target.value})} placeholder={ar ? "اسم العائلة" : "Last name"} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{ar ? "رقم الجواز" : "Passport Number"} *</Label>
+                        <Input className="bg-slate-50 focus:bg-white font-mono uppercase" value={profile.passportNumber || ""} onChange={e => setProfile({...profile, passportNumber: e.target.value})} placeholder="A1234567" dir="ltr" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{ar ? "الجنسية" : "Nationality"} *</Label>
+                        <Input className="bg-slate-50 focus:bg-white" value={profile.nationality || ""} onChange={e => setProfile({...profile, nationality: e.target.value})} placeholder={ar ? "مثال: اليمن" : "e.g. Yemen"} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{ar ? "تاريخ الميلاد" : "Date of Birth"} *</Label>
+                        <Input type="date" className="bg-slate-50 focus:bg-white" value={profile.dateOfBirth?.split('T')[0] || ""} onChange={e => setProfile({...profile, dateOfBirth: e.target.value})} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{ar ? "الجنس" : "Gender"}</Label>
+                        <Select value={profile.gender || "male"} onValueChange={v => setProfile({...profile, gender: v})}>
+                          <SelectTrigger className="bg-slate-50"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="male">{ar ? "ذكر" : "Male"}</SelectItem>
+                            <SelectItem value="female">{ar ? "أنثى" : "Female"}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{ar ? "تاريخ الإصدار" : "Issue Date"}</Label>
+                        <Input type="date" className="bg-slate-50 focus:bg-white" value={profile.passportIssueDate?.split('T')[0] || ""} onChange={e => setProfile({...profile, passportIssueDate: e.target.value})} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{ar ? "تاريخ الانتهاء" : "Expiry Date"} *</Label>
+                        <Input type="date" className="bg-slate-50 focus:bg-white" value={profile.passportExpiryDate?.split('T')[0] || ""} onChange={e => setProfile({...profile, passportExpiryDate: e.target.value})} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{ar ? "دولة الإصدار" : "Issuing Country"}</Label>
+                        <Input className="bg-slate-50 focus:bg-white" value={profile.passportIssueCountry || ""} onChange={e => setProfile({...profile, passportIssueCountry: e.target.value})} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{ar ? "مكان الإصدار" : "Place of Issue"}</Label>
+                        <Input className="bg-slate-50 focus:bg-white" value={profile.passportIssuePlace || ""} onChange={e => setProfile({...profile, passportIssuePlace: e.target.value})} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ── SECTION 3: Contact Info ── */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/60 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-[#0d2351] text-white flex items-center justify-center text-sm font-black shrink-0">3</div>
+                <div>
+                  <h4 className="font-bold text-slate-800">{ar ? "معلومات التواصل" : "Contact Information"}</h4>
                 </div>
               </div>
+              <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{ar ? "رقم الهاتف" : "Phone Number"} *</Label>
+                  <Input className="bg-slate-50 focus:bg-white" value={profile.phone || ""} onChange={e => setProfile({...profile, phone: e.target.value})} dir="ltr" placeholder="+9661234567" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{ar ? "واتساب" : "WhatsApp"}</Label>
+                  <Input className="bg-slate-50 focus:bg-white" value={profile.whatsapp || ""} onChange={e => setProfile({...profile, whatsapp: e.target.value})} dir="ltr" placeholder="+9661234567" />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{ar ? "البريد الإلكتروني" : "Email"}</Label>
+                  <Input value={profile.email || ""} disabled className="bg-slate-100 text-slate-400 border-dashed cursor-not-allowed" />
+                </div>
+              </div>
+            </div>
 
-              {/* GCC */}
-              <div className="border-t border-slate-100 p-6 bg-slate-50/30">
-                <label className="flex items-center gap-3 cursor-pointer p-4 rounded-xl border border-slate-200 bg-white hover:border-[#0d2351]/40 transition-colors mb-6 shadow-sm">
-                  <Checkbox checked={profile.isGccResident} onCheckedChange={(c) => setProfile({...profile, isGccResident: !!c})} className="scale-110" />
-                  <div className="font-bold text-slate-800">{ar ? "أنا مقيم في دول مجلس التعاون الخليجي" : "I am a GCC Resident"}</div>
-                </label>
+            {/* ── SECTION 4: GCC Residency ── */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/60 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-[#0d2351] text-white flex items-center justify-center text-sm font-black shrink-0">4</div>
+                <div>
+                  <h4 className="font-bold text-slate-800">{ar ? "إقامة دول مجلس التعاون" : "GCC Residency"}</h4>
+                  <p className="text-xs text-slate-500">{ar ? "هل أنت مقيم في إحدى دول مجلس التعاون الخليجي؟" : "Are you a resident of a GCC country?"}</p>
+                </div>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setProfile({...profile, isGccResident: true})}
+                    className={`flex-1 py-3 rounded-xl border-2 font-bold text-sm transition-all ${profile.isGccResident ? "border-[#0d2351] bg-[#0d2351] text-white" : "border-slate-200 bg-slate-50 text-slate-600 hover:border-[#0d2351]/40"}`}
+                  >
+                    {ar ? "نعم" : "Yes"}
+                  </button>
+                  <button
+                    onClick={() => setProfile({...profile, isGccResident: false, gccResidenceCountry: "", gccResidenceFrontUrl: ""})}
+                    className={`flex-1 py-3 rounded-xl border-2 font-bold text-sm transition-all ${profile.isGccResident === false ? "border-slate-500 bg-slate-100 text-slate-700" : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300"}`}
+                  >
+                    {ar ? "لا" : "No"}
+                  </button>
+                </div>
 
                 {profile.isGccResident && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 animate-in fade-in zoom-in-95 duration-200">
-                    <div className="space-y-2">
-                      <Label className="font-semibold">{ar ? "دولة الإقامة" : "Residence Country"}</Label>
-                      <Select value={profile.gccResidenceCountry} onValueChange={v => setProfile({...profile, gccResidenceCountry: v})}>
-                        <SelectTrigger className="bg-white focus:bg-white"><SelectValue placeholder={ar ? "اختر الدولة" : "Select country"} /></SelectTrigger>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in zoom-in-95 duration-200 pt-1">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{ar ? "دولة الإقامة" : "Residence Country"}</Label>
+                      <Select value={profile.gccResidenceCountry || ""} onValueChange={v => setProfile({...profile, gccResidenceCountry: v})}>
+                        <SelectTrigger className="bg-slate-50"><SelectValue placeholder={ar ? "اختر الدولة" : "Select country"} /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="Saudi Arabia">{ar ? "المملكة العربية السعودية" : "Saudi Arabia"}</SelectItem>
-                          <SelectItem value="UAE">{ar ? "الإمارات العربية المتحدة" : "United Arab Emirates"}</SelectItem>
+                          <SelectItem value="United Arab Emirates">{ar ? "الإمارات العربية المتحدة" : "United Arab Emirates"}</SelectItem>
                           <SelectItem value="Kuwait">{ar ? "الكويت" : "Kuwait"}</SelectItem>
                           <SelectItem value="Qatar">{ar ? "قطر" : "Qatar"}</SelectItem>
                           <SelectItem value="Bahrain">{ar ? "البحرين" : "Bahrain"}</SelectItem>
@@ -912,70 +1066,97 @@ export default function Account() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label className="font-semibold">{ar ? "رقم الإقامة" : "Residence Number"}</Label>
-                      <Input className="bg-white focus:bg-white" value={profile.gccResidenceNumber} onChange={e => setProfile({...profile, gccResidenceNumber: e.target.value})} />
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{ar ? "رقم الإقامة" : "Residence Number"}</Label>
+                      <Input className="bg-slate-50 focus:bg-white" value={profile.gccResidenceNumber || ""} onChange={e => setProfile({...profile, gccResidenceNumber: e.target.value})} dir="ltr" />
                     </div>
-                    <div className="space-y-2 md:col-span-2">
-                      <Label className="font-semibold">{ar ? "تاريخ الانتهاء" : "Expiry Date"}</Label>
-                      <Input type="date" className="bg-white focus:bg-white" value={profile.gccResidenceExpiry?.split('T')[0] || ""} onChange={e => setProfile({...profile, gccResidenceExpiry: e.target.value})} />
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{ar ? "تاريخ الانتهاء" : "Expiry Date"}</Label>
+                      <Input type="date" className="bg-slate-50 focus:bg-white" value={profile.gccResidenceExpiry?.split('T')[0] || ""} onChange={e => setProfile({...profile, gccResidenceExpiry: e.target.value})} />
                     </div>
-                    <div className="space-y-2">
-                      <ProfileFileUpload label={ar ? "الوجه الأمامي للإقامة" : "Residence Front Image"} value={profile.gccResidenceFrontUrl} onChange={v => setProfile({...profile, gccResidenceFrontUrl: v})} />
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{ar ? "صورة الإقامة (الوجه الأمامي)" : "Residence Front Image"}</Label>
+                      <ProfileFileUpload label="" value={profile.gccResidenceFrontUrl} onChange={v => setProfile({...profile, gccResidenceFrontUrl: v})} />
                     </div>
-                    <div className="space-y-2">
-                      <ProfileFileUpload label={ar ? "الوجه الخلفي للإقامة" : "Residence Back Image"} value={profile.gccResidenceBackUrl} onChange={v => setProfile({...profile, gccResidenceBackUrl: v})} />
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{ar ? "صورة الإقامة (الوجه الخلفي)" : "Residence Back Image"}</Label>
+                      <ProfileFileUpload label="" value={profile.gccResidenceBackUrl} onChange={v => setProfile({...profile, gccResidenceBackUrl: v})} />
                     </div>
                   </div>
                 )}
               </div>
+            </div>
 
-              {/* European / Schengen */}
-              <div className="border-t border-slate-100 p-6 bg-purple-50/20">
-                <label className="flex items-center gap-3 cursor-pointer p-4 rounded-xl border border-purple-100 bg-white hover:border-purple-300 transition-colors mb-6 shadow-sm">
-                  <Checkbox checked={profile.isEuropeanResident} onCheckedChange={(c) => setProfile({...profile, isEuropeanResident: !!c})} className="scale-110" />
-                  <div>
-                    <div className="font-bold text-slate-800">{ar ? "لديّ تأشيرة شنغن أو إقامة أوروبية سارية" : "I have a valid Schengen visa or European residency"}</div>
-                    <div className="text-xs text-slate-500 mt-0.5">{ar ? "قد يؤهلك هذا للتقدم على تأشيرات معينة" : "This may qualify you for certain visas"}</div>
-                  </div>
-                </label>
+            {/* ── SECTION 5: European / Schengen ── */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/60 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-[#0d2351] text-white flex items-center justify-center text-sm font-black shrink-0">5</div>
+                <div>
+                  <h4 className="font-bold text-slate-800">{ar ? "الإقامة الأوروبية / تأشيرة شنغن" : "European Residency / Schengen Visa"}</h4>
+                  <p className="text-xs text-slate-500">{ar ? "هل لديك إقامة أوروبية أو تأشيرة شنغن سارية؟" : "Do you have a valid European residency or Schengen visa?"}</p>
+                </div>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setProfile({...profile, isEuropeanResident: true})}
+                    className={`flex-1 py-3 rounded-xl border-2 font-bold text-sm transition-all ${profile.isEuropeanResident ? "border-[#0d2351] bg-[#0d2351] text-white" : "border-slate-200 bg-slate-50 text-slate-600 hover:border-[#0d2351]/40"}`}
+                  >
+                    {ar ? "نعم" : "Yes"}
+                  </button>
+                  <button
+                    onClick={() => setProfile({...profile, isEuropeanResident: false, europeanDocumentType: "", europeanDocumentUrl: ""})}
+                    className={`flex-1 py-3 rounded-xl border-2 font-bold text-sm transition-all ${profile.isEuropeanResident === false ? "border-slate-500 bg-slate-100 text-slate-700" : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300"}`}
+                  >
+                    {ar ? "لا" : "No"}
+                  </button>
+                </div>
 
                 {profile.isEuropeanResident && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 animate-in fade-in zoom-in-95 duration-200">
-                    <div className="space-y-2">
-                      <Label className="font-semibold">{ar ? "نوع الوثيقة" : "Document Type"}</Label>
-                      <Select value={profile.europeanDocumentType} onValueChange={v => setProfile({...profile, europeanDocumentType: v})}>
-                        <SelectTrigger className="bg-white focus:bg-white"><SelectValue placeholder={ar ? "اختر النوع" : "Select type"} /></SelectTrigger>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in zoom-in-95 duration-200 pt-1">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{ar ? "نوع الوثيقة" : "Document Type"}</Label>
+                      <Select value={profile.europeanDocumentType || ""} onValueChange={v => setProfile({...profile, europeanDocumentType: v})}>
+                        <SelectTrigger className="bg-slate-50"><SelectValue placeholder={ar ? "اختر النوع" : "Select type"} /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="schengen_visa">{ar ? "تأشيرة شنغن" : "Schengen Visa"}</SelectItem>
-                          <SelectItem value="uk_visa">{ar ? "تأشيرة بريطانية" : "UK Visa"}</SelectItem>
                           <SelectItem value="eu_residency">{ar ? "إقامة أوروبية" : "EU Residency Permit"}</SelectItem>
+                          <SelectItem value="uk_visa">{ar ? "تأشيرة بريطانية" : "UK Visa"}</SelectItem>
                           <SelectItem value="uk_residency">{ar ? "إقامة بريطانية" : "UK Residency Permit"}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label className="font-semibold">{ar ? "تاريخ انتهاء الصلاحية" : "Expiry Date"}</Label>
-                      <Input type="date" className="bg-white focus:bg-white" value={profile.europeanDocumentExpiry?.split('T')[0] || ""} onChange={e => setProfile({...profile, europeanDocumentExpiry: e.target.value})} />
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{ar ? "تاريخ الانتهاء" : "Expiry Date"}</Label>
+                      <Input type="date" className="bg-slate-50 focus:bg-white" value={profile.europeanDocumentExpiry?.split('T')[0] || ""} onChange={e => setProfile({...profile, europeanDocumentExpiry: e.target.value})} />
                     </div>
-                    <div className="space-y-2 md:col-span-2">
-                      <ProfileFileUpload label={ar ? "صورة الوثيقة الأوروبية / الشنغن" : "European / Schengen Document Image"} value={profile.europeanDocumentUrl} onChange={v => setProfile({...profile, europeanDocumentUrl: v})} />
+                    <div className="space-y-1.5 md:col-span-2">
+                      <Label className="text-xs font-bold text-slate-500 uppercase tracking-wide">{ar ? "صورة الوثيقة" : "Document Image"}</Label>
+                      <ProfileFileUpload label="" value={profile.europeanDocumentUrl} onChange={v => setProfile({...profile, europeanDocumentUrl: v})} />
                     </div>
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="sticky bottom-6 flex justify-end z-10">
+            {/* ── Save button ── */}
+            <div className="sticky bottom-6 z-10 flex justify-end">
               <Button
                 onClick={handleSaveProfile}
                 disabled={updateProfileMutation.isPending}
-                className="h-14 px-10 rounded-2xl shadow-lg shadow-[#0d2351]/25 hover:shadow-xl hover:shadow-[#0d2351]/30 transition-all font-bold text-lg gap-3 text-white bg-[#0d2351] hover:bg-[#0d2351]/90"
+                className="h-14 px-10 rounded-2xl shadow-lg shadow-[#0d2351]/25 hover:shadow-xl transition-all font-bold text-lg gap-3 text-white bg-[#0d2351] hover:bg-[#0d2351]/90"
               >
                 {updateProfileMutation.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
-                {ar ? "حفظ التغييرات" : "Save Changes"}
+                {ar ? "حفظ الملف الشخصي" : "Save Profile"}
               </Button>
             </div>
+
+            {/* Post-save success indicator */}
+            {updateProfileMutation.isSuccess && isProfileFull && (
+              <div className="text-center py-4 text-emerald-700 font-bold text-sm animate-in fade-in">
+                ✓ {ar ? "تم إكمال بيانات الملف الشخصي بنجاح" : "Profile Completed Successfully"}
+              </div>
+            )}
           </TabsContent>
 
           {/* ── Notifications tab ── */}

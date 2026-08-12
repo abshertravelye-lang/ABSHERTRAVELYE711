@@ -214,16 +214,18 @@ export default function UmrahVisaScreen() {
   // ── OCR passport ────────────────────────────────────────────────────────────
   const scanPassport = async (uri: string) => {
     try {
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
+      // The OCR endpoint accepts only internal storage paths — upload first.
+      const objectPath = await uploadFile(
+        (args) => uploadUrlMutation.mutateAsync(args),
+        uri,
+        `passport_scan_${Date.now()}.jpg`,
+      );
+      if (!objectPath) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        return;
+      }
       ocrMutation.mutate(
-        { data: { image: base64 } },
+        { data: { imageUrl: objectPath } },
         {
           onSuccess: (res) => {
             if (res.success) {

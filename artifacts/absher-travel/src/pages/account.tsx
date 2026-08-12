@@ -5,6 +5,7 @@ import {
   useListVisaApplications, useListNotifications, useMarkNotificationRead, useMarkAllNotificationsRead,
   useListMyBookings, useUpdateProfile, useGetCurrentUser, getGetCurrentUserQueryKey,
   VisaApplication, Notification as ApiNotification, Booking, useOcrPassport,
+  customFetch, ApiError,
 } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -562,25 +563,38 @@ export default function Account() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       setProfile((p: any) => ({ ...p, profilePhotoUrl: r.objectPath }));
 
-      // Validate photo with AI
+      // Validate photo with AI (customFetch attaches the token and
+      // auto-refreshes an expired session before retrying)
       setIsValidatingPhoto(true);
       try {
         const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
-        const token = localStorage.getItem("absher_access_token");
-        const vRes = await fetch(`${base}/api/visa-applications/validate-photo`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-          body: JSON.stringify({ imageUrl: r.objectPath }),
-        });
-        const vData = await vRes.json();
+        const vData = await customFetch<{ valid?: boolean; reason?: string }>(
+          `${base}/api/visa-applications/validate-photo`,
+          { method: "POST", headers: { "x-lang": ar ? "ar" : "en" }, body: JSON.stringify({ imageUrl: r.objectPath }) },
+        );
         setPhotoValidation({ valid: !!vData.valid, reason: vData.reason || "" });
         if (!vData.valid) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           setProfile((p: any) => ({ ...p, profilePhotoUrl: "" }));
         }
-      } catch {
-        // Validation failed silently — accept the photo
-        setPhotoValidation({ valid: true, reason: "Photo accepted" });
+      } catch (err) {
+        // A server/auth error is NOT a photo rejection — keep the uploaded
+        // photo and tell the user what actually happened.
+        if (err instanceof ApiError && err.status === 401) {
+          toast({
+            variant: "destructive",
+            title: ar ? "انتهت الجلسة" : "Session Expired",
+            description: ar ? "يرجى تسجيل الدخول مرة أخرى ثم إعادة رفع الصورة." : "Please log in again, then re-upload the photo.",
+          });
+        } else {
+          const serverMsg = err instanceof ApiError ? (err.data as { error?: string } | null)?.error : undefined;
+          toast({
+            variant: "destructive",
+            title: ar ? "تعذر التحقق من الصورة" : "Photo Check Unavailable",
+            description: serverMsg || (ar ? "تم رفع الصورة، لكن التحقق الآلي غير متاح حالياً." : "The photo was uploaded, but automatic verification is temporarily unavailable."),
+          });
+        }
+        setPhotoValidation(null);
       } finally {
         setIsValidatingPhoto(false);
       }
@@ -614,11 +628,11 @@ export default function Account() {
           setProfile((p: any) => ({
             ...p,
             passportImageUrl: r.objectPath,
-            // Prefer OCR-extracted name if profile name is empty
+            // Always take the name from the passport (user can still edit)
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ...((ocr as any).firstName && !p.firstName ? { firstName: (ocr as any).firstName } : {}),
+            ...((ocr as any).firstName ? { firstName: (ocr as any).firstName } : {}),
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            ...((ocr as any).lastName && !p.lastName ? { lastName: (ocr as any).lastName } : {}),
+            ...((ocr as any).lastName ? { lastName: (ocr as any).lastName } : {}),
             // Always overwrite from passport (user can edit)
             ...(ocr.passportNumber ? { passportNumber: ocr.passportNumber } : {}),
             ...(ocr.nationality ? { nationality: ocr.nationality } : {}),
@@ -845,7 +859,11 @@ export default function Account() {
                         <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
                         <div>
                           <p className="font-bold text-red-700 text-sm">{ar ? "الصورة غير مقبولة" : "Photo not accepted"}</p>
-                          <p className="text-red-600 text-xs mt-0.5">{ar ? "يرجى رفع صورة شخصية أوضح." : "Please upload a clearer personal photo."}</p>
+                          <p className="text-red-600 text-xs mt-0.5">
+                            {photoValidation.reason && photoValidation.reason !== "Photo accepted"
+                              ? photoValidation.reason
+                              : (ar ? "يرجى رفع صورة شخصية أوضح." : "Please upload a clearer personal photo.")}
+                          </p>
                         </div>
                       </div>
                     )}

@@ -3,7 +3,8 @@ import { useTranslation } from "@/hooks/use-translation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plane, Building, FileText, Map, Star, Car, Shield, MapPin, Briefcase, Users, ArrowRight, ArrowLeft, Calendar } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Plane, Building, FileText, Map, Star, Car, Shield, MapPin, Briefcase, Users, ArrowRight, ArrowLeft, Calendar, HelpCircle, Home as HomeIcon } from "lucide-react";
 import { useListOffers, useListDestinations } from "@workspace/api-client-react";
 import { Link, useLocation } from "wouter";
 import { AirportSearch } from "@/components/airport-search";
@@ -11,6 +12,23 @@ import { FlightDatePicker } from "@/components/flight-date-picker";
 import { PassengerSelector, type PassengerConfig } from "@/components/passenger-selector";
 import type { Airport } from "@/data/airports";
 import { AppDownloadLinks } from "@/components/app-download-links";
+
+/**
+ * Offer `duration` is a single free-text DB field (usually Arabic, e.g.
+ * "5 أيام / 4 ليالي"). Localize the common day/night words for display so the
+ * English UI doesn't show Arabic remnants (and vice versa).
+ */
+function localizeDuration(duration: string | null | undefined, ar: boolean): string {
+  if (!duration) return "";
+  if (ar) {
+    return duration
+      .replace(/\bdays?\b/gi, "أيام")
+      .replace(/\bnights?\b/gi, "ليالي");
+  }
+  return duration
+    .replace(/يوم(اً|ان|ين)?|أيام/g, "days")
+    .replace(/ليلة|ليلتان|ليلتين|ليالي?/g, "nights");
+}
 
 export default function Home() {
   const { t, language } = useTranslation();
@@ -24,21 +42,74 @@ export default function Home() {
   const { data: offers, isLoading: offersLoading } = useListOffers({ featured: true });
   const { data: destinations, isLoading: destLoading } = useListDestinations();
 
+  const ar = language === "ar";
+
+  // Umrah host-eligibility flow state
+  const [umrahStep, setUmrahStep] = useState<null | "ask" | "reject">(null);
+
   const handleHeroSearch = () => {
     navigate("/flights");
   };
 
+  // Primary services — each links to a REAL page in the system.
+  // Umrah opens the host-eligibility dialog first (handled via onClick).
   const services = [
-    { icon: Plane, label: t("flightTicketBooking"), color: "bg-blue-50 text-blue-600" },
-    { icon: Building, label: t("hotelBooking"), color: "bg-indigo-50 text-indigo-600" },
-    { icon: FileText, label: t("visaServices"), color: "bg-sky-50 text-sky-600" },
-    { icon: Map, label: t("tourismPrograms"), color: "bg-emerald-50 text-emerald-600" },
-    { icon: Star, label: t("umrahPackages"), color: "bg-amber-50 text-amber-600" },
-    { icon: Car, label: t("carRental"), color: "bg-slate-100 text-slate-600" },
-    { icon: Shield, label: t("travelInsurance"), color: "bg-teal-50 text-teal-600" },
-    { icon: MapPin, label: t("airportTransfer"), color: "bg-orange-50 text-orange-600" },
-    { icon: Briefcase, label: t("corporateBookings"), color: "bg-violet-50 text-violet-600" },
-    { icon: Users, label: t("businessServices"), color: "bg-rose-50 text-rose-600" }
+    {
+      icon: Plane,
+      emoji: "✈️",
+      href: "/flights",
+      titleAr: "حجز الطيران",
+      titleEn: "Flight Booking",
+      descAr: "احجز رحلاتك الجوية بأفضل الأسعار",
+      descEn: "Book your flights at the best prices",
+      color: "bg-blue-50 text-blue-600",
+      ring: "group-hover:ring-blue-200",
+    },
+    {
+      icon: Building,
+      emoji: "🏨",
+      href: "/hotels",
+      titleAr: "الفنادق",
+      titleEn: "Hotels",
+      descAr: "حجوزات الفنادق في مختلف الوجهات",
+      descEn: "Hotel bookings across destinations",
+      color: "bg-indigo-50 text-indigo-600",
+      ring: "group-hover:ring-indigo-200",
+    },
+    {
+      icon: FileText,
+      emoji: "🛂",
+      href: "/visas",
+      titleAr: "التأشيرات",
+      titleEn: "Visas",
+      descAr: "استخراج تأشيرات السفر لأكثر من ١٥٠ وجهة",
+      descEn: "Travel visas for 150+ destinations",
+      color: "bg-sky-50 text-sky-600",
+      ring: "group-hover:ring-sky-200",
+    },
+    {
+      icon: Star,
+      emoji: "🕋",
+      href: null,
+      onClick: () => setUmrahStep("ask"),
+      titleAr: "تأشيرة العمرة",
+      titleEn: "Umrah Visa",
+      descAr: "تقديم طلب تأشيرة العمرة",
+      descEn: "Apply for an Umrah visa",
+      color: "bg-amber-50 text-amber-600",
+      ring: "group-hover:ring-amber-200",
+    },
+    {
+      icon: Map,
+      emoji: "🌍",
+      href: "/programs",
+      titleAr: "البرامج السياحية",
+      titleEn: "Tourism Programs",
+      descAr: "تصفح البرامج السياحية المتاحة",
+      descEn: "Browse available tourism programs",
+      color: "bg-emerald-50 text-emerald-600",
+      ring: "group-hover:ring-emerald-200",
+    },
   ];
 
   return (
@@ -84,10 +155,10 @@ export default function Home() {
           <CardContent className="p-0">
             <Tabs defaultValue="flights" className="w-full">
               <TabsList className="w-full grid grid-cols-4 h-auto rounded-none bg-slate-50/50 p-0 border-b border-slate-100">
-                <TabsTrigger value="flights" className="py-5 data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-accent rounded-none text-base font-semibold transition-all"><Plane className="mr-2 h-5 w-5 rtl:ml-2 rtl:mr-0"/> <span className="hidden sm:inline">Flights</span></TabsTrigger>
-                <TabsTrigger value="hotels" className="py-5 data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-accent rounded-none text-base font-semibold transition-all"><Building className="mr-2 h-5 w-5 rtl:ml-2 rtl:mr-0"/> <span className="hidden sm:inline">Hotels</span></TabsTrigger>
-                <TabsTrigger value="visas" className="py-5 data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-accent rounded-none text-base font-semibold transition-all"><FileText className="mr-2 h-5 w-5 rtl:ml-2 rtl:mr-0"/> <span className="hidden sm:inline">Visas</span></TabsTrigger>
-                <TabsTrigger value="programs" className="py-5 data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-accent rounded-none text-base font-semibold transition-all"><Map className="mr-2 h-5 w-5 rtl:ml-2 rtl:mr-0"/> <span className="hidden sm:inline">Programs</span></TabsTrigger>
+                <TabsTrigger value="flights" className="py-5 data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-accent rounded-none text-base font-semibold transition-all"><Plane className="mr-2 h-5 w-5 rtl:ml-2 rtl:mr-0"/> <span className="hidden sm:inline">{ar ? "الطيران" : "Flights"}</span></TabsTrigger>
+                <TabsTrigger value="hotels" className="py-5 data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-accent rounded-none text-base font-semibold transition-all"><Building className="mr-2 h-5 w-5 rtl:ml-2 rtl:mr-0"/> <span className="hidden sm:inline">{ar ? "الفنادق" : "Hotels"}</span></TabsTrigger>
+                <TabsTrigger value="visas" className="py-5 data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-accent rounded-none text-base font-semibold transition-all"><FileText className="mr-2 h-5 w-5 rtl:ml-2 rtl:mr-0"/> <span className="hidden sm:inline">{ar ? "التأشيرات" : "Visas"}</span></TabsTrigger>
+                <TabsTrigger value="programs" className="py-5 data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-accent rounded-none text-base font-semibold transition-all"><Map className="mr-2 h-5 w-5 rtl:ml-2 rtl:mr-0"/> <span className="hidden sm:inline">{ar ? "البرامج" : "Programs"}</span></TabsTrigger>
               </TabsList>
               <div className="p-6 md:p-8 bg-white">
                 <TabsContent value="flights" className="m-0 animate-in fade-in duration-300 space-y-4">
@@ -113,30 +184,135 @@ export default function Home() {
       </section>
 
       {/* Services Section */}
-      <section className="py-24 bg-slate-50">
+      <section className="py-24 bg-slate-50" dir={ar ? "rtl" : "ltr"}>
         <div className="container px-4 mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-extrabold text-primary mb-4 tracking-tight">{language === 'ar' ? 'خدماتنا المميزة' : 'Our Premium Services'}</h2>
-            <div className="w-24 h-1.5 bg-accent mx-auto rounded-full"></div>
+          <div className="text-center mb-14 md:mb-16">
+            <span className="inline-flex items-center gap-2 bg-[#D4AF37]/10 text-[#D4AF37] border border-[#D4AF37]/25 px-4 py-1.5 rounded-full text-sm font-bold tracking-wide mb-4">
+              {ar ? "خدماتنا" : "Our Services"}
+            </span>
+            <h2 className="text-3xl md:text-4xl font-extrabold text-[#052B5B] mb-4 tracking-tight">
+              {ar ? "خدمات سفر متكاملة" : "Complete Travel Services"}
+            </h2>
+            <p className="text-slate-500 max-w-2xl mx-auto text-base md:text-lg">
+              {ar
+                ? "كل ما تحتاجه لرحلتك في مكان واحد — من الطيران والفنادق إلى التأشيرات والبرامج السياحية."
+                : "Everything you need for your journey in one place — flights, hotels, visas and tourism programs."}
+            </p>
+            <div className="w-24 h-1.5 bg-[#D4AF37] mx-auto rounded-full mt-6"></div>
           </div>
-          
+
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 md:gap-6">
             {services.map((service, index) => {
               const Icon = service.icon;
-              return (
-                <Card key={index} className="border border-slate-100 shadow-sm hover:shadow-xl transition-all hover:-translate-y-1 cursor-pointer group bg-white">
-                  <CardContent className="p-6 md:p-8 flex flex-col items-center text-center space-y-4">
-                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${service.color} group-hover:scale-110 transition-transform duration-300`}>
+              const title = ar ? service.titleAr : service.titleEn;
+              const desc = ar ? service.descAr : service.descEn;
+
+              const cardInner = (
+                <div className={`h-full border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1.5 cursor-pointer group bg-white rounded-2xl ring-0 ring-transparent ${service.ring} group-hover:ring-4 overflow-hidden`}>
+                  <div className="p-6 md:p-7 flex flex-col items-center text-center h-full">
+                    <div className={`relative w-16 h-16 md:w-[70px] md:h-[70px] rounded-2xl flex items-center justify-center ${service.color} group-hover:scale-110 transition-transform duration-300`}>
                       <Icon size={28} strokeWidth={2.5} />
+                      <span className="absolute -top-2 -right-2 rtl:-left-2 rtl:right-auto text-lg" aria-hidden>{service.emoji}</span>
                     </div>
-                    <h3 className="font-bold text-slate-800 text-sm md:text-base">{service.label}</h3>
-                  </CardContent>
-                </Card>
-              )
+                    <h3 className="font-bold text-[#052B5B] text-sm md:text-base mt-4 mb-1.5">{title}</h3>
+                    <p className="text-xs md:text-[13px] text-slate-500 leading-relaxed flex-1">{desc}</p>
+                    <span className="mt-4 inline-flex items-center gap-1 text-xs font-bold text-[#D4AF37] opacity-0 group-hover:opacity-100 transition-opacity">
+                      {ar ? "اذهب للخدمة" : "Explore"}
+                      {ar ? <ArrowLeft className="h-3.5 w-3.5" /> : <ArrowRight className="h-3.5 w-3.5" />}
+                    </span>
+                  </div>
+                </div>
+              );
+
+              if (service.href) {
+                return (
+                  <Link key={index} href={service.href} className="group block h-full" data-testid={`link-service-${index}`}>
+                    {cardInner}
+                  </Link>
+                );
+              }
+              return (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={service.onClick}
+                  className="group block h-full w-full text-start"
+                  data-testid="button-service-umrah"
+                >
+                  {cardInner}
+                </button>
+              );
             })}
           </div>
         </div>
       </section>
+
+      {/* Umrah — host eligibility flow */}
+      <Dialog open={umrahStep === "ask"} onOpenChange={(o) => { if (!o) setUmrahStep(null); }}>
+        <DialogContent className="max-w-md rounded-2xl" dir={ar ? "rtl" : "ltr"}>
+          <DialogHeader className="items-center text-center">
+            <div className="w-16 h-16 rounded-full bg-[#D4AF37]/15 border-2 border-[#D4AF37]/30 flex items-center justify-center mb-3 mx-auto">
+              <HelpCircle className="w-8 h-8 text-[#D4AF37]" />
+            </div>
+            <DialogTitle className="text-xl font-extrabold text-[#052B5B]">
+              {ar ? "تأشيرة العمرة 🕋" : "Umrah Visa 🕋"}
+            </DialogTitle>
+            <DialogDescription className="text-base text-slate-600 pt-1">
+              {ar
+                ? "هل لديك مستضيف في المملكة العربية السعودية؟"
+                : "Do you have a host in the Kingdom of Saudi Arabia?"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-3 pt-2">
+            <Button
+              onClick={() => { setUmrahStep(null); navigate("/visas?category=umrah"); }}
+              className="flex-1 h-12 bg-[#052B5B] text-white hover:bg-[#052B5B]/90 font-bold rounded-xl"
+              data-testid="button-umrah-yes"
+            >
+              {ar ? "نعم" : "Yes"}
+            </Button>
+            <Button
+              onClick={() => setUmrahStep("reject")}
+              variant="outline"
+              className="flex-1 h-12 border-slate-200 text-slate-700 hover:bg-slate-50 font-bold rounded-xl"
+              data-testid="button-umrah-no"
+            >
+              {ar ? "لا" : "No"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Umrah — rejection (no host) popup */}
+      <Dialog open={umrahStep === "reject"} onOpenChange={(o) => { if (!o) setUmrahStep(null); }}>
+        <DialogContent className="max-w-md rounded-2xl" dir={ar ? "rtl" : "ltr"}>
+          <DialogHeader className="items-center text-center">
+            <div className="w-16 h-16 rounded-full bg-red-50 border-2 border-red-100 flex items-center justify-center mb-3 mx-auto">
+              <span className="text-3xl">🕋</span>
+            </div>
+            <DialogTitle className="text-lg font-extrabold text-[#052B5B]">
+              {ar ? "عذراً" : "Sorry"}
+            </DialogTitle>
+            <DialogDescription className="text-base text-slate-600 pt-1 leading-relaxed">
+              {ar
+                ? "عذراً، لا يمكنك التقديم على تأشيرة العمرة لعدم وجود مستضيف في المملكة العربية السعودية."
+                : "Sorry, you cannot apply for an Umrah visa because you do not have a host in the Kingdom of Saudi Arabia."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="pt-2">
+            <Link href="/">
+              <Button
+                onClick={() => setUmrahStep(null)}
+                className="w-full h-12 bg-[#D4AF37] text-[#052B5B] hover:bg-[#D4AF37]/90 font-bold rounded-xl gap-2"
+                data-testid="button-umrah-back-home"
+              >
+                <HomeIcon className="h-4 w-4" />
+                {ar ? "العودة للرئيسية" : "Back to Home"}
+              </Button>
+            </Link>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Featured Offers */}
       <section className="py-24 bg-white">
@@ -171,7 +347,7 @@ export default function Home() {
                     <p className="text-slate-600 mb-6 line-clamp-2 text-sm leading-relaxed flex-1">{language === 'ar' ? offer.descriptionAr : offer.descriptionEn}</p>
                     <div className="flex items-center justify-between mb-6 pb-6 border-b border-slate-100">
                       <div className="flex items-center text-sm font-medium text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg tabular-nums">
-                        <Calendar className="mr-2 h-4 w-4 rtl:ml-2 rtl:mr-0 text-secondary" /> {offer.duration}
+                        <Calendar className="mr-2 h-4 w-4 rtl:ml-2 rtl:mr-0 text-secondary" /> {localizeDuration(offer.duration, language === 'ar')}
                       </div>
                     </div>
                     <Button className="w-full bg-primary hover:bg-primary/90 rounded-xl h-12 font-bold text-base">{t("bookNow")}</Button>

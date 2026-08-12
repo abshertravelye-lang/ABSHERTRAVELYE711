@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  ApplicationDocument,
   AuthResponse,
   Booking,
   BookingInput,
@@ -62,8 +63,11 @@ import type {
   RefreshToken200,
   RefreshTokenBody,
   RegisterInput,
+  RejectApplicationDocumentInput,
+  RequestApplicationDocumentInput,
   SafeUser,
   SearchFlightsParams,
+  UploadApplicationDocumentInput,
   UploadUrlRequest,
   UploadUrlResponse,
   Visa,
@@ -78,6 +82,9 @@ import type {
   VisaCustomFieldInput,
   VisaCustomFieldUpdate,
   VisaInput,
+  VisaRequiredDocument,
+  VisaRequiredDocumentInput,
+  VisaRequiredDocumentUpdate,
   VisaUpdate
 } from './api.schemas';
 
@@ -2851,6 +2858,666 @@ export const useUpdateVisaApplication = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateVisaApplicationMutationOptions(options));
+    }
+
+export const getListApplicationDocumentsUrl = (id: number,) => {
+
+
+
+
+  return `/api/visa-applications/${id}/documents`
+}
+
+/**
+ * @summary List documents (with version history) for an application
+ */
+export const listApplicationDocuments = async (id: number, options?: RequestInit): Promise<ApplicationDocument[]> => {
+
+  return customFetch<ApplicationDocument[]>(getListApplicationDocumentsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListApplicationDocumentsQueryKey = (id: number,) => {
+    return [
+    `/api/visa-applications/${id}/documents`
+    ] as const;
+    }
+
+
+export const getListApplicationDocumentsQueryOptions = <TData = Awaited<ReturnType<typeof listApplicationDocuments>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listApplicationDocuments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListApplicationDocumentsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listApplicationDocuments>>> = ({ signal }) => listApplicationDocuments(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listApplicationDocuments>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListApplicationDocumentsQueryResult = NonNullable<Awaited<ReturnType<typeof listApplicationDocuments>>>
+export type ListApplicationDocumentsQueryError = ErrorType<void>
+
+
+/**
+ * @summary List documents (with version history) for an application
+ */
+
+export function useListApplicationDocuments<TData = Awaited<ReturnType<typeof listApplicationDocuments>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listApplicationDocuments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListApplicationDocumentsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRequestApplicationDocumentUrl = (id: number,) => {
+
+
+
+
+  return `/api/visa-applications/${id}/documents/request`
+}
+
+/**
+ * Idempotent on (applicationId, documentKey) — a double-click or retry updates the existing slot instead of creating a duplicate.
+ * @summary Request an additional document from the customer (staff)
+ */
+export const requestApplicationDocument = async (id: number,
+    requestApplicationDocumentInput: RequestApplicationDocumentInput, options?: RequestInit): Promise<ApplicationDocument> => {
+
+  return customFetch<ApplicationDocument>(getRequestApplicationDocumentUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(requestApplicationDocumentInput)
+  }
+);}
+
+
+
+
+export const getRequestApplicationDocumentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestApplicationDocument>>, TError,{id: number;data: BodyType<RequestApplicationDocumentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof requestApplicationDocument>>, TError,{id: number;data: BodyType<RequestApplicationDocumentInput>}, TContext> => {
+
+const mutationKey = ['requestApplicationDocument'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof requestApplicationDocument>>, {id: number;data: BodyType<RequestApplicationDocumentInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  requestApplicationDocument(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RequestApplicationDocumentMutationResult = NonNullable<Awaited<ReturnType<typeof requestApplicationDocument>>>
+    export type RequestApplicationDocumentMutationBody = BodyType<RequestApplicationDocumentInput>
+    export type RequestApplicationDocumentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Request an additional document from the customer (staff)
+ */
+export const useRequestApplicationDocument = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof requestApplicationDocument>>, TError,{id: number;data: BodyType<RequestApplicationDocumentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof requestApplicationDocument>>,
+        TError,
+        {id: number;data: BodyType<RequestApplicationDocumentInput>},
+        TContext
+      > => {
+      return useMutation(getRequestApplicationDocumentMutationOptions(options));
+    }
+
+export const getUploadApplicationDocumentUrl = (id: number,
+    docId: number,) => {
+
+
+
+
+  return `/api/visa-applications/${id}/documents/${docId}/upload`
+}
+
+/**
+ * @summary Upload (or re-upload) a version of a requested document (customer)
+ */
+export const uploadApplicationDocument = async (id: number,
+    docId: number,
+    uploadApplicationDocumentInput: UploadApplicationDocumentInput, options?: RequestInit): Promise<ApplicationDocument> => {
+
+  return customFetch<ApplicationDocument>(getUploadApplicationDocumentUrl(id,docId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(uploadApplicationDocumentInput)
+  }
+);}
+
+
+
+
+export const getUploadApplicationDocumentMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadApplicationDocument>>, TError,{id: number;docId: number;data: BodyType<UploadApplicationDocumentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof uploadApplicationDocument>>, TError,{id: number;docId: number;data: BodyType<UploadApplicationDocumentInput>}, TContext> => {
+
+const mutationKey = ['uploadApplicationDocument'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadApplicationDocument>>, {id: number;docId: number;data: BodyType<UploadApplicationDocumentInput>}> = (props) => {
+          const {id,docId,data} = props ?? {};
+
+          return  uploadApplicationDocument(id,docId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UploadApplicationDocumentMutationResult = NonNullable<Awaited<ReturnType<typeof uploadApplicationDocument>>>
+    export type UploadApplicationDocumentMutationBody = BodyType<UploadApplicationDocumentInput>
+    export type UploadApplicationDocumentMutationError = ErrorType<void>
+
+    /**
+ * @summary Upload (or re-upload) a version of a requested document (customer)
+ */
+export const useUploadApplicationDocument = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadApplicationDocument>>, TError,{id: number;docId: number;data: BodyType<UploadApplicationDocumentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof uploadApplicationDocument>>,
+        TError,
+        {id: number;docId: number;data: BodyType<UploadApplicationDocumentInput>},
+        TContext
+      > => {
+      return useMutation(getUploadApplicationDocumentMutationOptions(options));
+    }
+
+export const getApproveApplicationDocumentUrl = (id: number,
+    docId: number,) => {
+
+
+
+
+  return `/api/visa-applications/${id}/documents/${docId}/approve`
+}
+
+/**
+ * @summary Approve an uploaded document (staff)
+ */
+export const approveApplicationDocument = async (id: number,
+    docId: number, options?: RequestInit): Promise<ApplicationDocument> => {
+
+  return customFetch<ApplicationDocument>(getApproveApplicationDocumentUrl(id,docId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getApproveApplicationDocumentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveApplicationDocument>>, TError,{id: number;docId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof approveApplicationDocument>>, TError,{id: number;docId: number}, TContext> => {
+
+const mutationKey = ['approveApplicationDocument'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof approveApplicationDocument>>, {id: number;docId: number}> = (props) => {
+          const {id,docId} = props ?? {};
+
+          return  approveApplicationDocument(id,docId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ApproveApplicationDocumentMutationResult = NonNullable<Awaited<ReturnType<typeof approveApplicationDocument>>>
+
+    export type ApproveApplicationDocumentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Approve an uploaded document (staff)
+ */
+export const useApproveApplicationDocument = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveApplicationDocument>>, TError,{id: number;docId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof approveApplicationDocument>>,
+        TError,
+        {id: number;docId: number},
+        TContext
+      > => {
+      return useMutation(getApproveApplicationDocumentMutationOptions(options));
+    }
+
+export const getRejectApplicationDocumentUrl = (id: number,
+    docId: number,) => {
+
+
+
+
+  return `/api/visa-applications/${id}/documents/${docId}/reject`
+}
+
+/**
+ * @summary Reject an uploaded document with a required reason (staff)
+ */
+export const rejectApplicationDocument = async (id: number,
+    docId: number,
+    rejectApplicationDocumentInput: RejectApplicationDocumentInput, options?: RequestInit): Promise<ApplicationDocument> => {
+
+  return customFetch<ApplicationDocument>(getRejectApplicationDocumentUrl(id,docId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(rejectApplicationDocumentInput)
+  }
+);}
+
+
+
+
+export const getRejectApplicationDocumentMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rejectApplicationDocument>>, TError,{id: number;docId: number;data: BodyType<RejectApplicationDocumentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof rejectApplicationDocument>>, TError,{id: number;docId: number;data: BodyType<RejectApplicationDocumentInput>}, TContext> => {
+
+const mutationKey = ['rejectApplicationDocument'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof rejectApplicationDocument>>, {id: number;docId: number;data: BodyType<RejectApplicationDocumentInput>}> = (props) => {
+          const {id,docId,data} = props ?? {};
+
+          return  rejectApplicationDocument(id,docId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RejectApplicationDocumentMutationResult = NonNullable<Awaited<ReturnType<typeof rejectApplicationDocument>>>
+    export type RejectApplicationDocumentMutationBody = BodyType<RejectApplicationDocumentInput>
+    export type RejectApplicationDocumentMutationError = ErrorType<void>
+
+    /**
+ * @summary Reject an uploaded document with a required reason (staff)
+ */
+export const useRejectApplicationDocument = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof rejectApplicationDocument>>, TError,{id: number;docId: number;data: BodyType<RejectApplicationDocumentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof rejectApplicationDocument>>,
+        TError,
+        {id: number;docId: number;data: BodyType<RejectApplicationDocumentInput>},
+        TContext
+      > => {
+      return useMutation(getRejectApplicationDocumentMutationOptions(options));
+    }
+
+export const getListVisaRequiredDocumentsUrl = (id: number,) => {
+
+
+
+
+  return `/api/visas/${id}/required-documents`
+}
+
+/**
+ * @summary List the required-document config for a visa
+ */
+export const listVisaRequiredDocuments = async (id: number, options?: RequestInit): Promise<VisaRequiredDocument[]> => {
+
+  return customFetch<VisaRequiredDocument[]>(getListVisaRequiredDocumentsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListVisaRequiredDocumentsQueryKey = (id: number,) => {
+    return [
+    `/api/visas/${id}/required-documents`
+    ] as const;
+    }
+
+
+export const getListVisaRequiredDocumentsQueryOptions = <TData = Awaited<ReturnType<typeof listVisaRequiredDocuments>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVisaRequiredDocuments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListVisaRequiredDocumentsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listVisaRequiredDocuments>>> = ({ signal }) => listVisaRequiredDocuments(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listVisaRequiredDocuments>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListVisaRequiredDocumentsQueryResult = NonNullable<Awaited<ReturnType<typeof listVisaRequiredDocuments>>>
+export type ListVisaRequiredDocumentsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List the required-document config for a visa
+ */
+
+export function useListVisaRequiredDocuments<TData = Awaited<ReturnType<typeof listVisaRequiredDocuments>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listVisaRequiredDocuments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListVisaRequiredDocumentsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateVisaRequiredDocumentUrl = (id: number,) => {
+
+
+
+
+  return `/api/visas/${id}/required-documents`
+}
+
+/**
+ * @summary Add a required-document definition to a visa (super admin)
+ */
+export const createVisaRequiredDocument = async (id: number,
+    visaRequiredDocumentInput: VisaRequiredDocumentInput, options?: RequestInit): Promise<VisaRequiredDocument> => {
+
+  return customFetch<VisaRequiredDocument>(getCreateVisaRequiredDocumentUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(visaRequiredDocumentInput)
+  }
+);}
+
+
+
+
+export const getCreateVisaRequiredDocumentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVisaRequiredDocument>>, TError,{id: number;data: BodyType<VisaRequiredDocumentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createVisaRequiredDocument>>, TError,{id: number;data: BodyType<VisaRequiredDocumentInput>}, TContext> => {
+
+const mutationKey = ['createVisaRequiredDocument'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createVisaRequiredDocument>>, {id: number;data: BodyType<VisaRequiredDocumentInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  createVisaRequiredDocument(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateVisaRequiredDocumentMutationResult = NonNullable<Awaited<ReturnType<typeof createVisaRequiredDocument>>>
+    export type CreateVisaRequiredDocumentMutationBody = BodyType<VisaRequiredDocumentInput>
+    export type CreateVisaRequiredDocumentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Add a required-document definition to a visa (super admin)
+ */
+export const useCreateVisaRequiredDocument = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createVisaRequiredDocument>>, TError,{id: number;data: BodyType<VisaRequiredDocumentInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createVisaRequiredDocument>>,
+        TError,
+        {id: number;data: BodyType<VisaRequiredDocumentInput>},
+        TContext
+      > => {
+      return useMutation(getCreateVisaRequiredDocumentMutationOptions(options));
+    }
+
+export const getUpdateVisaRequiredDocumentUrl = (id: number,
+    docId: number,) => {
+
+
+
+
+  return `/api/visas/${id}/required-documents/${docId}`
+}
+
+/**
+ * @summary Update a required-document definition (super admin)
+ */
+export const updateVisaRequiredDocument = async (id: number,
+    docId: number,
+    visaRequiredDocumentUpdate: VisaRequiredDocumentUpdate, options?: RequestInit): Promise<VisaRequiredDocument> => {
+
+  return customFetch<VisaRequiredDocument>(getUpdateVisaRequiredDocumentUrl(id,docId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(visaRequiredDocumentUpdate)
+  }
+);}
+
+
+
+
+export const getUpdateVisaRequiredDocumentMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateVisaRequiredDocument>>, TError,{id: number;docId: number;data: BodyType<VisaRequiredDocumentUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateVisaRequiredDocument>>, TError,{id: number;docId: number;data: BodyType<VisaRequiredDocumentUpdate>}, TContext> => {
+
+const mutationKey = ['updateVisaRequiredDocument'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateVisaRequiredDocument>>, {id: number;docId: number;data: BodyType<VisaRequiredDocumentUpdate>}> = (props) => {
+          const {id,docId,data} = props ?? {};
+
+          return  updateVisaRequiredDocument(id,docId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateVisaRequiredDocumentMutationResult = NonNullable<Awaited<ReturnType<typeof updateVisaRequiredDocument>>>
+    export type UpdateVisaRequiredDocumentMutationBody = BodyType<VisaRequiredDocumentUpdate>
+    export type UpdateVisaRequiredDocumentMutationError = ErrorType<void>
+
+    /**
+ * @summary Update a required-document definition (super admin)
+ */
+export const useUpdateVisaRequiredDocument = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateVisaRequiredDocument>>, TError,{id: number;docId: number;data: BodyType<VisaRequiredDocumentUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateVisaRequiredDocument>>,
+        TError,
+        {id: number;docId: number;data: BodyType<VisaRequiredDocumentUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateVisaRequiredDocumentMutationOptions(options));
+    }
+
+export const getDeleteVisaRequiredDocumentUrl = (id: number,
+    docId: number,) => {
+
+
+
+
+  return `/api/visas/${id}/required-documents/${docId}`
+}
+
+/**
+ * @summary Delete a required-document definition (super admin)
+ */
+export const deleteVisaRequiredDocument = async (id: number,
+    docId: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteVisaRequiredDocumentUrl(id,docId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteVisaRequiredDocumentMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteVisaRequiredDocument>>, TError,{id: number;docId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteVisaRequiredDocument>>, TError,{id: number;docId: number}, TContext> => {
+
+const mutationKey = ['deleteVisaRequiredDocument'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteVisaRequiredDocument>>, {id: number;docId: number}> = (props) => {
+          const {id,docId} = props ?? {};
+
+          return  deleteVisaRequiredDocument(id,docId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteVisaRequiredDocumentMutationResult = NonNullable<Awaited<ReturnType<typeof deleteVisaRequiredDocument>>>
+
+    export type DeleteVisaRequiredDocumentMutationError = ErrorType<void>
+
+    /**
+ * @summary Delete a required-document definition (super admin)
+ */
+export const useDeleteVisaRequiredDocument = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteVisaRequiredDocument>>, TError,{id: number;docId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteVisaRequiredDocument>>,
+        TError,
+        {id: number;docId: number},
+        TContext
+      > => {
+      return useMutation(getDeleteVisaRequiredDocumentMutationOptions(options));
     }
 
 export const getRequestUploadUrlUrl = () => {

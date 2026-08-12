@@ -47,10 +47,10 @@ export function ProgramCard({ program, onPress, wide }: Props) {
           )}
         </View>
         <View style={[styles.footer, { borderTopColor: colors.border }]}>
-          <Text style={[styles.price, { color: '#0A2342', fontFamily: 'Cairo_700Bold' }]}>
+          <Text style={[styles.price, { color: '#052B5B', fontFamily: 'Cairo_700Bold' }]}>
             {program.price.toLocaleString('ar-SA')} {program.currency || 'ريال'}
           </Text>
-          <View style={[styles.bookBtn, { backgroundColor: '#0A2342' }]}>
+          <View style={[styles.bookBtn, { backgroundColor: '#052B5B' }]}>
             <Text style={[styles.bookBtnText, { fontFamily: 'Cairo_600SemiBold' }]}>احجز</Text>
           </View>
         </View>

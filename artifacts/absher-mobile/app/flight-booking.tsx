@@ -264,8 +264,8 @@ function StepIndicator({ step, colors }: { step: number; colors: ReturnType<type
             <View style={si.stepWrap}>
               <View style={[si.dot, { backgroundColor: done || active ? '#D4AF37' : 'rgba(255,255,255,0.3)' }]}>
                 {done
-                  ? <Ionicons name="checkmark" size={12} color="#0A2342" />
-                  : <Text style={[si.dotNum, { color: active ? '#0A2342' : 'rgba(255,255,255,0.6)', fontFamily: 'Cairo_700Bold' }]}>{i + 1}</Text>
+                  ? <Ionicons name="checkmark" size={12} color="#052B5B" />
+                  : <Text style={[si.dotNum, { color: active ? '#052B5B' : 'rgba(255,255,255,0.6)', fontFamily: 'Cairo_700Bold' }]}>{i + 1}</Text>
                 }
               </View>
               <Text style={[si.label, { color: active ? '#D4AF37' : 'rgba(255,255,255,0.5)', fontFamily: active ? 'Cairo_700Bold' : 'Cairo_400Regular' }]}>{s}</Text>
@@ -305,7 +305,7 @@ function PassengerForm({
 
   return (
     <View style={[pf.card, { backgroundColor: colors.card }]}>
-      <Text style={[pf.cardTitle, { color: '#0A2342', fontFamily: 'Cairo_700Bold' }]}>
+      <Text style={[pf.cardTitle, { color: '#052B5B', fontFamily: 'Cairo_700Bold' }]}>
         المسافر {index + 1}
       </Text>
 
@@ -316,7 +316,7 @@ function PassengerForm({
           {TITLES.map((t) => (
             <Pressable
               key={t}
-              style={[pf.chip, { backgroundColor: data.title === t ? '#0A2342' : colors.muted, borderColor: data.title === t ? '#D4AF37' : colors.border }]}
+              style={[pf.chip, { backgroundColor: data.title === t ? '#052B5B' : colors.muted, borderColor: data.title === t ? '#D4AF37' : colors.border }]}
               onPress={() => set('title', t)}
             >
               <Text style={[pf.chipText, { color: data.title === t ? '#FFFFFF' : colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{t}</Text>
@@ -359,7 +359,7 @@ function PassengerForm({
           {([{ v: 'male', l: 'ذكر' }, { v: 'female', l: 'أنثى' }] as const).map(({ v, l }) => (
             <Pressable
               key={v}
-              style={[pf.chip, { flex: 1, backgroundColor: data.gender === v ? '#0A2342' : colors.muted, borderColor: data.gender === v ? '#D4AF37' : colors.border }]}
+              style={[pf.chip, { flex: 1, backgroundColor: data.gender === v ? '#052B5B' : colors.muted, borderColor: data.gender === v ? '#D4AF37' : colors.border }]}
               onPress={() => set('gender', v)}
             >
               <Text style={[pf.chipText, { color: data.gender === v ? '#FFFFFF' : colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{l}</Text>
@@ -563,7 +563,7 @@ export default function FlightBookingScreen() {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={[s.container, { backgroundColor: colors.background }]}>
         {/* Header */}
-        <View style={[s.header, { paddingTop: topInset + 8, backgroundColor: '#0A2342' }]}>
+        <View style={[s.header, { paddingTop: topInset + 8, backgroundColor: '#052B5B' }]}>
           <View style={s.headerRow}>
             <Pressable onPress={() => (step > 1 && step < 3) ? setStep((step - 1) as 1 | 2 | 3) : router.back()}>
               <Ionicons name="arrow-forward" size={22} color="#FFFFFF" />
@@ -604,7 +604,7 @@ export default function FlightBookingScreen() {
               style={({ pressed }) => [s.nextBtn, { opacity: pressed ? 0.9 : 1 }]}
               onPress={() => { if (validateStep1()) setStep(2); }}
             >
-              <Ionicons name="arrow-back" size={18} color="#0A2342" />
+              <Ionicons name="arrow-back" size={18} color="#052B5B" />
               <Text style={[s.nextBtnText, { fontFamily: 'Cairo_700Bold' }]}>التالي — مراجعة</Text>
             </Pressable>
           </ScrollView>
@@ -615,7 +615,7 @@ export default function FlightBookingScreen() {
           <ScrollView contentContainerStyle={s.scrollContent}>
             {/* Flight details card */}
             <View style={[s.reviewCard, { backgroundColor: colors.card }]}>
-              <Text style={[s.reviewSectionTitle, { color: '#0A2342', fontFamily: 'Cairo_700Bold' }]}>تفاصيل الرحلة</Text>
+              <Text style={[s.reviewSectionTitle, { color: '#052B5B', fontFamily: 'Cairo_700Bold' }]}>تفاصيل الرحلة</Text>
               <View style={s.reviewRow}>
                 <Text style={[s.reviewValue, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{firstSeg?.airlineName || '---'}</Text>
                 <Text style={[s.reviewKey, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>الناقل</Text>
@@ -637,7 +637,7 @@ export default function FlightBookingScreen() {
             {/* Passenger summary */}
             {passengers.map((p, i) => (
               <View key={i} style={[s.reviewCard, { backgroundColor: colors.card }]}>
-                <Text style={[s.reviewSectionTitle, { color: '#0A2342', fontFamily: 'Cairo_700Bold' }]}>المسافر {i + 1}</Text>
+                <Text style={[s.reviewSectionTitle, { color: '#052B5B', fontFamily: 'Cairo_700Bold' }]}>المسافر {i + 1}</Text>
                 <View style={s.reviewRow}>
                   <Text style={[s.reviewValue, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{p.title} {p.firstName} {p.lastName}</Text>
                   <Text style={[s.reviewKey, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>الاسم</Text>
@@ -658,7 +658,7 @@ export default function FlightBookingScreen() {
             ))}
 
             {/* Price */}
-            <View style={[s.priceCard, { backgroundColor: '#0A2342' }]}>
+            <View style={[s.priceCard, { backgroundColor: '#052B5B' }]}>
               <Text style={[s.priceCurrency, { fontFamily: 'Cairo_400Regular' }]}>{offer.currency || 'USD'}</Text>
               <Text style={[s.priceAmount, { fontFamily: 'Cairo_700Bold' }]}>
                 {offer.totalPrice?.toLocaleString('ar-SA') || '---'}
@@ -671,7 +671,7 @@ export default function FlightBookingScreen() {
               onPress={handleConfirm}
               disabled={createBooking.isPending}
             >
-              <Ionicons name="checkmark-circle" size={18} color="#0A2342" />
+              <Ionicons name="checkmark-circle" size={18} color="#052B5B" />
               <Text style={[s.nextBtnText, { fontFamily: 'Cairo_700Bold' }]}>
                 {createBooking.isPending ? 'جاري التأكيد...' : 'تأكيد الحجز'}
               </Text>
@@ -689,7 +689,7 @@ export default function FlightBookingScreen() {
             <Text style={[s.confirmedSub, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
               رقم الحجز الخاص بك
             </Text>
-            <View style={[s.refBadge, { backgroundColor: '#0A2342' }]}>
+            <View style={[s.refBadge, { backgroundColor: '#052B5B' }]}>
               <Text style={[s.refText, { fontFamily: 'Cairo_700Bold' }]}>{bookingRef}</Text>
             </View>
             <Text style={[s.confirmedHint, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
@@ -697,18 +697,18 @@ export default function FlightBookingScreen() {
             </Text>
             <View style={s.confirmedActions}>
               <Pressable
-                style={[s.confirmedBtn, { backgroundColor: '#0A2342' }]}
+                style={[s.confirmedBtn, { backgroundColor: '#052B5B' }]}
                 onPress={() => router.push('/(tabs)/bookings' as any)}
               >
                 <Ionicons name="calendar-outline" size={18} color="#FFFFFF" />
                 <Text style={[s.confirmedBtnText, { fontFamily: 'Cairo_700Bold' }]}>عرض حجوزاتي</Text>
               </Pressable>
               <Pressable
-                style={[s.confirmedBtnOutline, { borderColor: '#0A2342' }]}
+                style={[s.confirmedBtnOutline, { borderColor: '#052B5B' }]}
                 onPress={() => router.push('/')}
               >
-                <Ionicons name="home-outline" size={18} color="#0A2342" />
-                <Text style={[s.confirmedBtnOutlineText, { color: '#0A2342', fontFamily: 'Cairo_600SemiBold' }]}>الرئيسية</Text>
+                <Ionicons name="home-outline" size={18} color="#052B5B" />
+                <Text style={[s.confirmedBtnOutlineText, { color: '#052B5B', fontFamily: 'Cairo_600SemiBold' }]}>الرئيسية</Text>
               </Pressable>
             </View>
           </View>
@@ -729,7 +729,7 @@ const s = StyleSheet.create({
   stripMiddle: { flex: 1, alignItems: 'center' },
   scrollContent: { padding: 16, gap: 16, paddingBottom: 40 },
   nextBtn: { backgroundColor: '#D4AF37', borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 16, gap: 8 },
-  nextBtnText: { color: '#0A2342', fontSize: 16 },
+  nextBtnText: { color: '#052B5B', fontSize: 16 },
   reviewCard: { borderRadius: 16, padding: 16, gap: 10, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 3 },
   reviewSectionTitle: { fontSize: 15, borderBottomWidth: 2, borderBottomColor: '#D4AF37', paddingBottom: 6, textAlign: 'right' },
   reviewRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

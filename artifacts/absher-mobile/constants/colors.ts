@@ -1,75 +1,100 @@
 /**
- * ABSHER TRAVEL — Premium Luxury Travel Brand Palette
- * 
- * Brand Colors (from logo):
- *   Navy  #0A2342  (dark navy square background)
- *   Gold  #D4AF37  (border, "A" arrow, text)
- *   Cyan  #38BDF8  (airplane icon accent — sky blue)
- * 
- * Light mode → white canvas, navy actions, gold highlights, cyan accents
- * Dark  mode → deep-navy canvas, gold primary, cyan accents
+ * ABSHER TRAVEL — Premium Luxury Travel Brand Palette (Redesign Phase 1)
  */
-const colors = {
-  light: {
-    background:       '#FFFFFF',
-    foreground:       '#0A2342',
-    card:             '#FFFFFF',
-    cardForeground:   '#0A2342',
-    // Surfaces
-    muted:            '#F3F6FA',        // very-light navy tint
-    mutedForeground:  '#64748B',
-    border:           '#D9E2EF',
-    input:            '#D9E2EF',
-    // Brand primaries
-    primary:          '#0A2342',        // navy  → main buttons, headers
-    primaryForeground:'#FFFFFF',
-    secondary:        '#38BDF8',        // cyan  → airplane icons, links, secondary actions
-    secondaryForeground: '#FFFFFF',
-    accent:           '#D4AF37',        // gold  → badges, highlights, active tab, CTAs
-    accentForeground: '#0A2342',
-    // Semantic
-    success:          '#16A34A',
-    warning:          '#EAB308',
-    destructive:      '#EF4444',
-    destructiveForeground: '#FFFFFF',
-    // Icon-container tints (match logo palette)
-    iconBg:           '#EBF0F8',        // subtle navy tint
-    goldTint:         '#FBF6E4',        // subtle gold tint
-    cyanTint:         '#E0F2FE',        // subtle cyan tint
-    text:             '#0A2342',
-    tint:             '#0A2342',
-  },
-  dark: {
-    background:       '#071525',        // deepest navy
-    foreground:       '#F1F5F9',
-    card:             '#0A2342',        // logo-navy as card bg
-    cardForeground:   '#F1F5F9',
-    muted:            '#0F2B47',
-    mutedForeground:  '#94A3B8',
-    border:           '#0F2B47',
-    input:            '#0F2B47',
-    primary:          '#D4AF37',        // gold becomes primary accent in dark
-    primaryForeground:'#0A2342',
-    secondary:        '#38BDF8',        // cyan accent
-    secondaryForeground: '#FFFFFF',
-    accent:           '#D4AF37',        // gold
-    accentForeground: '#0A2342',
-    success:          '#22C55E',
-    warning:          '#EAB308',
-    destructive:      '#EF4444',
-    destructiveForeground: '#FFFFFF',
-    iconBg:           'rgba(212,175,55,0.14)',  // subtle gold tint
-    goldTint:         'rgba(212,175,55,0.18)',
-    cyanTint:         'rgba(56,189,248,0.14)',
-    text:             '#F1F5F9',
-    tint:             '#D4AF37',
-  },
-  // ── static brand tokens (same in both modes) ──
-  navy:   '#0A2342',
-  gold:   '#D4AF37',
-  cyan:   '#38BDF8',
-  blue:   '#2563EB',
+
+const staticColors = {
+  primaryNavy: '#062B5B',
+  secondaryBlue: '#0D4A8C',
+  premiumGold: '#D4A017',
+  premiumGoldActive: '#F4C542',
+  umrahGreen: '#0B5E3B',
+  skyBlue: '#38BDF8',
+  success: '#16A34A',
+  warning: '#F59E0B',
+  error: '#DC2626',
+  
+  // Legacy adapter tokens (to keep existing screens compiling)
+  navy: '#062B5B',
+  gold: '#D4A017',
+  cyan: '#0D4A8C', 
   radius: 12,
+};
+
+const light = {
+  // New tokens
+  background: '#F7F9FC',
+  card: '#FFFFFF',
+  text: '#0F172A',
+  textSecondary: '#64748B',
+  border: '#E2E8F0',
+  primary: '#062B5B', // Navy
+  primaryActive: '#0D4A8C', // Secondary Blue
+  accent: '#D4A017',  // Gold
+  accentActive: '#F4C542',
+  success: staticColors.success,
+  warning: staticColors.warning,
+  error: staticColors.error,
+  umrahGreen: staticColors.umrahGreen,
+  skyBlue: staticColors.skyBlue,
+  
+  // Legacy adapter tokens
+  foreground: '#0F172A',
+  cardForeground: '#0F172A',
+  muted: '#F1F5F9',
+  mutedForeground: '#64748B',
+  input: '#E2E8F0',
+  primaryForeground: '#FFFFFF',
+  secondary: '#0D4A8C',
+  secondaryForeground: '#FFFFFF',
+  accentForeground: '#062B5B',
+  destructive: staticColors.error,
+  destructiveForeground: '#FFFFFF',
+  iconBg: '#EBF0F8',
+  goldTint: '#FBF6E4',
+  cyanTint: '#E0F2FE',
+  tint: '#062B5B',
+};
+
+const dark = {
+  // New tokens
+  background: '#031B3A',
+  card: '#062B5B',
+  text: '#FFFFFF',
+  textSecondary: '#CBD5E1',
+  border: '#0D4A8C', // Soft border in dark
+  primary: '#D4A017', // Gold becomes primary in dark mode for contrast
+  primaryActive: '#F4C542',
+  accent: '#D4A017',
+  accentActive: '#F4C542',
+  success: staticColors.success,
+  warning: staticColors.warning,
+  error: staticColors.error,
+  umrahGreen: staticColors.umrahGreen,
+  skyBlue: staticColors.skyBlue,
+  
+  // Legacy adapter tokens
+  foreground: '#FFFFFF',
+  cardForeground: '#FFFFFF',
+  muted: '#0D4A8C',
+  mutedForeground: '#CBD5E1',
+  input: '#0D4A8C',
+  primaryForeground: '#062B5B',
+  secondary: '#38BDF8',
+  secondaryForeground: '#FFFFFF',
+  accentForeground: '#062B5B',
+  destructive: staticColors.error,
+  destructiveForeground: '#FFFFFF',
+  iconBg: 'rgba(212,160,23,0.14)',
+  goldTint: 'rgba(212,160,23,0.18)',
+  cyanTint: 'rgba(13,74,140,0.14)',
+  tint: '#D4A017',
+};
+
+const colors = {
+  light,
+  dark,
+  static: staticColors,
+  ...staticColors, // Top-level for backwards compat if used directly (e.g. colors.navy)
 };
 
 export default colors;

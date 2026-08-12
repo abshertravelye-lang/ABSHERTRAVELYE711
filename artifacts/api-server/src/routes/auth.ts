@@ -9,6 +9,7 @@ import { z } from "zod";
 import { requireAuth } from "../middleware/auth";
 import { logAudit } from "../lib/audit";
 import { canonicalCountryEn } from "@workspace/countries";
+import { findUnownedObjectPath } from "../lib/objectAccess";
 
 const router = Router();
 
@@ -304,6 +305,20 @@ router.patch("/auth/profile", requireAuth, async (req, res) => {
     const dateFields = ["dateOfBirth", "passportIssueDate", "passportExpiryDate", "gccResidenceExpiry", "europeanDocumentExpiry"] as const;
     for (const f of dateFields) {
       if ((body as Record<string, unknown>)[f] === "") (body as Record<string, unknown>)[f] = null;
+    }
+
+    // Ownership guard: reject any /objects/ document path the writer does not
+    // own (per object_uploads). Prevents binding a victim's object into your
+    // own profile to later pass the read-authorization check.
+    const unowned = await findUnownedObjectPath(req.user!.sub, [
+      body.profilePhotoUrl,
+      body.passportImageUrl,
+      body.gccResidenceFrontUrl,
+      body.gccResidenceBackUrl,
+      body.europeanDocumentUrl,
+    ]);
+    if (unowned) {
+      return res.status(403).json({ error: "You do not own the referenced document" });
     }
 
     // If phone is changing, check uniqueness

@@ -2,14 +2,16 @@ import { Link } from "wouter";
 import { useTranslation } from "@/hooks/use-translation";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { Globe, Menu, X, Phone, MapPin, User, LogOut } from "lucide-react";
+import { Globe, Menu, X, Phone, MapPin, User, LogOut, Mail, MessageCircle, Headphones } from "lucide-react";
 import logo from "@assets/absher-business-logo.png";
 import { useState } from "react";
 import { AppDownloadLinks } from "@/components/app-download-links";
+import { LogoutConfirmDialog } from "@/components/logout-confirm-dialog";
 
 function AccountNavButton({ language }: { language: string }) {
   const { isAuthenticated, user, logout } = useAuth();
   const ar = language === "ar";
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   if (!isAuthenticated) {
     return (
@@ -30,9 +32,15 @@ function AccountNavButton({ language }: { language: string }) {
           {user?.firstName || (ar ? "حسابي" : "My Account")}
         </Button>
       </Link>
-      <Button variant="ghost" size="icon" onClick={logout} title={ar ? "تسجيل الخروج" : "Sign out"}>
+      <Button variant="ghost" size="icon" onClick={() => setConfirmOpen(true)} title={ar ? "تسجيل الخروج" : "Sign out"}>
         <LogOut size={16} />
       </Button>
+      <LogoutConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        onConfirm={logout}
+        ar={ar}
+      />
     </div>
   );
 }
@@ -62,25 +70,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-[100dvh] flex flex-col w-full overflow-x-hidden bg-background">
-      {/* Top Bar */}
+      {/* Top Bar — language switch only (contact info moved to footer) */}
       <div className="bg-primary text-primary-foreground py-2 px-4 text-sm hidden md:block">
-        <div className="container mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-              <Phone size={16} className="text-accent" />
-              <span>+967 779055511 / +967 784055511</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <MapPin size={16} className="text-accent" />
-              <span>{language === 'ar' ? 'اليمن - صنعاء - شارع الزبيري - جولة كنتاكي سابقاً' : 'Yemen - Sana\'a - Zubairi St'}</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" onClick={toggleLanguage} className="h-8 hover:bg-white/10 hover:text-white">
-              <Globe size={16} className="mr-2 rtl:ml-2 rtl:mr-0" />
-              {language === "ar" ? "English" : "العربية"}
-            </Button>
-          </div>
+        <div className="container mx-auto flex justify-end items-center">
+          <Button variant="ghost" size="sm" onClick={toggleLanguage} className="h-8 hover:bg-white/10 hover:text-white">
+            <Globe size={16} className="mr-2 rtl:ml-2 rtl:mr-0" />
+            {language === "ar" ? "English" : "العربية"}
+          </Button>
         </div>
       </div>
 
@@ -180,30 +176,71 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </ul>
           </div>
           <div>
-            <h3 className="font-bold text-lg mb-4 text-accent">{t("contact")}</h3>
-            <ul className="space-y-4 text-sm text-slate-300">
-              <li className="flex items-center gap-2">
-                <MapPin size={18} className="text-accent shrink-0" />
-                <span>{language === 'ar' ? 'اليمن - صنعاء - شارع الزبيري - جولة كنتاكي سابقاً' : 'Yemen - Sana\'a - Zubairi St'}</span>
+            <h3 className="font-bold text-lg mb-4 text-accent flex items-center gap-2">
+              <Headphones size={18} className="text-accent shrink-0" />
+              {language === 'ar' ? 'الدعم والتواصل' : 'Support & Contact'}
+            </h3>
+            <ul className="space-y-3 text-sm text-slate-300">
+              <li>
+                <Link href="/contact" className="flex items-center gap-2 hover:text-white transition-colors">
+                  <User size={16} className="text-accent shrink-0" />
+                  {language === 'ar' ? 'تواصل معنا' : 'Contact Us'}
+                </Link>
               </li>
-              <li className="flex items-center gap-2">
-                <Phone size={18} className="text-accent shrink-0" />
-                <span>+967 779055511 <br/> +967 784055511</span>
+              <li>
+                <a
+                  href="https://wa.me/967779055511"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-2 hover:text-white transition-colors"
+                >
+                  <MessageCircle size={16} className="text-accent shrink-0" />
+                  {language === 'ar' ? 'واتساب' : 'WhatsApp'}
+                </a>
+              </li>
+              <li>
+                <a href="mailto:info@abshertravel.com" className="flex items-center gap-2 hover:text-white transition-colors" dir="ltr">
+                  <Mail size={16} className="text-accent shrink-0" />
+                  info@abshertravel.com
+                </a>
+              </li>
+              <li className="flex items-center gap-2 pt-2 border-t border-white/10 mt-2">
+                <Phone size={16} className="text-accent shrink-0" />
+                <span dir="ltr">+967 779055511 / +967 784055511</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <MapPin size={16} className="text-accent shrink-0 mt-0.5" />
+                <span>{language === 'ar' ? 'اليمن - صنعاء - شارع الزبيري - جولة كنتاكي سابقاً' : 'Yemen - Sana\'a - Zubairi St'}</span>
               </li>
             </ul>
           </div>
           <div>
-            <h3 className="font-bold text-lg mb-4 text-accent">Newsletter</h3>
+            <h3 className="font-bold text-lg mb-4 text-accent">
+              {language === 'ar' ? 'النشرة البريدية' : 'Newsletter'}
+            </h3>
+            <p className="text-sm text-slate-300 mb-3">
+              {language === 'ar'
+                ? 'اشترك ليصلك أحدث العروض والوجهات.'
+                : 'Subscribe for the latest offers and destinations.'}
+            </p>
             <div className="flex gap-2">
-              <input type="email" placeholder="Email" className="bg-white/10 border-white/20 text-white rounded px-3 py-2 text-sm w-full" />
-              <Button className="bg-accent text-primary hover:bg-accent/90">
-                Subscribe
+              <input
+                type="email"
+                aria-label={language === 'ar' ? 'بريدك الإلكتروني' : 'Your email'}
+                placeholder={language === 'ar' ? 'بريدك الإلكتروني' : 'Your email'}
+                dir={language === 'ar' ? 'rtl' : 'ltr'}
+                className="bg-white/10 border-white/20 text-white rounded px-3 py-2 text-sm w-full placeholder:text-slate-400"
+              />
+              <Button className="bg-accent text-primary hover:bg-accent/90 shrink-0">
+                {language === 'ar' ? 'اشتراك' : 'Subscribe'}
               </Button>
             </div>
           </div>
         </div>
         <div className="border-t border-white/10 pt-8 text-center text-sm text-slate-400">
-          <p>© {new Date().getFullYear()} ABSHER TRAVEL & TOURISM. All rights reserved.</p>
+          <p>
+            © {new Date().getFullYear()} {language === 'ar' ? 'أبشر للسفريات والسياحة. جميع الحقوق محفوظة.' : 'ABSHER TRAVEL & TOURISM. All rights reserved.'}
+          </p>
         </div>
       </footer>
     </div>

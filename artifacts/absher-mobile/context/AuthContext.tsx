@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { setAuthTokenGetter, setAuthRefreshHandler } from '@workspace/api-client-react';
 import type { SafeUser } from '@workspace/api-client-react';
+import { setImageAuthToken } from '../hooks/useImageUrl';
 
 type AuthState = {
   user: SafeUser | null;
@@ -29,6 +30,12 @@ const STORAGE_KEY = '@absher_auth';
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>({ user: null, accessToken: null, isLoading: true });
   const tokenRef = useRef<string | null>(null);
+
+  // Keep the image-URL helper's token in sync so access-controlled object URLs
+  // (passports, IDs, photos) render in <Image> tags, which can't send headers.
+  useEffect(() => {
+    setImageAuthToken(state.accessToken);
+  }, [state.accessToken]);
 
   // Wire up auth token getter for the API client
   useEffect(() => {
@@ -105,6 +112,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    // Revoke the session on the server (best-effort) before clearing local
+    // tokens. The endpoint requires auth + accepts the refresh token to revoke
+    // the matching session row (see api-server/src/routes/auth.ts POST /auth/logout).
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEY);
+      const stored = raw ? JSON.parse(raw) : null;
+      const token = tokenRef.current;
+      if (token) {
+        await fetch(`https://${process.env.EXPO_PUBLIC_DOMAIN}/api/auth/logout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ refreshToken: stored?.refreshToken }),
+        });
+      }
+    } catch {
+      // Ignore network/server errors — always clear the local session below.
+    }
     tokenRef.current = null;
     await AsyncStorage.removeItem(STORAGE_KEY);
     setState({ user: null, accessToken: null, isLoading: false });

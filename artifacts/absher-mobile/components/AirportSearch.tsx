@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
+import { useLanguage } from '@/context/LanguageContext';
 import { Airport, searchAirports } from '@/constants/airports';
 
 interface Props {
@@ -18,6 +19,7 @@ interface Props {
 
 export default function AirportSearch({ selected, onSelect, placeholder, icon }: Props) {
   const colors = useColors();
+  const { t, lang } = useLanguage();
   const insets = useSafeAreaInsets();
   const [visible, setVisible] = useState(false);
   const [query, setQuery] = useState('');
@@ -55,23 +57,23 @@ export default function AirportSearch({ selected, onSelect, placeholder, icon }:
       </View>
       <View style={s.resultBody}>
         <View style={s.resultTop}>
-          <View style={[s.iataTag, { backgroundColor: '#0A2342' }]}>
+          <View style={[s.iataTag, { backgroundColor: '#052B5B' }]}>
             <Text style={s.iataText}>{item.iata}</Text>
           </View>
           <Text style={[s.nameAr, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]} numberOfLines={1}>
-            {item.nameAr}
+            {lang === 'ar' ? item.nameAr : item.nameEn}
           </Text>
         </View>
         <Text style={[s.nameEn, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]} numberOfLines={1}>
-          {item.nameEn}
+          {lang === 'ar' ? item.nameEn : item.nameAr}
         </Text>
         <Text style={[s.city, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-          {item.cityAr} · {item.countryAr}
+          {lang === 'ar' ? `${item.cityAr} · ${item.countryAr}` : `${item.cityEn} · ${item.countryEn}`}
         </Text>
       </View>
     </Pressable>
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [colors, query]);
+  ), [colors, query, lang]);
 
   return (
     <>
@@ -84,16 +86,16 @@ export default function AirportSearch({ selected, onSelect, placeholder, icon }:
           {selected ? (
             <>
               <View style={s.triggerLeft}>
-                <View style={[s.iataTag, { backgroundColor: '#0A2342' }]}>
+                <View style={[s.iataTag, { backgroundColor: '#052B5B' }]}>
                   <Text style={s.iataText}>{selected.iata}</Text>
                 </View>
               </View>
               <View style={s.triggerCenter}>
                 <Text style={[s.triggerCity, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]} numberOfLines={1}>
-                  {selected.cityAr}
+                  {lang === 'ar' ? selected.cityAr : selected.cityEn}
                 </Text>
                 <Text style={[s.triggerName, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]} numberOfLines={1}>
-                  {selected.nameAr}
+                  {lang === 'ar' ? selected.nameAr : selected.nameEn}
                 </Text>
               </View>
             </>
@@ -113,11 +115,11 @@ export default function AirportSearch({ selected, onSelect, placeholder, icon }:
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           {/* Modal header */}
-          <View style={[s.modalHeader, { backgroundColor: '#0A2342', paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
+          <View style={[s.modalHeader, { backgroundColor: '#052B5B', paddingTop: Platform.OS === 'ios' ? 16 : insets.top + 16 }]}>
             <Pressable onPress={close} style={s.closeBtn} hitSlop={12}>
               <Ionicons name="close" size={22} color="#FFFFFF" />
             </Pressable>
-            <Text style={[s.modalTitle, { fontFamily: 'Cairo_700Bold' }]}>البحث عن مطار</Text>
+            <Text style={[s.modalTitle, { fontFamily: 'Cairo_700Bold' }]}>{t('airportSearch.title')}</Text>
           </View>
 
           {/* Search bar */}
@@ -127,7 +129,7 @@ export default function AirportSearch({ selected, onSelect, placeholder, icon }:
               ref={inputRef}
               value={query}
               onChangeText={setQuery}
-              placeholder="ابحث بالدولة أو المدينة أو المطار أو IATA..."
+              placeholder={t('airportSearch.placeholder')}
               placeholderTextColor={colors.mutedForeground}
               style={[s.searchInput, { color: colors.foreground, fontFamily: 'Cairo_400Regular' }]}
               autoCorrect={false}
@@ -146,10 +148,10 @@ export default function AirportSearch({ selected, onSelect, placeholder, icon }:
             <View style={s.empty}>
               <Ionicons name="airplane" size={48} color={colors.border} />
               <Text style={[s.emptyTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>
-                ابدأ الكتابة للبحث
+                {t('airportSearch.startTyping')}
               </Text>
               <Text style={[s.emptyHint, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-                {'مثال: مصر، الرياض، DXB، Cairo'}
+                {t('airportSearch.example')}
               </Text>
             </View>
           )}
@@ -159,10 +161,10 @@ export default function AirportSearch({ selected, onSelect, placeholder, icon }:
             <View style={s.empty}>
               <Ionicons name="search" size={48} color={colors.border} />
               <Text style={[s.emptyTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>
-                لا توجد نتائج
+                {t('airportSearch.noResults')}
               </Text>
               <Text style={[s.emptyHint, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-                جرّب كلمة مختلفة
+                {t('airportSearch.tryDifferent')}
               </Text>
             </View>
           )}

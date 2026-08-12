@@ -12,3 +12,5 @@ export * from "./auditLogs";
 export * from "./travelerProfiles";
 export * from "./notifications";
 export * from "./appSettings";
+export * from "./objectUploads";
+export * from "./applicationDocuments";

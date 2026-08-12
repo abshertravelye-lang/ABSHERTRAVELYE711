@@ -2,23 +2,26 @@ import React from 'react';
 import { StyleSheet, Text, View, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
+import { useLanguage } from '@/context/LanguageContext';
 import type { FlightOffer } from '@workspace/api-client-react';
 
-function formatDuration(mins: number): string {
+function formatDuration(mins: number, hourUnit: string, minuteUnit: string): string {
   const h = Math.floor(mins / 60);
   const m = mins % 60;
-  return `${h}س ${m}د`;
+  return `${h}${hourUnit} ${m}${minuteUnit}`;
 }
 
-function formatTime(iso: string): string {
+function formatTime(iso: string, locale: string): string {
   const d = new Date(iso);
-  return d.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit', hour12: false });
+  return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
 type Props = { offer: FlightOffer; onPress?: () => void };
 
 export function FlightCard({ offer, onPress }: Props) {
   const colors = useColors();
+  const { t, lang } = useLanguage();
+  const locale = lang === 'ar' ? 'ar-SA' : 'en-US';
   const firstSeg = offer.segments[0];
   const lastSeg = offer.segments[offer.segments.length - 1];
 
@@ -37,12 +40,12 @@ export function FlightCard({ offer, onPress }: Props) {
         </Text>
         {offer.stops === 0 ? (
           <View style={[styles.stopBadge, { backgroundColor: '#DCFCE7' }]}>
-            <Text style={[styles.stopText, { color: '#16A34A', fontFamily: 'Cairo_600SemiBold' }]}>مباشر</Text>
+            <Text style={[styles.stopText, { color: '#16A34A', fontFamily: 'Cairo_600SemiBold' }]}>{t('flightCard.direct')}</Text>
           </View>
         ) : (
           <View style={[styles.stopBadge, { backgroundColor: colors.muted }]}>
             <Text style={[styles.stopText, { color: colors.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>
-              {offer.stops} توقف
+              {offer.stops} {t('flightCard.stops')}
             </Text>
           </View>
         )}
@@ -52,7 +55,7 @@ export function FlightCard({ offer, onPress }: Props) {
       <View style={styles.route}>
         <View style={styles.airport}>
           <Text style={[styles.time, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>
-            {firstSeg ? formatTime(firstSeg.departureAt) : '--'}
+            {firstSeg ? formatTime(firstSeg.departureAt, locale) : '--'}
           </Text>
           <Text style={[styles.iata, { color: colors.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>
             {firstSeg?.originIata}
@@ -61,18 +64,18 @@ export function FlightCard({ offer, onPress }: Props) {
 
         <View style={styles.middle}>
           <Text style={[styles.duration, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-            {formatDuration(offer.totalDurationMin)}
+            {formatDuration(offer.totalDurationMin, t('flightCard.hourUnit'), t('flightCard.minuteUnit'))}
           </Text>
           <View style={styles.line}>
-            <View style={[styles.dot, { backgroundColor: '#0A2342' }]} />
+            <View style={[styles.dot, { backgroundColor: '#052B5B' }]} />
             <View style={[styles.track, { backgroundColor: colors.border }]} />
-            <Ionicons name="airplane" size={16} color="#0A2342" />
+            <Ionicons name="airplane" size={16} color="#052B5B" />
           </View>
         </View>
 
         <View style={styles.airport}>
           <Text style={[styles.time, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>
-            {lastSeg ? formatTime(lastSeg.arrivalAt) : '--'}
+            {lastSeg ? formatTime(lastSeg.arrivalAt, locale) : '--'}
           </Text>
           <Text style={[styles.iata, { color: colors.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>
             {lastSeg?.destinationIata}
@@ -87,18 +90,18 @@ export function FlightCard({ offer, onPress }: Props) {
             <View style={[styles.badge, { backgroundColor: colors.muted }]}>
               <Ionicons name="bag-handle-outline" size={12} color={colors.mutedForeground} />
               <Text style={[styles.badgeText, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-                {offer.baggageIncludedKg} كغ
+                {offer.baggageIncludedKg} {t('flightCard.kg')}
               </Text>
             </View>
           )}
           {offer.isRefundable && (
             <View style={[styles.badge, { backgroundColor: '#DCFCE7' }]}>
-              <Text style={[styles.badgeText, { color: '#16A34A', fontFamily: 'Cairo_400Regular' }]}>قابل للاسترداد</Text>
+              <Text style={[styles.badgeText, { color: '#16A34A', fontFamily: 'Cairo_400Regular' }]}>{t('flightCard.refundable')}</Text>
             </View>
           )}
         </View>
-        <Text style={[styles.price, { color: '#0A2342', fontFamily: 'Cairo_700Bold' }]}>
-          {offer.totalPrice.toLocaleString('ar-SA')} {offer.currency}
+        <Text style={[styles.price, { color: '#052B5B', fontFamily: 'Cairo_700Bold' }]}>
+          {offer.totalPrice.toLocaleString(locale)} {offer.currency}
         </Text>
       </View>
     </Pressable>

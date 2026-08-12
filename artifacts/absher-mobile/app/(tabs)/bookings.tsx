@@ -18,24 +18,31 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import { useLanguage } from '@/context/LanguageContext';
 import { useColors } from '@/hooks/useColors';
 import { useListMyBookings } from '@workspace/api-client-react';
 import type { Booking } from '@workspace/api-client-react';
 import { EmptyState } from '@/components/EmptyState';
 
 // ── Status badge config ───────────────────────────────────────────────────────
-const STATUS_CONFIG = {
-  pending:   { label: 'قيد الانتظار', bg: '#FEF9C3', text: '#854D0E', icon: 'time-outline' as const },
-  confirmed: { label: 'مؤكد',         bg: '#DCFCE7', text: '#166534', icon: 'checkmark-circle-outline' as const },
-  cancelled: { label: 'ملغي',         bg: '#FEE2E2', text: '#991B1B', icon: 'close-circle-outline' as const },
-};
+function getStatusConfig(t: any) {
+  return {
 
-const TYPE_CONFIG = {
-  flight:  { icon: 'airplane' as const,       label: 'رحلة طيران', color: '#38BDF8' },
-  hotel:   { icon: 'bed-outline' as const,    label: 'فندق',       color: '#7C3AED' },
-  program: { icon: 'globe-outline' as const,  label: 'برنامج سياحي', color: '#0891B2' },
-  visa:    { icon: 'card-outline' as const,   label: 'تأشيرة',    color: '#D4AF37' },
-};
+  pending:             { label: t('status.pending'), bg: '#FEF9C3', text: '#854D0E', icon: 'time-outline' as const },
+  confirmed: { label: t('status.confirmed'),         bg: '#DCFCE7', text: '#166534', icon: 'checkmark-circle-outline' as const },
+  cancelled:           { label: t('status.cancelled'),         bg: '#FEE2E2', text: '#991B1B', icon: 'close-circle-outline' as const },
+  };
+}
+
+function getTypeConfig(t: any) {
+  return {
+
+  flight:  { icon: 'airplane' as const,       label: t('booking.type.flight'), color: '#38BDF8' },
+  hotel:   { icon: 'bed-outline' as const,    label: t('booking.type.hotel'),       color: '#7C3AED' },
+  program: { icon: 'globe-outline' as const,  label: t('booking.type.program'), color: '#0891B2' },
+  visa:    { icon: 'card-outline' as const,   label: t('booking.type.visa'),    color: '#D4AF37' },
+  };
+}
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('ar-SA', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -43,15 +50,16 @@ function formatDate(iso: string) {
 
 // ── BookingCard ───────────────────────────────────────────────────────────────
 function BookingCard({ booking }: { booking: Booking }) {
+  const { t } = useLanguage();
   const colors = useColors();
   const [expanded, setExpanded] = useState(false);
 
-  const status = STATUS_CONFIG[booking.status] || STATUS_CONFIG.pending;
-  const typeConf = TYPE_CONFIG[booking.type] || TYPE_CONFIG.flight;
+  const status = getStatusConfig(t)[booking.status] || getStatusConfig(t).pending;
+  const typeConf = getTypeConfig(t)[booking.type] || getTypeConfig(t).flight;
 
   const shareWhatsApp = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const msg = `حجزي مع أبشر ترافل:\n${typeConf.label}\nرقم الحجز: #${booking.id}\nالعميل: ${booking.clientName}\nالوجهة: ${booking.destination || '---'}\nتاريخ السفر: ${booking.travelDate ? formatDate(booking.travelDate) : '---'}\nالحالة: ${status.label}`;
+    const msg = `${t('booking.share.intro')}\n${typeConf.label}\n${t('tracking.reference')}: #${booking.id}\n${t('booking.share.client')}: ${booking.clientName}\n${t('booking.destination')}: ${booking.destination || '---'}\n${t('booking.travelDate')}: ${booking.travelDate ? formatDate(booking.travelDate) : '---'}\n${t('booking.share.status')}: ${status.label}`;
     Linking.openURL(`whatsapp://send?text=${encodeURIComponent(msg)}`);
   };
 
@@ -97,7 +105,7 @@ function BookingCard({ booking }: { booking: Booking }) {
         <View style={bc.passBadge}>
           <Ionicons name="people-outline" size={15} color="#38BDF8" />
           <Text style={[bc.passText, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-            {booking.adults} {(booking.adults ?? 0) === 1 ? 'مسافر' : 'مسافرون'}
+            {booking.adults} {(booking.adults ?? 0) === 1 ? t('booking.traveler') : t('booking.travelers')}
           </Text>
         </View>
       )}
@@ -105,7 +113,7 @@ function BookingCard({ booking }: { booking: Booking }) {
       {/* Price */}
       {booking.totalPrice && (
         <Text style={[bc.price, { color: '#D4AF37', fontFamily: 'Cairo_700Bold' }]}>
-          {booking.totalPrice.toLocaleString('ar-SA')} {booking.type === 'flight' ? 'USD' : 'ر.س'}
+          {booking.totalPrice.toLocaleString('ar-SA')} {booking.type === 'flight' ? 'USD' : t('booking.currency.sar')}
         </Text>
       )}
 
@@ -115,19 +123,19 @@ function BookingCard({ booking }: { booking: Booking }) {
           {booking.clientPhone && (
             <View style={bc.detailRow}>
               <Text style={[bc.detailValue, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{booking.clientPhone}</Text>
-              <Text style={[bc.detailKey, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>الجوال</Text>
+              <Text style={[bc.detailKey, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{t('booking.phone')}</Text>
             </View>
           )}
           {booking.clientEmail && (
             <View style={bc.detailRow}>
               <Text style={[bc.detailValue, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{booking.clientEmail}</Text>
-              <Text style={[bc.detailKey, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>البريد</Text>
+              <Text style={[bc.detailKey, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{t('booking.email')}</Text>
             </View>
           )}
           {booking.returnDate && (
             <View style={bc.detailRow}>
               <Text style={[bc.detailValue, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{formatDate(booking.returnDate)}</Text>
-              <Text style={[bc.detailKey, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>تاريخ العودة</Text>
+              <Text style={[bc.detailKey, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{t('booking.returnDate')}</Text>
             </View>
           )}
           {booking.notes && (
@@ -136,7 +144,7 @@ function BookingCard({ booking }: { booking: Booking }) {
             </View>
           )}
           <Text style={[bc.createdAt, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-            تاريخ الحجز: {formatDate(booking.createdAt)}
+            {t('booking.bookingDate')}: {formatDate(booking.createdAt)}
           </Text>
         </View>
       )}
@@ -148,14 +156,14 @@ function BookingCard({ booking }: { booking: Booking }) {
           onPress={shareWhatsApp}
         >
           <Ionicons name="logo-whatsapp" size={18} color="#16A34A" />
-          <Text style={[bc.actionText, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>مشاركة</Text>
+          <Text style={[bc.actionText, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{t('common.share')}</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [bc.actionBtn, { backgroundColor: expanded ? '#D4AF3720' : colors.muted, opacity: pressed ? 0.7 : 1 }]}
           onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setExpanded(!expanded); }}
         >
           <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color="#D4AF37" />
-          <Text style={[bc.actionText, { color: '#D4AF37', fontFamily: 'Cairo_600SemiBold' }]}>تفاصيل</Text>
+          <Text style={[bc.actionText, { color: '#D4AF37', fontFamily: 'Cairo_600SemiBold' }]}>{t('common.details')}</Text>
         </Pressable>
       </View>
     </View>
@@ -195,6 +203,7 @@ const bc = StyleSheet.create({
 export default function BookingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const bottomInset = Platform.OS === 'web' ? 34 : 0;
 
@@ -208,14 +217,14 @@ export default function BookingsScreen() {
       <LinearGradient colors={['#071525', '#0A2342', '#1E3A5F']} style={[s.header, { paddingTop: topInset + 14 }]}>
         <View style={s.headerRow}>
           <View style={{ width: 24 }} />
-          <Text style={[s.headerTitle, { fontFamily: 'Cairo_700Bold' }]}>حجوزاتي</Text>
+          <Text style={[s.headerTitle, { fontFamily: 'Cairo_700Bold' }]}>{t('nav.bookings')}</Text>
           <Pressable onPress={() => router.push('/flight-results' as any)} style={{ opacity: 0 }}>
             <View style={{ width: 24 }} />
           </Pressable>
         </View>
         {bookings.length > 0 && (
           <Text style={[s.subTitle, { fontFamily: 'Cairo_400Regular' }]}>
-            {bookings.length} {bookings.length === 1 ? 'حجز' : 'حجوزات'}
+            {bookings.length} {bookings.length === 1 ? t('booking.singular') : t('booking.plural')}
           </Text>
         )}
       </LinearGradient>
@@ -223,19 +232,19 @@ export default function BookingsScreen() {
       {error ? (
         <EmptyState
           icon="calendar-outline"
-          title="خطأ في تحميل الحجوزات"
-          description="تعذر تحميل حجوزاتك، حاول مرة أخرى"
-          actionLabel="إعادة المحاولة"
+          title={t('tracking.error.title')}
+          description={t('tracking.error.desc')}
+          actionLabel={t('common.retry')}
           onAction={() => refetch()}
         />
       ) : isLoading ? (
-        <EmptyState loading title="جاري تحميل حجوزاتك..." />
+        <EmptyState loading title={t('common.loading')} />
       ) : bookings.length === 0 ? (
         <EmptyState
           icon="calendar-outline"
-          title="لا توجد حجوزات"
-          description="لم تقم بأي حجز حتى الآن. ابدأ بالبحث عن رحلات أو تأشيرات"
-          actionLabel="البحث عن رحلات"
+          title={t('tracking.empty.noRequestsTitle')}
+          description={t('tracking.empty.noRequestsDesc')}
+          actionLabel={t('booking.searchFlights')}
           onAction={() => router.push('/(tabs)/flights')}
         />
       ) : (

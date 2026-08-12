@@ -36,7 +36,7 @@ export default function Flights() {
       </div>
 
       <Link href="/">
-        <button className="text-sm text-slate-400 hover:text-white underline underline-offset-4 transition-colors">
+        <button className="inline-flex items-center gap-2 bg-[#D4AF37] text-[#052B5B] font-bold px-8 py-3.5 rounded-xl shadow-lg shadow-[#D4AF37]/20 hover:bg-[#D4AF37]/90 hover:-translate-y-0.5 transition-all">
           {ar ? "العودة للرئيسية" : "Back to Home"}
         </button>
       </Link>

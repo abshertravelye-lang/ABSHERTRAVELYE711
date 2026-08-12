@@ -11,3 +11,6 @@
 - [Auth token refresh](auth-token-refresh.md) — 15-min tokens need the shared 401-refresh-retry; refresh JWTs need jti; AI-check outages are 503, never "rejected".
 - [Country canonicalization](country-canonicalization.md) — all country fields store canonical English names from @workspace/countries; compare with isSameCountry, never substring.
 - [OpenAI proxy setup](openai-proxy-setup.md) — user's OpenAI key has no credits; server uses Replit AI Integrations proxy (both env vars required) with key fallback.
+- [Expo preview testing](expo-preview-testing.md) — mobile e2e/screenshots must hit the REPLIT_EXPO_DEV_DOMAIN root; the shared-proxy /absher-mobile path serves HTML for bundles → blank page.
+- [Document management rules](document-management-rules.md) — scoped staff file ACL, ownership at every upload path, idempotent doc requests/versions, refresh-aware multipart uploads.
+- [Leave/exit guard patterns](leave-guard-patterns.md) — wouter router-level blocker + history sentinel for Back; Expo wizards intercept their own header back, never raw GO_BACK.

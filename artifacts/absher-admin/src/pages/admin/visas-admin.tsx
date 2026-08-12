@@ -4,6 +4,8 @@ import {
   useListVisas, useCreateVisa, useUpdateVisa, useDeleteVisa, getListVisasQueryKey,
   useListVisaCountries, useListVisaCustomFields, useCreateVisaCustomField, useUpdateVisaCustomField, useDeleteVisaCustomField,
   getListVisaCustomFieldsQueryKey,
+  useListVisaRequiredDocuments, useCreateVisaRequiredDocument, useUpdateVisaRequiredDocument, useDeleteVisaRequiredDocument,
+  getListVisaRequiredDocumentsQueryKey,
 } from "@workspace/api-client-react";
 import { useTranslation } from "@/hooks/use-translation";
 import { Plus, Edit2, Trash2, X, Globe, ChevronDown, ChevronRight, Upload, Image as ImageIcon, CheckCircle2, ShieldCheck, FileText, Settings } from "lucide-react";
@@ -313,6 +315,144 @@ function CustomFieldsPanel({ visaId, ar }: { visaId: number; ar: boolean }) {
           <div className="flex gap-2 justify-end">
             <button onClick={() => { setAdding(false); setEditId(null); }} className="text-xs text-muted-foreground hover:underline">{ar ? "إلغاء" : "Cancel"}</button>
             <Button size="sm" onClick={save} disabled={!form.labelAr || !form.labelEn}>{ar ? "حفظ" : "Save"}</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Required Documents Panel (dynamic per-visa document config) ──────────────
+const DOC_FILE_TYPES = [
+  { value: "image",     ar: "صورة",          en: "Image" },
+  { value: "pdf",       ar: "PDF",           en: "PDF" },
+  { value: "image_pdf", ar: "صورة أو PDF",   en: "Image or PDF" },
+];
+const DOC_REQUIRED_AT = [
+  { value: "application_start",  ar: "عند بدء الطلب",     en: "Application Start" },
+  { value: "before_submission", ar: "قبل الإرسال",       en: "Before Submission" },
+  { value: "during_processing", ar: "أثناء المعالجة",    en: "During Processing" },
+  { value: "optional",          ar: "اختياري",           en: "Optional" },
+];
+
+function RequiredDocumentsPanel({ visaId, ar }: { visaId: number; ar: boolean }) {
+  const qc = useQueryClient();
+  const { data: docs = [] } = useListVisaRequiredDocuments(visaId);
+  const createMut = useCreateVisaRequiredDocument();
+  const updateMut = useUpdateVisaRequiredDocument();
+  const deleteMut = useDeleteVisaRequiredDocument();
+  const [adding, setAdding] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const emptyForm = { nameAr: "", nameEn: "", description: "", required: true, allowedFileType: "image_pdf", maxFileSizeMb: 10, requiredAt: "application_start", sortOrder: 0 };
+  const [form, setForm] = useState(emptyForm);
+  const set = (k: string, v: unknown) => setForm(f => ({ ...f, [k]: v }));
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: getListVisaRequiredDocumentsQueryKey(visaId) });
+  const reset = () => { setAdding(false); setEditId(null); setForm(emptyForm); };
+
+  async function save() {
+    try {
+      const payload = {
+        nameAr: form.nameAr,
+        nameEn: form.nameEn,
+        description: form.description || undefined,
+        required: form.required,
+        allowedFileType: form.allowedFileType,
+        maxFileSizeMb: form.maxFileSizeMb ? Number(form.maxFileSizeMb) : undefined,
+        requiredAt: form.requiredAt,
+        sortOrder: Number(form.sortOrder) || 0,
+      };
+      if (editId !== null) {
+        await updateMut.mutateAsync({ id: visaId, docId: editId, data: payload as never });
+      } else {
+        await createMut.mutateAsync({ id: visaId, data: payload as never });
+      }
+      await invalidate();
+      reset();
+      toast.success(ar ? "تم حفظ المستند بنجاح" : "Document saved successfully");
+    } catch {
+      toast.error(ar ? "حدث خطأ أثناء الحفظ" : "Error saving document");
+    }
+  }
+
+  const saving = createMut.isPending || updateMut.isPending;
+
+  return (
+    <div className="mt-4 border-t pt-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-semibold text-muted-foreground flex items-center gap-1.5">
+          <FileText className="w-4 h-4" />{ar ? "المستندات المطلوبة" : "Required Documents"}
+        </span>
+        <button onClick={() => { reset(); setAdding(true); }} className="text-xs text-primary hover:underline flex items-center gap-1">
+          <Plus className="w-3.5 h-3.5" />{ar ? "إضافة مستند" : "Add Document"}
+        </button>
+      </div>
+      {docs.map(d => {
+        const ft = DOC_FILE_TYPES.find(t => t.value === d.allowedFileType);
+        const ra = DOC_REQUIRED_AT.find(r => r.value === d.requiredAt);
+        return (
+          <div key={d.id} className="flex items-center justify-between bg-slate-50 rounded-xl px-4 py-2.5 text-sm">
+            <div className="min-w-0">
+              <span className="font-medium">{ar ? d.nameAr : d.nameEn}</span>
+              {d.required
+                ? <span className="ms-2 text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded-md">{ar ? "إلزامي" : "Required"}</span>
+                : <span className="ms-2 text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-md">{ar ? "اختياري" : "Optional"}</span>}
+              <span className="ms-2 text-xs text-muted-foreground">{ar ? ft?.ar : ft?.en}{d.maxFileSizeMb ? ` · ${d.maxFileSizeMb}MB` : ""} · {ar ? ra?.ar : ra?.en}</span>
+              {d.description && <div className="text-xs text-muted-foreground mt-0.5 truncate">{d.description}</div>}
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <button onClick={() => { setEditId(d.id); setAdding(true); setForm({ nameAr: d.nameAr, nameEn: d.nameEn, description: d.description ?? "", required: d.required, allowedFileType: d.allowedFileType, maxFileSizeMb: d.maxFileSizeMb ?? 10, requiredAt: d.requiredAt, sortOrder: d.sortOrder }); }} className="p-1 hover:bg-white rounded-lg"><Edit2 className="w-3.5 h-3.5" /></button>
+              <button onClick={async () => { await deleteMut.mutateAsync({ id: visaId, docId: d.id }); invalidate(); }} className="p-1 hover:bg-red-50 text-red-500 rounded-lg"><Trash2 className="w-3.5 h-3.5" /></button>
+            </div>
+          </div>
+        );
+      })}
+      {docs.length === 0 && !adding && (
+        <p className="text-xs text-muted-foreground italic">{ar ? "لا توجد مستندات مطلوبة بعد" : "No required documents yet"}</p>
+      )}
+      {adding && (
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium mb-1">{ar ? "اسم المستند (عربي)" : "Document Name (Arabic)"}</label>
+              <input className="w-full border rounded-lg px-3 py-1.5 text-sm" value={form.nameAr} onChange={e => set("nameAr", e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">{ar ? "اسم المستند (إنجليزي)" : "Document Name (English)"}</label>
+              <input className="w-full border rounded-lg px-3 py-1.5 text-sm" value={form.nameEn} onChange={e => set("nameEn", e.target.value)} dir="ltr" />
+            </div>
+            <div className="col-span-full">
+              <label className="block text-xs font-medium mb-1">{ar ? "الوصف / التعليمات" : "Description / Instructions"}</label>
+              <textarea rows={2} className="w-full border rounded-lg px-3 py-1.5 text-sm resize-none" value={form.description} onChange={e => set("description", e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">{ar ? "نوع الملف" : "File Type"}</label>
+              <select className="w-full border rounded-lg px-3 py-1.5 text-sm bg-white" value={form.allowedFileType} onChange={e => set("allowedFileType", e.target.value)}>
+                {DOC_FILE_TYPES.map(t => <option key={t.value} value={t.value}>{ar ? t.ar : t.en}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">{ar ? "الحجم الأقصى (ميغابايت)" : "Max Size (MB)"}</label>
+              <input type="number" min="0" className="w-full border rounded-lg px-3 py-1.5 text-sm" value={form.maxFileSizeMb} onChange={e => set("maxFileSizeMb", Number(e.target.value))} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">{ar ? "مطلوب عند" : "Required At"}</label>
+              <select className="w-full border rounded-lg px-3 py-1.5 text-sm bg-white" value={form.requiredAt} onChange={e => set("requiredAt", e.target.value)}>
+                {DOC_REQUIRED_AT.map(r => <option key={r.value} value={r.value}>{ar ? r.ar : r.en}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1">{ar ? "الترتيب" : "Order"}</label>
+              <input type="number" className="w-full border rounded-lg px-3 py-1.5 text-sm" value={form.sortOrder} onChange={e => set("sortOrder", Number(e.target.value))} />
+            </div>
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id={`doc-req-${visaId}`} checked={form.required} onChange={e => set("required", e.target.checked)} className="w-4 h-4" />
+              <label htmlFor={`doc-req-${visaId}`} className="text-xs font-medium">{ar ? "إلزامي" : "Required"}</label>
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end">
+            <button onClick={reset} className="text-xs text-muted-foreground hover:underline">{ar ? "إلغاء" : "Cancel"}</button>
+            <Button size="sm" onClick={save} disabled={!form.nameAr || !form.nameEn || saving}>{saving ? (ar ? "جارٍ الحفظ..." : "Saving...") : (ar ? "حفظ" : "Save")}</Button>
           </div>
         </div>
       )}
@@ -832,6 +972,7 @@ export default function VisasAdmin() {
                         {euLogic !== "neither" && <p className="text-blue-600">🌍 {ar ? EU_SCHENGEN_OPTIONS.find(o => o.value === euLogic)?.ar : EU_SCHENGEN_OPTIONS.find(o => o.value === euLogic)?.en}</p>}
                       </div>
                     )}
+                    <RequiredDocumentsPanel visaId={v.id} ar={ar} />
                     <CustomFieldsPanel visaId={v.id} ar={ar} />
                   </div>
                 )}

@@ -8,6 +8,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
+import { useLanguage } from '@/context/LanguageContext';
 import { useGetVisa, useCreateVisaApplication } from '@workspace/api-client-react';
 import DatePickerModal, { DateField } from '@/components/DatePickerModal';
 import ImageUploader from '@/components/ImageUploader';
@@ -15,8 +16,8 @@ import NationalityPicker from '@/components/NationalityPicker';
 import { Nationality } from '@/constants/nationalities';
 import { useAuth } from '@/context/AuthContext';
 
-const STATUS_LABELS: Record<string, string> = {
-  available: 'متاحة', suspended: 'موقوفة', closed: 'مغلقة',
+const STATUS_LABEL_KEYS: Record<string, string> = {
+  available: 'visaDetail.status.available', suspended: 'visaDetail.status.suspended', closed: 'visaDetail.status.closed',
 };
 const STATUS_COLORS: Record<string, string> = {
   available: '#16A34A', suspended: '#EAB308', closed: '#EF4444',
@@ -32,6 +33,7 @@ const todayISO = () => {
 export default function VisaDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
+  const { t, lang } = useLanguage();
   const insets = useSafeAreaInsets();
   const { user: authUser } = useAuth();
 
@@ -70,23 +72,23 @@ export default function VisaDetailScreen() {
 
   const submit = () => {
     if (!form.fullName || !form.nationality || !form.passportNumber || !form.email || !form.phone) {
-      Alert.alert('بيانات ناقصة', 'يرجى تعبئة جميع الحقول المطلوبة');
+      Alert.alert(t('visaDetail.missingDataTitle'), t('visaDetail.missingDataBody'));
       return;
     }
     if (!form.agreedToTerms) {
-      Alert.alert('الموافقة مطلوبة', 'يرجى الموافقة على الشروط والأحكام للمتابعة');
+      Alert.alert(t('visaDetail.agreementRequiredTitle'), t('visaDetail.agreementRequiredBody'));
       return;
     }
     if (needsPersonalPhoto && !form.personalPhotoUrl) {
-      Alert.alert('صورة مطلوبة', 'يرجى رفع الصورة الشخصية');
+      Alert.alert(t('visaDetail.photoRequiredTitle'), t('visaDetail.uploadPersonalPhoto'));
       return;
     }
     if (needsPassportImage && !form.passportImageUrl) {
-      Alert.alert('صورة مطلوبة', 'يرجى رفع صورة الجواز');
+      Alert.alert(t('visaDetail.photoRequiredTitle'), t('visaDetail.uploadPassportImage'));
       return;
     }
     if (needsResidencyImage && !form.residencyImageUrl) {
-      Alert.alert('صورة مطلوبة', 'يرجى رفع صورة الإقامة');
+      Alert.alert(t('visaDetail.photoRequiredTitle'), t('visaDetail.uploadResidencyImage'));
       return;
     }
 
@@ -117,10 +119,10 @@ export default function VisaDetailScreen() {
         onSuccess: () => {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           setShowForm(false);
-          Alert.alert('✅ تم تقديم الطلب', 'سيتم مراجعة طلبك والتواصل معك قريباً.');
+          Alert.alert(t('visaDetail.submitSuccessTitle'), t('visaDetail.submitSuccessBody'));
         },
         onError: (err: any) =>
-          Alert.alert('خطأ', err?.message || 'تعذر تقديم الطلب'),
+          Alert.alert(t('flow.error'), err?.message || t('visaDetail.submitError')),
       },
     );
   };
@@ -128,14 +130,14 @@ export default function VisaDetailScreen() {
   if (isLoading)
     return (
       <View style={[s.loading, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color="#0A2342" />
+        <ActivityIndicator size="large" color={colors.navy} />
       </View>
     );
   if (!visa)
     return (
       <View style={[s.loading, { backgroundColor: colors.background }]}>
         <Text style={{ color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }}>
-          لم يتم العثور على التأشيرة
+          {t('visaDetail.notFound')}
         </Text>
       </View>
     );
@@ -150,10 +152,12 @@ export default function VisaDetailScreen() {
       </View>
     ) : null;
 
+  const countryName = lang === 'ar' ? visa.countryAr : ((visa as any).countryEn || visa.countryAr);
+
   const datePickerConfigs: Record<DatePickerKey, { label: string; mode: 'birth' | 'passport'; minDate?: string; maxDate?: string }> = {
-    dateOfBirth:        { label: 'تاريخ الميلاد',          mode: 'birth',    maxDate: todayISO() },
-    passportIssueDate:  { label: 'تاريخ إصدار الجواز',     mode: 'passport', maxDate: todayISO() },
-    passportExpiryDate: { label: 'تاريخ انتهاء الجواز',    mode: 'passport', minDate: todayISO() },
+    dateOfBirth:        { label: t('visaDetail.dateOfBirth'),          mode: 'birth',    maxDate: todayISO() },
+    passportIssueDate:  { label: t('visaDetail.passportIssueDate'),    mode: 'passport', maxDate: todayISO() },
+    passportExpiryDate: { label: t('visaDetail.passportExpiryDate'),   mode: 'passport', minDate: todayISO() },
   };
   const activeConfig = activePicker ? datePickerConfigs[activePicker] : null;
 
@@ -161,7 +165,7 @@ export default function VisaDetailScreen() {
     <View style={[s.container, { backgroundColor: colors.background }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* ── Header ───────────────────────────────────────────────────────── */}
-        <View style={[s.header, { paddingTop: insets.top + 12, backgroundColor: '#0A2342' }]}>
+        <View style={[s.header, { paddingTop: insets.top + 12, backgroundColor: colors.navy }]}>
           <Pressable onPress={() => router.back()} style={s.backBtn}>
             <Ionicons name="arrow-forward" size={22} color="#FFFFFF" />
           </Pressable>
@@ -169,11 +173,11 @@ export default function VisaDetailScreen() {
             <View style={[s.flag, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
               <Text style={s.flagText}>{visa.countryCode || '🌍'}</Text>
             </View>
-            <Text style={[s.country, { fontFamily: 'Cairo_700Bold' }]}>{visa.countryAr}</Text>
+            <Text style={[s.country, { fontFamily: 'Cairo_700Bold' }]}>{countryName}</Text>
             <View style={[s.statusBadge, { backgroundColor: statusColor + '22', borderColor: statusColor }]}>
               <View style={[s.statusDot, { backgroundColor: statusColor }]} />
               <Text style={[s.statusText, { color: statusColor, fontFamily: 'Cairo_600SemiBold' }]}>
-                {STATUS_LABELS[visa.status]}
+                {STATUS_LABEL_KEYS[visa.status] ? t(STATUS_LABEL_KEYS[visa.status]) : visa.status}
               </Text>
             </View>
           </View>
@@ -182,20 +186,20 @@ export default function VisaDetailScreen() {
         {/* ── Price card ───────────────────────────────────────────────────── */}
         <View style={[s.priceCard, { backgroundColor: colors.card }]}>
           <View style={s.priceRow}>
-            <Text style={[s.priceLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>رسوم التأشيرة</Text>
-            <Text style={[s.price,      { color: '#0A2342',              fontFamily: 'Cairo_700Bold'    }]}>{visa.fee} {visa.currency}</Text>
+            <Text style={[s.priceLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{t('visaDetail.fee')}</Text>
+            <Text style={[s.price,      { color: colors.navy,              fontFamily: 'Cairo_700Bold'    }]}>{visa.fee} {visa.currency}</Text>
           </View>
           <View style={[s.divider, { backgroundColor: colors.border }]} />
           <View style={s.priceRow}>
-            <Text style={[s.priceLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>مدة المعالجة</Text>
-            <Text style={[s.priceVal,   { color: colors.foreground,      fontFamily: 'Cairo_600SemiBold'}]}>{visa.processingDays} أيام عمل</Text>
+            <Text style={[s.priceLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{t('visaDetail.processingTime')}</Text>
+            <Text style={[s.priceVal,   { color: colors.foreground,      fontFamily: 'Cairo_600SemiBold'}]}>{visa.processingDays} {t('visaDetail.workingDays')}</Text>
           </View>
           {visa.stayDuration && (
             <>
               <View style={[s.divider, { backgroundColor: colors.border }]} />
               <View style={s.priceRow}>
-                <Text style={[s.priceLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>مدة الإقامة</Text>
-                <Text style={[s.priceVal,   { color: colors.foreground,      fontFamily: 'Cairo_600SemiBold'}]}>{visa.stayDuration} يوم</Text>
+                <Text style={[s.priceLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{t('visaDetail.stayDuration')}</Text>
+                <Text style={[s.priceVal,   { color: colors.foreground,      fontFamily: 'Cairo_600SemiBold'}]}>{visa.stayDuration} {t('visaDetail.dayUnit')}</Text>
               </View>
             </>
           )}
@@ -223,7 +227,7 @@ export default function VisaDetailScreen() {
       {visa.status === 'available' && (
         <View style={[s.footer, { paddingBottom: insets.bottom + 16, backgroundColor: colors.card, borderTopColor: colors.border }]}>
           <Pressable
-            style={({ pressed }) => [s.applyBtn, { backgroundColor: '#0A2342', opacity: pressed ? 0.9 : 1 }]}
+            style={({ pressed }) => [s.applyBtn, { backgroundColor: colors.navy, opacity: pressed ? 0.9 : 1 }]}
             onPress={() => {
               if (!authUser) {
                 Alert.alert(
@@ -253,7 +257,9 @@ export default function VisaDetailScreen() {
                 );
                 return;
               }
-              setShowForm(true);
+              // Route to the profile-driven 5-step wizard (single source of truth
+              // for application submission — matches the server contract).
+              router.push(`/umrah-visa?visaId=${Number(id)}` as never);
             }}
           >
             <Ionicons name="document-text-outline" size={20} color="#FFFFFF" />
@@ -286,7 +292,7 @@ export default function VisaDetailScreen() {
             {/* ── Personal Info ──────────────────────────────────────────── */}
             <View style={[s.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={s.sectionHeader}>
-                <Ionicons name="person-outline" size={18} color="#0A2342" />
+                <Ionicons name="person-outline" size={18} color={colors.navy} />
                 <Text style={[s.sectionHeaderText, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>
                   البيانات الشخصية
                 </Text>
@@ -330,7 +336,7 @@ export default function VisaDetailScreen() {
                   {(['male', 'female'] as const).map(g => (
                     <Pressable
                       key={g}
-                      style={[s.genderBtn, { backgroundColor: form.gender === g ? '#0A2342' : colors.muted, borderColor: colors.border }]}
+                      style={[s.genderBtn, { backgroundColor: form.gender === g ? colors.navy : colors.muted, borderColor: colors.border }]}
                       onPress={() => set('gender', g)}
                     >
                       <Text style={[s.genderText, { color: form.gender === g ? '#FFFFFF' : colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>
@@ -345,7 +351,7 @@ export default function VisaDetailScreen() {
             {/* ── Passport ──────────────────────────────────────────────── */}
             <View style={[s.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={s.sectionHeader}>
-                <Ionicons name="card-outline" size={18} color="#0A2342" />
+                <Ionicons name="card-outline" size={18} color={colors.navy} />
                 <Text style={[s.sectionHeaderText, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>
                   بيانات جواز السفر
                 </Text>
@@ -392,7 +398,7 @@ export default function VisaDetailScreen() {
             {/* ── Documents ─────────────────────────────────────────────── */}
             <View style={[s.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={s.sectionHeader}>
-                <Ionicons name="documents-outline" size={18} color="#0A2342" />
+                <Ionicons name="documents-outline" size={18} color={colors.navy} />
                 <Text style={[s.sectionHeaderText, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>
                   المستندات المطلوبة
                 </Text>
@@ -491,7 +497,7 @@ export default function VisaDetailScreen() {
               <Ionicons
                 name={form.agreedToTerms ? 'checkbox' : 'square-outline'}
                 size={24}
-                color={form.agreedToTerms ? '#0A2342' : colors.mutedForeground}
+                color={form.agreedToTerms ? colors.navy : colors.mutedForeground}
               />
               <Text style={[s.termsText, { color: colors.foreground, fontFamily: 'Cairo_400Regular' }]}>
                 أوافق على الشروط والأحكام وسياسة الخصوصية وأقر بصحة المعلومات المُدخلة
@@ -500,7 +506,7 @@ export default function VisaDetailScreen() {
 
             {/* ── Submit ────────────────────────────────────────────────── */}
             <Pressable
-              style={({ pressed }) => [s.submitBtn, { backgroundColor: '#0A2342', opacity: pressed ? 0.9 : 1 }]}
+              style={({ pressed }) => [s.submitBtn, { backgroundColor: colors.navy, opacity: pressed ? 0.9 : 1 }]}
               onPress={submit}
               disabled={createApp.isPending}
             >

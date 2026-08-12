@@ -15,6 +15,11 @@ import { isProfileComplete } from "./auth";
 import OpenAI from "openai";
 import fs from "fs/promises";
 import path from "path";
+import { ObjectStorageService } from "../lib/objectStorage";
+import { isAuthorizedForObject, findUnownedObjectPath } from "../lib/objectAccess";
+import { seedApplicationDocuments } from "./applicationDocuments";
+
+const objectStorageService = new ObjectStorageService();
 
 const router = Router();
 
@@ -240,17 +245,19 @@ async function resolveImageForOpenAI(imageUrl: string): Promise<string> {
     }
   }
 
-  // Fallback: fetch from our own API (works for GCS-backed paths)
-  const port = process.env.PORT ?? "8080";
-  const fetchUrl = imageUrl.startsWith("/api/")
-    ? `http://localhost:${port}${imageUrl}`
-    : `http://localhost:${port}/api/storage${imageUrl}`;
-
-  const resp = await fetch(fetchUrl);
-  if (!resp.ok) throw new Error(`Could not fetch image: ${resp.status}`);
-  const arrBuf = await resp.arrayBuffer();
-  const mimeType = resp.headers.get("content-type") || "image/jpeg";
-  return `data:${mimeType};base64,${Buffer.from(arrBuf).toString("base64")}`;
+  // Fallback: read directly from object storage (GCS-backed paths).
+  // NOTE: we intentionally do NOT self-fetch the /api/storage/objects route —
+  // that route now enforces authentication, and OCR runs server-side without a
+  // user token. Reading straight from GCS keeps OCR working while the public
+  // HTTP surface stays locked down.
+  const objectFile = await objectStorageService.getObjectEntityFile(imageUrl);
+  const [buf] = await objectFile.download();
+  let mimeType = "image/jpeg";
+  try {
+    const [meta] = await objectFile.getMetadata();
+    if (meta.contentType) mimeType = meta.contentType as string;
+  } catch { /* fall back to image/jpeg */ }
+  return `data:${mimeType};base64,${buf.toString("base64")}`;
 }
 
 // ── OCR endpoint ──────────────────────────────────────────────────────────
@@ -258,6 +265,13 @@ router.post("/visa-applications/ocr", requireAuth, async (req, res) => {
   try {
     const { imageUrl } = req.body;
     if (!imageUrl) return res.status(400).json({ error: "imageUrl is required" });
+
+    // Authorization: OCR reads the raw object server-side, so the caller must be
+    // allowed to access it (owner via object_uploads, or authorized visa staff).
+    // Prevents an authenticated user OCR-ing another customer's passport.
+    if (!(await isAuthorizedForObject(req.user!.sub, imageUrl))) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
 
     let imageData: string;
     try {
@@ -267,20 +281,32 @@ router.post("/visa-applications/ocr", requireAuth, async (req, res) => {
       return res.json({ success: false, error: "Could not load the passport image. Please try uploading again." });
     }
 
-    const prompt = `You are a passport OCR system. Extract the following fields from the passport image and return ONLY a JSON object with these exact keys:
-- fullName (name in Arabic/native script if available, else same as fullNameEn)
-- fullNameEn (full name in English / Latin script, e.g. "JOHN WILLIAM SMITH")
-- firstName (given name(s) in English)
-- lastName (surname/family name in English)
-- passportNumber
-- nationality (country name in English, e.g. "Yemen", "Saudi Arabia")
-- gender ("male" or "female")
-- dateOfBirth (YYYY-MM-DD format)
-- issueDate (YYYY-MM-DD format)
-- expiryDate (YYYY-MM-DD format)
-- issuingCountry (country name in English)
+    const prompt = `You are an expert passport OCR system. Read EVERY field visible on the passport information page and the two Machine Readable Zone (MRZ) lines at the bottom.
 
-If a field cannot be read or is not visible, use null. Return only valid JSON, no markdown, no code block.`;
+Return ONLY a single JSON object (no markdown, no code fences) with these exact keys:
+- givenName: the person's first/given name only, in English/Latin script (e.g. "JOHN")
+- fatherName: the second name (father's name), English, if present
+- grandName: the third name (grandfather's name), English, if present
+- surname: the family/last name (surname), English (e.g. "SMITH")
+- firstName: all given names combined (givenName + fatherName + grandName), English (e.g. "JOHN WILLIAM")
+- lastName: same as surname
+- fullNameEn: the complete name in English/Latin script, e.g. "JOHN WILLIAM SMITH"
+- fullNameAr: the complete name in Arabic/native script if the passport shows one, else null
+- fullName: fullNameAr if available, otherwise fullNameEn
+- passportNumber: the passport/document number
+- nationality: country name in English (e.g. "Yemen", "Saudi Arabia")
+- gender: "male" or "female"
+- dateOfBirth: YYYY-MM-DD
+- issueDate: YYYY-MM-DD
+- expiryDate: YYYY-MM-DD
+- issuingCountry: issuing country name in English
+- placeOfBirth: place of birth as printed, else null
+
+CRITICAL RULES:
+1. The MRZ (two lines of monospaced text at the very bottom, containing '<' filler characters) is the SOURCE OF TRUTH. Cross-check surname, given names, passport number, nationality, date of birth, sex and expiry date against the MRZ. When the printed field and the MRZ disagree, trust the MRZ.
+2. In the MRZ the format is: line 1 "P<ISSUINGCOUNTRY<SURNAME<<GIVEN<NAMES", line 2 "PASSPORTNO<NATIONALITY<YYMMDD(dob)<SEX<YYMMDD(expiry)...". Parse names by splitting on '<' (surname is before the '<<', given names after). Convert MRZ 2-digit years correctly (dob years > current 2-digit year → 1900s).
+3. NEVER guess or hallucinate. If a field is genuinely unreadable or absent, return null for it.
+4. Use ISO YYYY-MM-DD for all dates.`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
@@ -293,23 +319,58 @@ If a field cannot be read or is not visible, use null. Return only valid JSON, n
           ],
         },
       ],
-      max_tokens: 600,
+      max_tokens: 900,
+      temperature: 0,
+      response_format: { type: "json_object" },
     });
 
     const text = response.choices[0]?.message?.content ?? "{}";
     const jsonText = text.replace(/```json?\n?/g, "").replace(/```/g, "").trim();
     const data = JSON.parse(jsonText);
 
+    // Normalise: derive combined name parts when the model only returned some.
+    const nz = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+    const given = nz(data.givenName);
+    const father = nz(data.fatherName);
+    const grand = nz(data.grandName);
+    const surname = nz(data.surname) ?? nz(data.lastName);
+    const combinedGiven = [given, father, grand].filter(Boolean).join(" ") || nz(data.firstName);
+
+    const normalized = {
+      fullName: nz(data.fullName) ?? nz(data.fullNameEn),
+      fullNameEn: nz(data.fullNameEn),
+      fullNameAr: nz(data.fullNameAr),
+      givenName: given,
+      fatherName: father,
+      grandName: grand,
+      surname,
+      firstName: combinedGiven,
+      lastName: surname,
+      passportNumber: nz(data.passportNumber),
+      nationality: nz(data.nationality),
+      gender: nz(data.gender),
+      dateOfBirth: nz(data.dateOfBirth),
+      issueDate: nz(data.issueDate),
+      expiryDate: nz(data.expiryDate),
+      issuingCountry: nz(data.issuingCountry),
+      placeOfBirth: nz(data.placeOfBirth),
+    };
+
     // Only report success when a meaningful extraction actually happened —
     // at minimum the passport number plus some identity data.
-    const hasIdentity = !!(data.fullNameEn || data.fullName || (data.firstName && data.lastName));
-    if (!data.passportNumber || !hasIdentity) {
-      req.log.warn({ extractedKeys: Object.keys(data).filter(k => data[k]) }, "OCR returned insufficient data");
+    const hasIdentity = !!(normalized.fullNameEn || normalized.fullName || (normalized.firstName && normalized.lastName));
+    if (!normalized.passportNumber || !hasIdentity) {
+      req.log.warn({ extractedKeys: Object.keys(normalized).filter((k) => (normalized as Record<string, unknown>)[k]) }, "OCR returned insufficient data");
       return res.json({ success: false, error: "We couldn't read the passport. Please upload a clear image of the passport information page." });
     }
 
-    req.log.info({ passport: { ...data, passportNumber: "REDACTED" } }, "OCR success");
-    res.json({ success: true, ...data });
+    // Log only non-PII metadata — never names, DOB, nationality, or other
+    // passport contents (application logs are not a place for identity data).
+    req.log.info(
+      { extractedFieldCount: Object.values(normalized).filter(Boolean).length },
+      "OCR success",
+    );
+    res.json({ success: true, ...normalized });
   } catch (e) {
     req.log.error({ err: e }, "OCR processing failed");
     res.json({ success: false, error: "We couldn't read the passport. Please upload a clear image of the passport information page." });
@@ -323,6 +384,11 @@ router.post("/visa-applications/validate-photo", requireAuth, async (req, res) =
     if (!imageUrl) return res.status(400).json({ error: "imageUrl is required" });
 
     const ar = req.headers["x-lang"] === "ar";
+
+    // Same authorization gate as OCR — reads the raw object server-side.
+    if (!(await isAuthorizedForObject(req.user!.sub, imageUrl))) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
 
     let imageData: string;
     try {
@@ -506,6 +572,17 @@ router.post("/visa-applications", requireAuth, async (req, res) => {
     const body = req.body;
     if (!body.visaId) return res.status(400).json({ error: "visaId is required" });
 
+    // Ownership guard: any /objects/ path embedded in custom-field responses
+    // must be owned by the applicant (per object_uploads). Prevents referencing
+    // a victim's document to later pass the read-authorization check.
+    const customValues = body.customFieldResponses && typeof body.customFieldResponses === "object"
+      ? Object.values(body.customFieldResponses as Record<string, unknown>).filter((v): v is string => typeof v === "string")
+      : [];
+    const unownedCustom = await findUnownedObjectPath(userId, customValues);
+    if (unownedCustom) {
+      return res.status(403).json({ error: "You do not own the referenced document" });
+    }
+
     const [visa] = await db.select().from(visasTable)
       .where(and(eq(visasTable.id, Number(body.visaId)), isNull(visasTable.deletedAt)));
     if (!visa) return res.status(404).json({ error: "Visa not found" });
@@ -572,6 +649,23 @@ router.post("/visa-applications", requireAuth, async (req, res) => {
     };
 
     const [row] = await db.insert(visaApplicationSubmissionsTable).values(insertData as never).returning();
+
+    // Auto-provision document slots from visa config + standard profile docs.
+    // Never blocks the submission response if it fails.
+    try {
+      await seedApplicationDocuments({
+        id: row.id,
+        userId: row.userId,
+        visaId: row.visaId,
+        passportImageUrl: row.passportImageUrl,
+        personalPhotoUrl: row.personalPhotoUrl,
+        residencyImageUrl: row.residencyImageUrl,
+        residencyBackImageUrl: row.residencyBackImageUrl,
+        visaImageUrl: row.visaImageUrl,
+      });
+    } catch (seedErr) {
+      req.log.error({ err: seedErr }, "Failed to seed application documents");
+    }
 
     // Send notification
     await db.insert(notificationsTable).values({

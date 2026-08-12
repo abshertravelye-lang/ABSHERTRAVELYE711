@@ -1,7 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,84 +7,230 @@ import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
-import { getImageUrl } from '@/hooks/useImageUrl';
+import { useLanguage } from '@/context/LanguageContext';
+import ConfirmDialog from '@/components/ConfirmDialog';
+import ProfileHeader from '@/components/profile/ProfileHeader';
+import PassportSummary from '@/components/profile/PassportSummary';
+import DocumentList from '@/components/profile/DocumentList';
+import DownloadedVisas from '@/components/profile/DownloadedVisas';
+import type { SafeUser } from '@workspace/api-client-react';
 
-type ThemeMode = 'light' | 'dark' | 'system';
-
-const THEME_OPTIONS: { value: ThemeMode; label: string; icon: keyof typeof Ionicons.glyphMap; desc: string }[] = [
-  { value: 'light', label: 'النهاري', icon: 'sunny-outline', desc: 'أبيض ونقي' },
-  { value: 'dark',  label: 'الليلي',  icon: 'moon-outline',  desc: 'داكن ومريح' },
-  { value: 'system',label: 'تلقائي',  icon: 'phone-portrait-outline', desc: 'حسب الجهاز' },
+const COMPLETION_FIELDS: (keyof SafeUser)[] = [
+  'firstName', 'lastName', 'phone', 'nationality', 'dateOfBirth',
+  'passportNumber', 'passportExpiryDate', 'profilePhotoUrl', 'passportImageUrl',
 ];
 
-// ── ThemeSection component ─────────────────────────────────────────────────
-function ThemeSection({
-  colors,
-  mode,
-  setMode,
-}: {
-  colors: ReturnType<typeof import('@/hooks/useColors').useColors>;
-  mode: string;
-  setMode: (m: 'light' | 'dark' | 'system') => void;
-}) {
-  return (
-    <View style={[themeStyles.card, { backgroundColor: colors.card, shadowColor: colors.primary, marginHorizontal: 16, marginBottom: 12 }]}>
-      {/* Header */}
-      <View style={themeStyles.header}>
-        <View style={[themeStyles.headerIcon, { backgroundColor: '#FBF6E4' }]}>
-          <Ionicons name="contrast-outline" size={22} color="#D4AF37" />
+function getCompletion(user: SafeUser): number {
+  const filled = COMPLETION_FIELDS.filter((k) => !!user[k]).length;
+  return Math.round((filled / COMPLETION_FIELDS.length) * 100);
+}
+
+// ── Grouped settings list types ────────────────────────────────────────────
+type SettingRow = {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  color: string;
+  value?: string;
+  route?: string;
+  onPress?: () => void;
+  destructive?: boolean;
+};
+
+export default function AccountScreen() {
+  const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const topInset = Platform.OS === 'web' ? 67 : insets.top;
+  const bottomInset = Platform.OS === 'web' ? 34 : 0;
+  
+  const { user, isLoading, logout } = useAuth();
+  const { t } = useLanguage();
+  const [logoutVisible, setLogoutVisible] = useState(false);
+
+  const handleLogout = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setLogoutVisible(true);
+  };
+
+  const confirmLogout = async () => {
+    setLogoutVisible(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    await logout();
+    router.replace('/welcome');
+  };
+
+  if (isLoading) return null;
+
+  // ── Guest view ───────────────────────────────────────────────────────────
+  if (!user) {
+    return (
+      <ScrollView
+        style={[styles.container, { backgroundColor: colors.background }]}
+        contentContainerStyle={{ paddingBottom: bottomInset + 90 }}
+      >
+        <View style={[styles.guestHero, { paddingTop: topInset + 40, backgroundColor: colors.card }]}>
+          <View style={[styles.avatarPlaceholder, { backgroundColor: colors.goldTint, borderColor: colors.accent }]}>
+            <Ionicons name="person" size={52} color={colors.accent} />
+          </View>
+          <Text style={[styles.guestTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>{t('profile.guestWelcome') as string}</Text>
+          <Text style={[styles.guestSub, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
+            {t('profile.guestSubtitle') as string}
+          </Text>
         </View>
-        <Text style={[themeStyles.headerTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>
-          المظهر
-        </Text>
+
+        <View style={styles.authButtons}>
+          <Pressable
+            style={({ pressed }) => [styles.loginBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.9 : 1 }]}
+            onPress={() => router.push('/auth/login')}
+          >
+            <Text style={[styles.loginBtnText, { color: colors.primaryForeground, fontFamily: 'Cairo_700Bold' }]}>{t('welcome.login') as string}</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.registerBtn, { borderColor: colors.primary, opacity: pressed ? 0.9 : 1 }]}
+            onPress={() => router.push('/auth/register')}
+          >
+            <Text style={[styles.registerBtnText, { color: colors.primary, fontFamily: 'Cairo_600SemiBold' }]}>{t('welcome.register') as string}</Text>
+          </Pressable>
+        </View>
+
+        <SettingsGroup
+          colors={colors}
+          title={(t('settings.aboutApp') as string) || "عن التطبيق"}
+          rows={[
+            { icon: 'shield-checkmark-outline', label: (t('legal.terms.title') as string) || 'الشروط والأحكام', color: colors.primary, route: '/terms' },
+            { icon: 'lock-closed-outline', label: (t('legal.privacy.title') as string) || 'سياسة الخصوصية', color: colors.secondary, route: '/privacy' },
+          ]}
+        />
+      </ScrollView>
+    );
+  }
+
+  // ── Logged-in view ─────────────────────────────────────────────────────────
+  const completion = getCompletion(user);
+
+  return (
+    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={{ paddingBottom: bottomInset + 90 }}>
+      <ProfileHeader 
+        user={user} 
+        completion={completion} 
+        onEditPress={() => router.push('/profile-edit' as never)} 
+        topInset={topInset} 
+      />
+
+      <PassportSummary user={user} onEditPress={() => router.push('/profile-edit' as never)} />
+
+      <DocumentList user={user} onUploadPress={() => router.push('/profile-edit' as never)} />
+      
+      <DownloadedVisas />
+
+      <View style={styles.shortcutsRow}>
+        <Shortcut colors={colors} icon="calendar-outline" label={(t('nav.bookings') as string) || "حجوزاتي"} onPress={() => router.push('/(tabs)/bookings' as never)} />
+        <Shortcut colors={colors} icon="wallet-outline" label={(t('payment.wallet') as string) || "المحفظة"} onPress={() => router.push('/wallet' as never)} />
       </View>
 
-      {/* Options row */}
-      <View style={themeStyles.optionsRow}>
-        {THEME_OPTIONS.map((opt) => {
-          const active = mode === opt.value;
+      <SettingsGroup
+        colors={colors}
+        title={(t('settings.advancedSettings') as string) || "الإعدادات المتقدمة"}
+        rows={[
+          { icon: 'settings-outline', label: (t('settings.generalSettings') as string) || 'الإعدادات العامة', color: '#64748B', route: '/settings' },
+          { icon: 'notifications-outline', label: (t('settings.notifications') as string) || 'الإشعارات', color: colors.secondary, route: '/notifications' },
+          { icon: 'person-circle-outline', label: (t('profile.edit') as string) || 'تعديل الملف الشخصي', color: colors.accent, route: '/profile-edit' },
+        ]}
+      />
+
+      <SettingsGroup
+        colors={colors}
+        title={(t('settings.supportInfo') as string) || "الدعم والمعلومات"}
+        rows={[
+          { icon: 'help-buoy-outline', label: (t('support.contactUs') as string) || 'الدعم / تواصل معنا', color: colors.success, onPress: () => Alert.alert((t('support.contactUs') as string) || 'تواصل معنا', (t('settings.supportAvailable') as string) || 'فريق الدعم متاح لمساعدتك عبر قنوات التواصل داخل التطبيق.') },
+          { icon: 'shield-checkmark-outline', label: (t('legal.terms.title') as string) || 'الشروط والأحكام', color: colors.primary, route: '/terms' },
+          { icon: 'lock-closed-outline', label: (t('legal.privacy.title') as string) || 'سياسة الخصوصية', color: colors.secondary, route: '/privacy' },
+        ]}
+      />
+
+      <Pressable
+        style={({ pressed }) => [styles.logoutBtn, { borderColor: colors.destructive, opacity: pressed ? 0.8 : 1 }]}
+        onPress={handleLogout}
+      >
+        <Ionicons name="log-out-outline" size={22} color={colors.destructive} />
+        <Text style={[styles.logoutText, { color: colors.destructive, fontFamily: 'Cairo_600SemiBold' }]}>{(t('profile.logout') as string) || "تسجيل الخروج"}</Text>
+      </Pressable>
+
+      <Text style={[styles.version, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{(t('settings.version') as string) || "الإصدار"} 1.0.0</Text>
+
+      <ConfirmDialog
+        visible={logoutVisible}
+        icon="log-out-outline"
+        confirmStyle="destructive"
+        title={(t('profile.logoutConfirmTitle') as string) || "هل تريد تسجيل الخروج؟"}
+        message={(t('profile.logoutConfirmBody') as string) || "هل أنت متأكد أنك تريد تسجيل الخروج من حسابك؟"}
+        cancelLabel={(t('common.cancel') as string) || "إلغاء"}
+        confirmLabel={(t('profile.logout') as string) || "تسجيل الخروج"}
+        onCancel={() => setLogoutVisible(false)}
+        onConfirm={confirmLogout}
+      />
+    </ScrollView>
+  );
+}
+
+// ── Sub-components ─────────────────────────────────────────────────────────
+
+function Shortcut({
+  colors, icon, label, onPress,
+}: {
+  colors: ReturnType<typeof useColors>;
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.shortcut, { backgroundColor: colors.card, shadowColor: colors.primary, opacity: pressed ? 0.85 : 1 }]}
+      onPress={onPress}
+    >
+      <View style={[styles.shortcutIcon, { backgroundColor: colors.goldTint }]}>
+        <Ionicons name={icon} size={22} color={colors.accent} />
+      </View>
+      <Text style={[styles.shortcutLabel, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function SettingsGroup({
+  colors, title, rows,
+}: {
+  colors: ReturnType<typeof useColors>;
+  title: string;
+  rows: SettingRow[];
+}) {
+  return (
+    <View style={styles.group}>
+      <Text style={[styles.groupTitle, { color: colors.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>{title}</Text>
+      <View style={[styles.groupCard, { backgroundColor: colors.card, shadowColor: colors.primary, borderColor: colors.border }]}>
+        {rows.map((row, i) => {
+          const last = i === rows.length - 1;
           return (
             <Pressable
-              key={opt.value}
+              key={row.label}
               style={({ pressed }) => [
-                themeStyles.option,
-                {
-                  backgroundColor: active ? '#0A2342' : colors.muted,
-                  borderColor: active ? '#D4AF37' : colors.border,
-                  opacity: pressed ? 0.85 : 1,
-                },
+                styles.row,
+                { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1 },
+                last && { borderBottomWidth: 0 },
               ]}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                setMode(opt.value);
+                if (row.onPress) row.onPress();
+                else if (row.route) router.push(row.route as never);
               }}
             >
-              <Ionicons
-                name={opt.icon}
-                size={24}
-                color={active ? '#D4AF37' : colors.mutedForeground}
-              />
-              <Text
-                style={[
-                  themeStyles.optionLabel,
-                  { color: active ? '#FFFFFF' : colors.foreground, fontFamily: 'Cairo_700Bold' },
-                ]}
-              >
-                {opt.label}
-              </Text>
-              <Text
-                style={[
-                  themeStyles.optionDesc,
-                  { color: active ? 'rgba(255,255,255,0.65)' : colors.mutedForeground, fontFamily: 'Cairo_400Regular' },
-                ]}
-              >
-                {opt.desc}
-              </Text>
-              {active && (
-                <View style={themeStyles.activeDot}>
-                  <Ionicons name="checkmark-circle" size={18} color="#D4AF37" />
-                </View>
+              {row.value ? (
+                <Text style={[styles.rowValue, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{row.value}</Text>
+              ) : (
+                <Ionicons name="chevron-back" size={18} color={colors.mutedForeground} />
               )}
+              <Text style={[styles.rowLabel, { color: colors.foreground, fontFamily: 'Cairo_400Regular' }]}>{row.label}</Text>
+              <View style={[styles.rowIcon, { backgroundColor: `${row.color}22` }]}>
+                <Ionicons name={row.icon} size={20} color={row.color} />
+              </View>
             </Pressable>
           );
         })}
@@ -95,234 +239,37 @@ function ThemeSection({
   );
 }
 
-const themeStyles = StyleSheet.create({
-  card: {
-    borderRadius: 18,
-    padding: 18,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 16,
-    justifyContent: 'flex-end',
-  },
-  headerIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: { fontSize: 17 },
-  optionsRow: { flexDirection: 'row', gap: 10 },
-  option: {
-    flex: 1,
-    borderRadius: 16,
-    borderWidth: 2,
-    padding: 14,
-    alignItems: 'center',
-    gap: 8,
-    position: 'relative',
-  },
-  optionLabel: { fontSize: 14 },
-  optionDesc: { fontSize: 11, textAlign: 'center' },
-  activeDot: { position: 'absolute', top: 8, left: 8 },
-});
-// ─────────────────────────────────────────────────────────────────────────────
-
-const MENU_ITEMS = [
-  { icon: 'person-circle-outline' as const, label: 'الملف الشخصي', route: '/profile-edit', color: '#D4AF37' },
-  { icon: 'calendar-outline' as const, label: 'حجوزاتي', route: '/(tabs)/bookings', color: '#0A2342' },
-  { icon: 'document-text-outline' as const, label: 'طلبات التأشيرة', route: null, color: '#D4AF37' },
-  { icon: 'wallet-outline' as const, label: 'المحفظة', route: '/wallet', color: '#7C3AED' },
-  { icon: 'notifications-outline' as const, label: 'الإشعارات', route: '/notifications', color: '#38BDF8' },
-  { icon: 'settings-outline' as const, label: 'الإعدادات', route: '/settings', color: '#64748B' },
-  { icon: 'help-circle-outline' as const, label: 'تواصل معنا', route: null, color: '#16A34A' },
-  { icon: 'information-circle-outline' as const, label: 'عن التطبيق', route: null, color: '#0891B2' },
-];
-
-export default function AccountScreen() {
-  const colors = useColors();
-  const insets = useSafeAreaInsets();
-  const topInset = Platform.OS === 'web' ? 67 : insets.top;
-  const bottomInset = Platform.OS === 'web' ? 34 : 0;
-  const { user, isLoading, logout } = useAuth();
-  const { mode, setMode } = useTheme();
-
-  const handleLogout = () => {
-    Alert.alert('تسجيل الخروج', 'هل تريد تسجيل الخروج؟', [
-      { text: 'إلغاء', style: 'cancel' },
-      {
-        text: 'تسجيل الخروج',
-        style: 'destructive',
-        onPress: () => {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          logout();
-        },
-      },
-    ]);
-  };
-
-  if (isLoading) return null;
-
-  // Guest view
-  if (!user) {
-    return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <LinearGradient colors={['#071525', '#0A2342', '#1E3A5F']} style={[styles.guestHero, { paddingTop: topInset + 20 }]}>
-          <View style={[styles.avatarPlaceholder, { backgroundColor: 'rgba(212,175,55,0.15)', borderColor: '#D4AF37' }]}>
-            <Ionicons name="person" size={52} color="#D4AF37" />
-          </View>
-          <Text style={[styles.guestTitle, { fontFamily: 'Cairo_700Bold' }]}>مرحباً بك</Text>
-          <Text style={[styles.guestSub, { fontFamily: 'Cairo_400Regular' }]}>سجّل دخولك للوصول لحسابك وحجوزاتك</Text>
-        </LinearGradient>
-        <View style={styles.authButtons}>
-          <Pressable
-            style={({ pressed }) => [styles.loginBtn, { backgroundColor: '#D4AF37', opacity: pressed ? 0.9 : 1 }]}
-            onPress={() => router.push('/auth/login')}
-          >
-            <Text style={[styles.loginBtnText, { fontFamily: 'Cairo_700Bold' }]}>تسجيل الدخول</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.registerBtn, { borderColor: '#D4AF37', opacity: pressed ? 0.9 : 1 }]}
-            onPress={() => router.push('/auth/register')}
-          >
-            <Text style={[styles.registerBtnText, { color: '#D4AF37', fontFamily: 'Cairo_600SemiBold' }]}>إنشاء حساب جديد</Text>
-          </Pressable>
-        </View>
-        <View style={styles.guestMenu}>
-          {MENU_ITEMS.slice(-2).map((item) => (
-            <View key={item.label} style={[styles.menuItem, { borderBottomColor: colors.border }]}>
-              <Ionicons name="chevron-back" size={18} color={colors.mutedForeground} />
-              <Text style={[styles.menuLabel, { color: colors.foreground, fontFamily: 'Cairo_400Regular' }]}>{item.label}</Text>
-              <View style={[styles.menuIcon, { backgroundColor: `${item.color}18` }]}>
-                <Ionicons name={item.icon} size={22} color={item.color} />
-              </View>
-            </View>
-          ))}
-        </View>
-        {/* Theme even for guests */}
-        <ThemeSection colors={colors} mode={mode} setMode={setMode} />
-      </View>
-    );
-  }
-
-  const avatarUri = getImageUrl(user.profilePhotoUrl);
-  const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email || user.phone || 'المستخدم';
-
-  return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={{ paddingBottom: bottomInset + 90 }}>
-      {/* Profile Header */}
-      <LinearGradient colors={['#071525', '#0A2342', '#1E3A5F']} style={[styles.profileHero, { paddingTop: topInset + 18 }]}>
-        <View style={styles.profileRow}>
-          <View>
-            <Text style={[styles.profileName, { fontFamily: 'Cairo_700Bold' }]}>{fullName}</Text>
-            <Text style={[styles.profileEmail, { fontFamily: 'Cairo_400Regular' }]}>{user.email || user.phone || ''}</Text>
-            <View style={styles.brandBadge}>
-              <Text style={[styles.brandBadgeText, { fontFamily: 'Cairo_600SemiBold' }]}>ABSHER TRAVEL</Text>
-            </View>
-          </View>
-          {avatarUri ? (
-            <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" />
-          ) : (
-            <View style={[styles.avatarFallback, { backgroundColor: '#D4AF37' }]}>
-              <Text style={[styles.avatarLetter, { fontFamily: 'Cairo_700Bold' }]}>
-                {(user.firstName || user.email || 'م')[0]}
-              </Text>
-            </View>
-          )}
-        </View>
-      </LinearGradient>
-
-      {/* Profile completion prompt */}
-      {!user.isProfileComplete && (
-        <Pressable
-          style={({ pressed }) => [styles.completeBanner, { opacity: pressed ? 0.9 : 1 }]}
-          onPress={() => router.push('/profile-edit' as never)}
-        >
-          <Ionicons name="chevron-back" size={18} color="#92400E" />
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.completeBannerTitle, { fontFamily: 'Cairo_700Bold' }]}>أكمل ملفك الشخصي</Text>
-            <Text style={[styles.completeBannerSub, { fontFamily: 'Cairo_400Regular' }]}>
-              ارفع صورتك وجواز سفرك للتمكن من التقديم على التأشيرات
-            </Text>
-          </View>
-          <View style={styles.completeBannerIcon}>
-            <Ionicons name="alert-circle" size={24} color="#D97706" />
-          </View>
-        </Pressable>
-      )}
-
-      {/* Menu */}
-      <View style={[styles.menuCard, { backgroundColor: colors.card, shadowColor: colors.primary }]}>
-        {MENU_ITEMS.map((item, i) => (
-          <Pressable
-            key={item.label}
-            style={({ pressed }) => [
-              styles.menuItem,
-              { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1 },
-              i === MENU_ITEMS.length - 1 && { borderBottomWidth: 0 },
-            ]}
-            onPress={() => item.route && router.push(item.route as any)}
-          >
-            <Ionicons name="chevron-back" size={18} color={colors.mutedForeground} />
-            <Text style={[styles.menuLabel, { color: colors.foreground, fontFamily: 'Cairo_400Regular' }]}>{item.label}</Text>
-            <View style={[styles.menuIcon, { backgroundColor: `${item.color}18` }]}>
-              <Ionicons name={item.icon} size={22} color={item.color} />
-            </View>
-          </Pressable>
-        ))}
-      </View>
-
-      {/* Theme Section */}
-      <ThemeSection colors={colors} mode={mode} setMode={setMode} />
-
-      {/* Logout */}
-      <Pressable
-        style={({ pressed }) => [styles.logoutBtn, { borderColor: colors.destructive, opacity: pressed ? 0.8 : 1 }]}
-        onPress={handleLogout}
-      >
-        <Ionicons name="log-out-outline" size={22} color={colors.destructive} />
-        <Text style={[styles.logoutText, { color: colors.destructive, fontFamily: 'Cairo_600SemiBold' }]}>تسجيل الخروج</Text>
-      </Pressable>
-    </ScrollView>
-  );
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  guestHero: { paddingHorizontal: 20, paddingBottom: 36, alignItems: 'center', gap: 12 },
+
+  // Guest
+  guestHero: { paddingHorizontal: 20, paddingBottom: 36, alignItems: 'center', gap: 12, borderBottomLeftRadius: 32, borderBottomRightRadius: 32 },
   avatarPlaceholder: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center', marginBottom: 10, borderWidth: 2 },
-  guestTitle: { fontSize: 26, color: '#D4AF37' },
-  guestSub: { fontSize: 15, color: 'rgba(255,255,255,0.75)', textAlign: 'center' },
-  authButtons: { padding: 20, gap: 14 },
-  loginBtn: { borderRadius: 16, paddingVertical: 16, alignItems: 'center', shadowColor: '#D4AF37', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
-  loginBtnText: { color: '#0A2342', fontSize: 17 },
+  guestTitle: { fontSize: 26 },
+  guestSub: { fontSize: 15, textAlign: 'center', lineHeight: 22 },
+  authButtons: { padding: 20, gap: 14, marginTop: 10 },
+  loginBtn: { borderRadius: 16, paddingVertical: 16, alignItems: 'center', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
+  loginBtnText: { fontSize: 17 },
   registerBtn: { borderRadius: 16, paddingVertical: 16, alignItems: 'center', borderWidth: 2 },
   registerBtnText: { fontSize: 16 },
-  guestMenu: { paddingHorizontal: 16 },
-  profileHero: { paddingHorizontal: 20, paddingBottom: 28 },
-  profileRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  profileName: { fontSize: 22, color: '#FFFFFF' },
-  profileEmail: { fontSize: 14, color: 'rgba(255,255,255,0.7)', marginTop: 5 },
-  brandBadge: { backgroundColor: 'rgba(212,175,55,0.2)', borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, marginTop: 8, alignSelf: 'flex-start' },
-  brandBadgeText: { fontSize: 10, color: '#D4AF37', letterSpacing: 0.5 },
-  avatar: { width: 70, height: 70, borderRadius: 35, borderWidth: 3, borderColor: '#D4AF37' },
-  avatarFallback: { width: 70, height: 70, borderRadius: 35, alignItems: 'center', justifyContent: 'center' },
-  avatarLetter: { fontSize: 28, color: '#0A2342' },
-  menuCard: { margin: 16, borderRadius: 18, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 10, elevation: 4 },
-  menuItem: { flexDirection: 'row', alignItems: 'center', padding: 18, borderBottomWidth: 1, gap: 14 },
-  menuIcon: { width: 44, height: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  menuLabel: { flex: 1, fontSize: 16, textAlign: 'right' },
-  completeBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginTop: 16, backgroundColor: '#FFFBEB', borderColor: '#FDE68A', borderWidth: 1.5, borderRadius: 16, padding: 14 },
-  completeBannerTitle: { fontSize: 14, color: '#92400E', textAlign: 'right' },
-  completeBannerSub: { fontSize: 11.5, color: '#B45309', textAlign: 'right', marginTop: 2 },
-  completeBannerIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center' },
-  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginHorizontal: 16, marginTop: 4, borderRadius: 16, borderWidth: 2, paddingVertical: 16, gap: 10 },
+
+  // Shortcuts
+  shortcutsRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 20, marginTop: 24 },
+  shortcut: { flex: 1, borderRadius: 18, paddingVertical: 20, alignItems: 'center', gap: 10, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
+  shortcutIcon: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  shortcutLabel: { fontSize: 14 },
+
+  // Groups
+  group: { marginTop: 28 },
+  groupTitle: { fontSize: 13, paddingHorizontal: 24, marginBottom: 8, textAlign: 'right' },
+  groupCard: { marginHorizontal: 20, borderRadius: 18, borderWidth: 1, overflow: 'hidden', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
+  row: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: StyleSheet.hairlineWidth, gap: 14 },
+  rowIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  rowLabel: { flex: 1, fontSize: 15, textAlign: 'right' },
+  rowValue: { fontSize: 14 },
+
+  // Logout
+  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginHorizontal: 20, marginTop: 32, borderRadius: 16, borderWidth: 2, paddingVertical: 16, gap: 10 },
   logoutText: { fontSize: 16 },
+  version: { textAlign: 'center', fontSize: 12, marginTop: 24, marginBottom: 12 },
 });

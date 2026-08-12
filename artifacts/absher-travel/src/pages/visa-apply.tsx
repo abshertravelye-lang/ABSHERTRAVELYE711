@@ -22,16 +22,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-
-const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
-
-function getDisplayUrl(url?: string | null) {
-  if (!url) return "";
-  // Storage object paths are served by the API at /api/storage/objects/*
-  if (url.startsWith("/objects/")) return `${BASE_URL}/api/storage${url}`;
-  if (url.startsWith("/api")) return `${BASE_URL}${url}`;
-  return url;
-}
+import { AuthImage } from "@/components/auth-image";
+import { UnsavedChangesGuard } from "@/components/unsaved-changes-guard";
 
 /** Profile completeness — mirrors the backend `isProfileComplete()` */
 function checkProfileComplete(user: any): { complete: boolean; missing: string[] } {
@@ -85,6 +77,12 @@ export default function VisaApply() {
 
   const user = currentUser || authUser;
   const profileCheck = user ? checkProfileComplete(user) : { complete: false, missing: [] };
+
+  // Form is "dirty" once the user has entered any custom response or agreed to
+  // terms, and has not yet submitted. Used by the unsaved-data guard.
+  const isDirty =
+    !submitted &&
+    (agreed || Object.values(customResponses).some((v) => v && v.trim() !== ""));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -201,6 +199,7 @@ export default function VisaApply() {
   // ── Main apply form ───────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-slate-50 pb-24" dir={ar ? "rtl" : "ltr"}>
+      <UnsavedChangesGuard enabled={isDirty} ar={ar} />
       {/* Header */}
       <div className="bg-[#0A2342] pt-20 pb-20 relative">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_right,rgba(212,175,55,0.1)_0%,transparent_50%)]" />
@@ -243,8 +242,8 @@ export default function VisaApply() {
             <div className="p-8">
               {user?.profilePhotoUrl && (
                 <div className="flex items-center gap-4 mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                  <img
-                    src={getDisplayUrl(user.profilePhotoUrl)}
+                  <AuthImage
+                    src={user.profilePhotoUrl}
                     className="w-16 h-16 rounded-xl object-cover border-2 border-white shadow-sm"
                   />
                   <div>

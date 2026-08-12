@@ -405,6 +405,20 @@ export interface OcrResult {
   /** @nullable */
   fullNameEn?: string | null;
   /** @nullable */
+  fullNameAr?: string | null;
+  /** @nullable */
+  firstName?: string | null;
+  /** @nullable */
+  lastName?: string | null;
+  /** @nullable */
+  givenName?: string | null;
+  /** @nullable */
+  fatherName?: string | null;
+  /** @nullable */
+  grandName?: string | null;
+  /** @nullable */
+  surname?: string | null;
+  /** @nullable */
   passportNumber?: string | null;
   /** @nullable */
   nationality?: string | null;
@@ -418,6 +432,8 @@ export interface OcrResult {
   expiryDate?: string | null;
   /** @nullable */
   issuingCountry?: string | null;
+  /** @nullable */
+  placeOfBirth?: string | null;
   /** @nullable */
   error?: string | null;
 }
@@ -824,6 +840,218 @@ export interface VisaApplicationStatusUpdate {
   status?: VisaApplicationStatusUpdateStatus;
   adminNotes?: string;
   issuedVisaUrl?: string;
+}
+
+export type ApplicationDocumentVersionStatus = typeof ApplicationDocumentVersionStatus[keyof typeof ApplicationDocumentVersionStatus];
+
+
+export const ApplicationDocumentVersionStatus = {
+  uploaded: 'uploaded',
+  approved: 'approved',
+  rejected: 'rejected',
+} as const;
+
+export interface ApplicationDocumentVersion {
+  id: number;
+  documentId: number;
+  storagePath: string;
+  /** @nullable */
+  originalFilename?: string | null;
+  /** @nullable */
+  mimeType?: string | null;
+  /** @nullable */
+  size?: number | null;
+  /** @nullable */
+  uploadedBy?: string | null;
+  uploadedAt: string;
+  status: ApplicationDocumentVersionStatus;
+  /** @nullable */
+  rejectionReason?: string | null;
+  versionNumber: number;
+}
+
+export type ApplicationDocumentAllowedFileType = typeof ApplicationDocumentAllowedFileType[keyof typeof ApplicationDocumentAllowedFileType];
+
+
+export const ApplicationDocumentAllowedFileType = {
+  image: 'image',
+  pdf: 'pdf',
+  image_pdf: 'image_pdf',
+} as const;
+
+export type ApplicationDocumentStatus = typeof ApplicationDocumentStatus[keyof typeof ApplicationDocumentStatus];
+
+
+export const ApplicationDocumentStatus = {
+  required: 'required',
+  waiting_customer: 'waiting_customer',
+  uploaded: 'uploaded',
+  under_review: 'under_review',
+  approved: 'approved',
+  rejected: 'rejected',
+  reupload_required: 'reupload_required',
+} as const;
+
+export interface ApplicationDocument {
+  id: number;
+  applicationId: number;
+  /** @nullable */
+  userId?: string | null;
+  /** @nullable */
+  visaId?: number | null;
+  documentKey: string;
+  nameAr: string;
+  nameEn: string;
+  /** @nullable */
+  description?: string | null;
+  required: boolean;
+  allowedFileType: ApplicationDocumentAllowedFileType;
+  /** @nullable */
+  maxFileSizeMb?: number | null;
+  status: ApplicationDocumentStatus;
+  /** @nullable */
+  requestedBy?: string | null;
+  /** @nullable */
+  requestDescription?: string | null;
+  /** @nullable */
+  rejectionReason?: string | null;
+  /** @nullable */
+  currentVersionId?: number | null;
+  /** @nullable */
+  reviewedBy?: string | null;
+  /** @nullable */
+  reviewedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  currentVersion?: ApplicationDocumentVersion | null;
+  versions: ApplicationDocumentVersion[];
+}
+
+export type RequestApplicationDocumentInputFileType = typeof RequestApplicationDocumentInputFileType[keyof typeof RequestApplicationDocumentInputFileType];
+
+
+export const RequestApplicationDocumentInputFileType = {
+  image: 'image',
+  pdf: 'pdf',
+  image_pdf: 'image_pdf',
+} as const;
+
+export interface RequestApplicationDocumentInput {
+  /** Optional stable slug; derived from the name if omitted. */
+  documentKey?: string;
+  nameAr: string;
+  nameEn: string;
+  description?: string;
+  fileType?: RequestApplicationDocumentInputFileType;
+  required?: boolean;
+  maxFileSizeMb?: number;
+}
+
+export interface UploadApplicationDocumentInput {
+  /** Object storage path returned by POST /storage/uploads (must be owned by the caller). */
+  storagePath: string;
+}
+
+export interface RejectApplicationDocumentInput {
+  rejectionReason: string;
+}
+
+export type VisaRequiredDocumentAllowedFileType = typeof VisaRequiredDocumentAllowedFileType[keyof typeof VisaRequiredDocumentAllowedFileType];
+
+
+export const VisaRequiredDocumentAllowedFileType = {
+  image: 'image',
+  pdf: 'pdf',
+  image_pdf: 'image_pdf',
+} as const;
+
+export type VisaRequiredDocumentRequiredAt = typeof VisaRequiredDocumentRequiredAt[keyof typeof VisaRequiredDocumentRequiredAt];
+
+
+export const VisaRequiredDocumentRequiredAt = {
+  application_start: 'application_start',
+  before_submission: 'before_submission',
+  during_processing: 'during_processing',
+  optional: 'optional',
+} as const;
+
+export interface VisaRequiredDocument {
+  id: number;
+  visaId: number;
+  documentKey: string;
+  nameAr: string;
+  nameEn: string;
+  /** @nullable */
+  description?: string | null;
+  required: boolean;
+  allowedFileType: VisaRequiredDocumentAllowedFileType;
+  /** @nullable */
+  maxFileSizeMb?: number | null;
+  requiredAt: VisaRequiredDocumentRequiredAt;
+  sortOrder: number;
+  createdAt: string;
+}
+
+export type VisaRequiredDocumentInputAllowedFileType = typeof VisaRequiredDocumentInputAllowedFileType[keyof typeof VisaRequiredDocumentInputAllowedFileType];
+
+
+export const VisaRequiredDocumentInputAllowedFileType = {
+  image: 'image',
+  pdf: 'pdf',
+  image_pdf: 'image_pdf',
+} as const;
+
+export type VisaRequiredDocumentInputRequiredAt = typeof VisaRequiredDocumentInputRequiredAt[keyof typeof VisaRequiredDocumentInputRequiredAt];
+
+
+export const VisaRequiredDocumentInputRequiredAt = {
+  application_start: 'application_start',
+  before_submission: 'before_submission',
+  during_processing: 'during_processing',
+  optional: 'optional',
+} as const;
+
+export interface VisaRequiredDocumentInput {
+  documentKey?: string;
+  nameAr: string;
+  nameEn: string;
+  description?: string;
+  required?: boolean;
+  allowedFileType?: VisaRequiredDocumentInputAllowedFileType;
+  maxFileSizeMb?: number;
+  requiredAt?: VisaRequiredDocumentInputRequiredAt;
+  sortOrder?: number;
+}
+
+export type VisaRequiredDocumentUpdateAllowedFileType = typeof VisaRequiredDocumentUpdateAllowedFileType[keyof typeof VisaRequiredDocumentUpdateAllowedFileType];
+
+
+export const VisaRequiredDocumentUpdateAllowedFileType = {
+  image: 'image',
+  pdf: 'pdf',
+  image_pdf: 'image_pdf',
+} as const;
+
+export type VisaRequiredDocumentUpdateRequiredAt = typeof VisaRequiredDocumentUpdateRequiredAt[keyof typeof VisaRequiredDocumentUpdateRequiredAt];
+
+
+export const VisaRequiredDocumentUpdateRequiredAt = {
+  application_start: 'application_start',
+  before_submission: 'before_submission',
+  during_processing: 'during_processing',
+  optional: 'optional',
+} as const;
+
+export interface VisaRequiredDocumentUpdate {
+  documentKey?: string;
+  nameAr?: string;
+  nameEn?: string;
+  description?: string;
+  required?: boolean;
+  allowedFileType?: VisaRequiredDocumentUpdateAllowedFileType;
+  maxFileSizeMb?: number;
+  requiredAt?: VisaRequiredDocumentUpdateRequiredAt;
+  sortOrder?: number;
 }
 
 export type BookingType = typeof BookingType[keyof typeof BookingType];

@@ -1126,6 +1126,13 @@ export const OcrPassportResponse = zod.object({
   "success": zod.boolean(),
   "fullName": zod.string().nullish(),
   "fullNameEn": zod.string().nullish(),
+  "fullNameAr": zod.string().nullish(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "givenName": zod.string().nullish(),
+  "fatherName": zod.string().nullish(),
+  "grandName": zod.string().nullish(),
+  "surname": zod.string().nullish(),
   "passportNumber": zod.string().nullish(),
   "nationality": zod.string().nullish(),
   "gender": zod.string().nullish(),
@@ -1133,6 +1140,7 @@ export const OcrPassportResponse = zod.object({
   "issueDate": zod.string().nullish(),
   "expiryDate": zod.string().nullish(),
   "issuingCountry": zod.string().nullish(),
+  "placeOfBirth": zod.string().nullish(),
   "error": zod.string().nullish()
 })
 
@@ -1343,6 +1351,420 @@ export const UpdateVisaApplicationResponse = zod.object({
   "createdAt": zod.string(),
   "updatedAt": zod.string()
 })
+
+
+/**
+ * @summary List documents (with version history) for an application
+ */
+export const ListApplicationDocumentsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListApplicationDocumentsResponseItem = zod.object({
+  "id": zod.number(),
+  "applicationId": zod.number(),
+  "userId": zod.string().nullish(),
+  "visaId": zod.number().nullish(),
+  "documentKey": zod.string(),
+  "nameAr": zod.string(),
+  "nameEn": zod.string(),
+  "description": zod.string().nullish(),
+  "required": zod.boolean(),
+  "allowedFileType": zod.enum(['image', 'pdf', 'image_pdf']),
+  "maxFileSizeMb": zod.number().nullish(),
+  "status": zod.enum(['required', 'waiting_customer', 'uploaded', 'under_review', 'approved', 'rejected', 'reupload_required']),
+  "requestedBy": zod.string().nullish(),
+  "requestDescription": zod.string().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "currentVersionId": zod.number().nullish(),
+  "reviewedBy": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "currentVersion": zod.union([zod.object({
+  "id": zod.number(),
+  "documentId": zod.number(),
+  "storagePath": zod.string(),
+  "originalFilename": zod.string().nullish(),
+  "mimeType": zod.string().nullish(),
+  "size": zod.number().nullish(),
+  "uploadedBy": zod.string().nullish(),
+  "uploadedAt": zod.string(),
+  "status": zod.enum(['uploaded', 'approved', 'rejected']),
+  "rejectionReason": zod.string().nullish(),
+  "versionNumber": zod.number()
+}),zod.null()]).optional(),
+  "versions": zod.array(zod.object({
+  "id": zod.number(),
+  "documentId": zod.number(),
+  "storagePath": zod.string(),
+  "originalFilename": zod.string().nullish(),
+  "mimeType": zod.string().nullish(),
+  "size": zod.number().nullish(),
+  "uploadedBy": zod.string().nullish(),
+  "uploadedAt": zod.string(),
+  "status": zod.enum(['uploaded', 'approved', 'rejected']),
+  "rejectionReason": zod.string().nullish(),
+  "versionNumber": zod.number()
+}))
+})
+export const ListApplicationDocumentsResponse = zod.array(ListApplicationDocumentsResponseItem)
+
+
+/**
+ * Idempotent on (applicationId, documentKey) — a double-click or retry updates the existing slot instead of creating a duplicate.
+ * @summary Request an additional document from the customer (staff)
+ */
+export const RequestApplicationDocumentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RequestApplicationDocumentBody = zod.object({
+  "documentKey": zod.string().optional().describe('Optional stable slug; derived from the name if omitted.'),
+  "nameAr": zod.string(),
+  "nameEn": zod.string(),
+  "description": zod.string().optional(),
+  "fileType": zod.enum(['image', 'pdf', 'image_pdf']).optional(),
+  "required": zod.boolean().optional(),
+  "maxFileSizeMb": zod.number().optional()
+})
+
+export const RequestApplicationDocumentResponse = zod.object({
+  "id": zod.number(),
+  "applicationId": zod.number(),
+  "userId": zod.string().nullish(),
+  "visaId": zod.number().nullish(),
+  "documentKey": zod.string(),
+  "nameAr": zod.string(),
+  "nameEn": zod.string(),
+  "description": zod.string().nullish(),
+  "required": zod.boolean(),
+  "allowedFileType": zod.enum(['image', 'pdf', 'image_pdf']),
+  "maxFileSizeMb": zod.number().nullish(),
+  "status": zod.enum(['required', 'waiting_customer', 'uploaded', 'under_review', 'approved', 'rejected', 'reupload_required']),
+  "requestedBy": zod.string().nullish(),
+  "requestDescription": zod.string().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "currentVersionId": zod.number().nullish(),
+  "reviewedBy": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "currentVersion": zod.union([zod.object({
+  "id": zod.number(),
+  "documentId": zod.number(),
+  "storagePath": zod.string(),
+  "originalFilename": zod.string().nullish(),
+  "mimeType": zod.string().nullish(),
+  "size": zod.number().nullish(),
+  "uploadedBy": zod.string().nullish(),
+  "uploadedAt": zod.string(),
+  "status": zod.enum(['uploaded', 'approved', 'rejected']),
+  "rejectionReason": zod.string().nullish(),
+  "versionNumber": zod.number()
+}),zod.null()]).optional(),
+  "versions": zod.array(zod.object({
+  "id": zod.number(),
+  "documentId": zod.number(),
+  "storagePath": zod.string(),
+  "originalFilename": zod.string().nullish(),
+  "mimeType": zod.string().nullish(),
+  "size": zod.number().nullish(),
+  "uploadedBy": zod.string().nullish(),
+  "uploadedAt": zod.string(),
+  "status": zod.enum(['uploaded', 'approved', 'rejected']),
+  "rejectionReason": zod.string().nullish(),
+  "versionNumber": zod.number()
+}))
+})
+
+
+/**
+ * @summary Upload (or re-upload) a version of a requested document (customer)
+ */
+export const UploadApplicationDocumentParams = zod.object({
+  "id": zod.coerce.number(),
+  "docId": zod.coerce.number()
+})
+
+export const UploadApplicationDocumentBody = zod.object({
+  "storagePath": zod.string().describe('Object storage path returned by POST \/storage\/uploads (must be owned by the caller).')
+})
+
+export const UploadApplicationDocumentResponse = zod.object({
+  "id": zod.number(),
+  "applicationId": zod.number(),
+  "userId": zod.string().nullish(),
+  "visaId": zod.number().nullish(),
+  "documentKey": zod.string(),
+  "nameAr": zod.string(),
+  "nameEn": zod.string(),
+  "description": zod.string().nullish(),
+  "required": zod.boolean(),
+  "allowedFileType": zod.enum(['image', 'pdf', 'image_pdf']),
+  "maxFileSizeMb": zod.number().nullish(),
+  "status": zod.enum(['required', 'waiting_customer', 'uploaded', 'under_review', 'approved', 'rejected', 'reupload_required']),
+  "requestedBy": zod.string().nullish(),
+  "requestDescription": zod.string().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "currentVersionId": zod.number().nullish(),
+  "reviewedBy": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "currentVersion": zod.union([zod.object({
+  "id": zod.number(),
+  "documentId": zod.number(),
+  "storagePath": zod.string(),
+  "originalFilename": zod.string().nullish(),
+  "mimeType": zod.string().nullish(),
+  "size": zod.number().nullish(),
+  "uploadedBy": zod.string().nullish(),
+  "uploadedAt": zod.string(),
+  "status": zod.enum(['uploaded', 'approved', 'rejected']),
+  "rejectionReason": zod.string().nullish(),
+  "versionNumber": zod.number()
+}),zod.null()]).optional(),
+  "versions": zod.array(zod.object({
+  "id": zod.number(),
+  "documentId": zod.number(),
+  "storagePath": zod.string(),
+  "originalFilename": zod.string().nullish(),
+  "mimeType": zod.string().nullish(),
+  "size": zod.number().nullish(),
+  "uploadedBy": zod.string().nullish(),
+  "uploadedAt": zod.string(),
+  "status": zod.enum(['uploaded', 'approved', 'rejected']),
+  "rejectionReason": zod.string().nullish(),
+  "versionNumber": zod.number()
+}))
+})
+
+
+/**
+ * @summary Approve an uploaded document (staff)
+ */
+export const ApproveApplicationDocumentParams = zod.object({
+  "id": zod.coerce.number(),
+  "docId": zod.coerce.number()
+})
+
+export const ApproveApplicationDocumentResponse = zod.object({
+  "id": zod.number(),
+  "applicationId": zod.number(),
+  "userId": zod.string().nullish(),
+  "visaId": zod.number().nullish(),
+  "documentKey": zod.string(),
+  "nameAr": zod.string(),
+  "nameEn": zod.string(),
+  "description": zod.string().nullish(),
+  "required": zod.boolean(),
+  "allowedFileType": zod.enum(['image', 'pdf', 'image_pdf']),
+  "maxFileSizeMb": zod.number().nullish(),
+  "status": zod.enum(['required', 'waiting_customer', 'uploaded', 'under_review', 'approved', 'rejected', 'reupload_required']),
+  "requestedBy": zod.string().nullish(),
+  "requestDescription": zod.string().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "currentVersionId": zod.number().nullish(),
+  "reviewedBy": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "currentVersion": zod.union([zod.object({
+  "id": zod.number(),
+  "documentId": zod.number(),
+  "storagePath": zod.string(),
+  "originalFilename": zod.string().nullish(),
+  "mimeType": zod.string().nullish(),
+  "size": zod.number().nullish(),
+  "uploadedBy": zod.string().nullish(),
+  "uploadedAt": zod.string(),
+  "status": zod.enum(['uploaded', 'approved', 'rejected']),
+  "rejectionReason": zod.string().nullish(),
+  "versionNumber": zod.number()
+}),zod.null()]).optional(),
+  "versions": zod.array(zod.object({
+  "id": zod.number(),
+  "documentId": zod.number(),
+  "storagePath": zod.string(),
+  "originalFilename": zod.string().nullish(),
+  "mimeType": zod.string().nullish(),
+  "size": zod.number().nullish(),
+  "uploadedBy": zod.string().nullish(),
+  "uploadedAt": zod.string(),
+  "status": zod.enum(['uploaded', 'approved', 'rejected']),
+  "rejectionReason": zod.string().nullish(),
+  "versionNumber": zod.number()
+}))
+})
+
+
+/**
+ * @summary Reject an uploaded document with a required reason (staff)
+ */
+export const RejectApplicationDocumentParams = zod.object({
+  "id": zod.coerce.number(),
+  "docId": zod.coerce.number()
+})
+
+export const RejectApplicationDocumentBody = zod.object({
+  "rejectionReason": zod.string()
+})
+
+export const RejectApplicationDocumentResponse = zod.object({
+  "id": zod.number(),
+  "applicationId": zod.number(),
+  "userId": zod.string().nullish(),
+  "visaId": zod.number().nullish(),
+  "documentKey": zod.string(),
+  "nameAr": zod.string(),
+  "nameEn": zod.string(),
+  "description": zod.string().nullish(),
+  "required": zod.boolean(),
+  "allowedFileType": zod.enum(['image', 'pdf', 'image_pdf']),
+  "maxFileSizeMb": zod.number().nullish(),
+  "status": zod.enum(['required', 'waiting_customer', 'uploaded', 'under_review', 'approved', 'rejected', 'reupload_required']),
+  "requestedBy": zod.string().nullish(),
+  "requestDescription": zod.string().nullish(),
+  "rejectionReason": zod.string().nullish(),
+  "currentVersionId": zod.number().nullish(),
+  "reviewedBy": zod.string().nullish(),
+  "reviewedAt": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string(),
+  "currentVersion": zod.union([zod.object({
+  "id": zod.number(),
+  "documentId": zod.number(),
+  "storagePath": zod.string(),
+  "originalFilename": zod.string().nullish(),
+  "mimeType": zod.string().nullish(),
+  "size": zod.number().nullish(),
+  "uploadedBy": zod.string().nullish(),
+  "uploadedAt": zod.string(),
+  "status": zod.enum(['uploaded', 'approved', 'rejected']),
+  "rejectionReason": zod.string().nullish(),
+  "versionNumber": zod.number()
+}),zod.null()]).optional(),
+  "versions": zod.array(zod.object({
+  "id": zod.number(),
+  "documentId": zod.number(),
+  "storagePath": zod.string(),
+  "originalFilename": zod.string().nullish(),
+  "mimeType": zod.string().nullish(),
+  "size": zod.number().nullish(),
+  "uploadedBy": zod.string().nullish(),
+  "uploadedAt": zod.string(),
+  "status": zod.enum(['uploaded', 'approved', 'rejected']),
+  "rejectionReason": zod.string().nullish(),
+  "versionNumber": zod.number()
+}))
+})
+
+
+/**
+ * @summary List the required-document config for a visa
+ */
+export const ListVisaRequiredDocumentsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListVisaRequiredDocumentsResponseItem = zod.object({
+  "id": zod.number(),
+  "visaId": zod.number(),
+  "documentKey": zod.string(),
+  "nameAr": zod.string(),
+  "nameEn": zod.string(),
+  "description": zod.string().nullish(),
+  "required": zod.boolean(),
+  "allowedFileType": zod.enum(['image', 'pdf', 'image_pdf']),
+  "maxFileSizeMb": zod.number().nullish(),
+  "requiredAt": zod.enum(['application_start', 'before_submission', 'during_processing', 'optional']),
+  "sortOrder": zod.number(),
+  "createdAt": zod.string()
+})
+export const ListVisaRequiredDocumentsResponse = zod.array(ListVisaRequiredDocumentsResponseItem)
+
+
+/**
+ * @summary Add a required-document definition to a visa (super admin)
+ */
+export const CreateVisaRequiredDocumentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const CreateVisaRequiredDocumentBody = zod.object({
+  "documentKey": zod.string().optional(),
+  "nameAr": zod.string(),
+  "nameEn": zod.string(),
+  "description": zod.string().optional(),
+  "required": zod.boolean().optional(),
+  "allowedFileType": zod.enum(['image', 'pdf', 'image_pdf']).optional(),
+  "maxFileSizeMb": zod.number().optional(),
+  "requiredAt": zod.enum(['application_start', 'before_submission', 'during_processing', 'optional']).optional(),
+  "sortOrder": zod.number().optional()
+})
+
+export const CreateVisaRequiredDocumentResponse = zod.object({
+  "id": zod.number(),
+  "visaId": zod.number(),
+  "documentKey": zod.string(),
+  "nameAr": zod.string(),
+  "nameEn": zod.string(),
+  "description": zod.string().nullish(),
+  "required": zod.boolean(),
+  "allowedFileType": zod.enum(['image', 'pdf', 'image_pdf']),
+  "maxFileSizeMb": zod.number().nullish(),
+  "requiredAt": zod.enum(['application_start', 'before_submission', 'during_processing', 'optional']),
+  "sortOrder": zod.number(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Update a required-document definition (super admin)
+ */
+export const UpdateVisaRequiredDocumentParams = zod.object({
+  "id": zod.coerce.number(),
+  "docId": zod.coerce.number()
+})
+
+export const UpdateVisaRequiredDocumentBody = zod.object({
+  "documentKey": zod.string().optional(),
+  "nameAr": zod.string().optional(),
+  "nameEn": zod.string().optional(),
+  "description": zod.string().optional(),
+  "required": zod.boolean().optional(),
+  "allowedFileType": zod.enum(['image', 'pdf', 'image_pdf']).optional(),
+  "maxFileSizeMb": zod.number().optional(),
+  "requiredAt": zod.enum(['application_start', 'before_submission', 'during_processing', 'optional']).optional(),
+  "sortOrder": zod.number().optional()
+})
+
+export const UpdateVisaRequiredDocumentResponse = zod.object({
+  "id": zod.number(),
+  "visaId": zod.number(),
+  "documentKey": zod.string(),
+  "nameAr": zod.string(),
+  "nameEn": zod.string(),
+  "description": zod.string().nullish(),
+  "required": zod.boolean(),
+  "allowedFileType": zod.enum(['image', 'pdf', 'image_pdf']),
+  "maxFileSizeMb": zod.number().nullish(),
+  "requiredAt": zod.enum(['application_start', 'before_submission', 'during_processing', 'optional']),
+  "sortOrder": zod.number(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Delete a required-document definition (super admin)
+ */
+export const DeleteVisaRequiredDocumentParams = zod.object({
+  "id": zod.coerce.number(),
+  "docId": zod.coerce.number()
+})
+
+export const DeleteVisaRequiredDocumentResponse = zod.void()
 
 
 /**

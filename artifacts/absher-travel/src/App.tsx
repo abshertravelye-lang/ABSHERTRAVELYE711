@@ -1,5 +1,6 @@
 import { Layout } from "@/components/layout";
 import { Switch, Route, Router as WouterRouter } from "wouter";
+import { useGuardedLocation } from "@/lib/guarded-location";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -84,7 +85,7 @@ function App() {
       <TranslationProvider>
         <AuthProvider>
           <TooltipProvider>
-            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")} hook={useGuardedLocation}>
               <Layout>
                 <Router />
               </Layout>

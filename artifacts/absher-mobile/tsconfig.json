@@ -18,6 +18,12 @@
   "references": [
     {
       "path": "../../lib/api-client-react"
+    },
+    {
+      "path": "../../lib/countries"
+    },
+    {
+      "path": "../../lib/i18n"
     }
   ]
 }

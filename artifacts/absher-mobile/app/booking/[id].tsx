@@ -5,28 +5,31 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
+import { useLanguage } from '@/context/LanguageContext';
 import { useGetBooking, getGetBookingQueryKey } from '@workspace/api-client-react';
 
 const STATUS_STEPS = [
-  { key: 'pending', label: 'قيد الانتظار' },
-  { key: 'confirmed', label: 'تم التأكيد' },
-  { key: 'completed', label: 'مكتمل' }
-];
+  { key: 'pending', labelKey: 'bookingDetail.step.pending' },
+  { key: 'confirmed', labelKey: 'bookingDetail.step.confirmed' },
+  { key: 'completed', labelKey: 'bookingDetail.step.completed' }
+] as const;
 
 const TYPE_CONFIG = {
-  flight:  { icon: 'airplane' as const,       label: 'رحلة طيران', color: '#0A2342' },
-  hotel:   { icon: 'bed-outline' as const,    label: 'فندق',       color: '#7C3AED' },
-  program: { icon: 'globe-outline' as const,  label: 'برنامج سياحي', color: '#0891B2' },
-  visa:    { icon: 'card-outline' as const,   label: 'تأشيرة',    color: '#D97706' },
+  flight:  { icon: 'airplane' as const,       labelKey: 'bookingDetail.type.flight', color: '#052B5B' },
+  hotel:   { icon: 'bed-outline' as const,    labelKey: 'bookingDetail.type.hotel',  color: '#7C3AED' },
+  program: { icon: 'globe-outline' as const,  labelKey: 'bookingDetail.type.program', color: '#0891B2' },
+  visa:    { icon: 'card-outline' as const,   labelKey: 'bookingDetail.type.visa',   color: '#D97706' },
 };
 
-function formatDate(iso: string | null | undefined) {
+function formatDate(iso: string | null | undefined, locale: string) {
   if (!iso) return '---';
-  return new Date(iso).toLocaleDateString('ar-SA', { day: 'numeric', month: 'long', year: 'numeric' });
+  return new Date(iso).toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 export default function BookingDetailScreen() {
   const colors = useColors();
+  const { t, lang } = useLanguage();
+  const locale = lang === 'ar' ? 'ar-SA' : 'en-US';
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const bottomInset = Platform.OS === 'web' ? 34 : Math.max(insets.bottom, 20);
@@ -49,7 +52,7 @@ export default function BookingDetailScreen() {
   if (error || !booking) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { paddingTop: topInset + 12, backgroundColor: '#0A2342' }]}>
+        <View style={[styles.header, { paddingTop: topInset + 12, backgroundColor: '#052B5B' }]}>
           <Pressable onPress={() => router.back()} hitSlop={10}>
             <Ionicons name="arrow-forward" size={24} color="#FFFFFF" />
           </Pressable>
@@ -57,7 +60,7 @@ export default function BookingDetailScreen() {
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle-outline" size={64} color={colors.destructive} />
           <Text style={[styles.errorText, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>
-            حدث خطأ أثناء تحميل الحجز
+            {t('bookingDetail.loadError')}
           </Text>
         </View>
       </View>
@@ -70,33 +73,33 @@ export default function BookingDetailScreen() {
   // Determine current step index
   let currentStepIndex = 0;
   if (booking.status === 'confirmed') currentStepIndex = 1;
-  if (booking.status === 'completed') currentStepIndex = 2;
+  if ((booking.status as string) === 'completed') currentStepIndex = 2;
 
   const handleShare = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const msg = `تفاصيل الحجز:\nرقم الحجز: #${booking.id}\nالنوع: ${typeConf.label}\nالعميل: ${booking.clientName}\nالحالة: ${isCancelled ? 'ملغي' : STATUS_STEPS[currentStepIndex].label}`;
+    const msg = `${t('bookingDetail.shareBookingLabel')}\n${t('bookingDetail.shareRef')} #${booking.id}\n${t('bookingDetail.shareType')} ${t(typeConf.labelKey)}\n${t('bookingDetail.shareClient')} ${booking.clientName}\n${t('bookingDetail.shareStatus')} ${isCancelled ? t('bookingDetail.shareCancelled') : t(STATUS_STEPS[currentStepIndex].labelKey)}`;
     Linking.openURL(`whatsapp://send?text=${encodeURIComponent(msg)}`);
   };
 
   const handleDownload = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    Alert.alert('قريباً', 'سيتم توفير إمكانية تحميل التذكرة/الإيصال قريباً.');
+    Alert.alert(t('flow.comingSoon'), t('bookingDetail.downloadComingSoon'));
   };
 
   const handleSupport = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/(tabs)/');
+    router.push('/(tabs)');
   };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: topInset + 12, backgroundColor: '#0A2342' }]}>
+      <View style={[styles.header, { paddingTop: topInset + 12, backgroundColor: '#052B5B' }]}>
         <View style={styles.headerRow}>
           <Pressable onPress={() => router.back()} hitSlop={10}>
             <Ionicons name="arrow-forward" size={24} color="#FFFFFF" />
           </Pressable>
-          <Text style={[styles.headerTitle, { fontFamily: 'Cairo_700Bold' }]}>تفاصيل الحجز #{booking.id}</Text>
+          <Text style={[styles.headerTitle, { fontFamily: 'Cairo_700Bold' }]}>{t('bookingDetail.title')} #{booking.id}</Text>
           <View style={{ width: 24 }} />
         </View>
       </View>
@@ -111,12 +114,12 @@ export default function BookingDetailScreen() {
             {booking.destination || booking.clientName}
           </Text>
           <Text style={[styles.heroSubtitle, { color: colors.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>
-            {typeConf.label}
+            {t(typeConf.labelKey)}
           </Text>
 
           {isCancelled && (
             <View style={[styles.cancelledBadge, { backgroundColor: '#FEE2E2' }]}>
-              <Text style={[styles.cancelledText, { color: '#991B1B', fontFamily: 'Cairo_700Bold' }]}>تم الإلغاء</Text>
+              <Text style={[styles.cancelledText, { color: '#991B1B', fontFamily: 'Cairo_700Bold' }]}>{t('bookingDetail.cancelled')}</Text>
             </View>
           )}
         </View>
@@ -124,7 +127,7 @@ export default function BookingDetailScreen() {
         {/* Status Timeline */}
         {!isCancelled && (
           <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>حالة الحجز</Text>
+            <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>{t('bookingDetail.statusTitle')}</Text>
             <View style={styles.timeline}>
               {STATUS_STEPS.map((step, index) => {
                 const isActive = index <= currentStepIndex;
@@ -158,7 +161,7 @@ export default function BookingDetailScreen() {
                           fontFamily: isCurrent ? 'Cairo_700Bold' : 'Cairo_600SemiBold'
                         }
                       ]}>
-                        {step.label}
+                        {t(step.labelKey)}
                       </Text>
                     </View>
                   </View>
@@ -171,48 +174,48 @@ export default function BookingDetailScreen() {
         {/* Flight specific details */}
         {booking.type === 'flight' && (
           <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>تفاصيل الرحلة</Text>
+            <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>{t('bookingDetail.flightDetails')}</Text>
             <View style={styles.detailRow}>
               <Text style={[styles.detailValue, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>SV-1042</Text>
-              <Text style={[styles.detailLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>رقم الرحلة</Text>
+              <Text style={[styles.detailLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{t('bookingDetail.flightNumber')}</Text>
             </View>
             <View style={styles.detailRow}>
-              <Text style={[styles.detailValue, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>الرياض (RUH)</Text>
-              <Text style={[styles.detailLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>المغادرة</Text>
+              <Text style={[styles.detailValue, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{t('bookingDetail.riyadh')} (RUH)</Text>
+              <Text style={[styles.detailLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{t('bookingDetail.departure')}</Text>
             </View>
             <View style={styles.detailRow}>
-              <Text style={[styles.detailValue, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>دبي (DXB)</Text>
-              <Text style={[styles.detailLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>الوصول</Text>
+              <Text style={[styles.detailValue, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{t('bookingDetail.dubai')} (DXB)</Text>
+              <Text style={[styles.detailLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{t('bookingDetail.arrival')}</Text>
             </View>
           </View>
         )}
 
         {/* Travel Dates */}
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>تواريخ السفر</Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>{t('bookingDetail.travelDates')}</Text>
           <View style={styles.detailRow}>
-            <Text style={[styles.detailValue, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{formatDate(booking.travelDate)}</Text>
-            <Text style={[styles.detailLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>تاريخ الذهاب</Text>
+            <Text style={[styles.detailValue, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{formatDate(booking.travelDate, locale)}</Text>
+            <Text style={[styles.detailLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{t('bookingDetail.departureDate')}</Text>
           </View>
           {booking.returnDate && (
             <View style={styles.detailRow}>
-              <Text style={[styles.detailValue, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{formatDate(booking.returnDate)}</Text>
-              <Text style={[styles.detailLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>تاريخ العودة</Text>
+              <Text style={[styles.detailValue, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{formatDate(booking.returnDate, locale)}</Text>
+              <Text style={[styles.detailLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{t('bookingDetail.returnDate')}</Text>
             </View>
           )}
         </View>
 
         {/* Passengers */}
         <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>المسافرون</Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>{t('bookingDetail.passengers')}</Text>
           <View style={styles.detailRow}>
             <Text style={[styles.detailValue, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{booking.clientName}</Text>
-            <Text style={[styles.detailLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>صاحب الحجز</Text>
+            <Text style={[styles.detailLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{t('bookingDetail.bookingHolder')}</Text>
           </View>
           {booking.adults ? (
             <View style={styles.detailRow}>
-              <Text style={[styles.detailValue, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{booking.adults} بالغ</Text>
-              <Text style={[styles.detailLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>عدد المسافرين</Text>
+              <Text style={[styles.detailValue, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{booking.adults} {t('bookingDetail.adultUnit')}</Text>
+              <Text style={[styles.detailLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{t('bookingDetail.travelerCount')}</Text>
             </View>
           ) : null}
         </View>
@@ -220,12 +223,12 @@ export default function BookingDetailScreen() {
         {/* Price Breakdown */}
         {booking.totalPrice && (
           <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>تفاصيل الدفع</Text>
+            <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>{t('bookingDetail.paymentDetails')}</Text>
             <View style={styles.detailRow}>
               <Text style={[styles.detailValue, { color: '#16A34A', fontFamily: 'Cairo_700Bold', fontSize: 18 }]}>
-                {booking.totalPrice.toLocaleString('ar-SA')} {booking.type === 'flight' ? 'USD' : 'ر.س'}
+                {booking.totalPrice.toLocaleString(locale)} {booking.type === 'flight' ? 'USD' : t('bookingDetail.currencySar')}
               </Text>
-              <Text style={[styles.detailLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>الإجمالي المدفوع</Text>
+              <Text style={[styles.detailLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{t('bookingDetail.totalPaid')}</Text>
             </View>
           </View>
         )}
@@ -237,16 +240,16 @@ export default function BookingDetailScreen() {
         <View style={styles.actionGrid}>
           <Pressable style={({ pressed }) => [styles.actionBtn, { backgroundColor: '#16A34A', opacity: pressed ? 0.8 : 1 }]} onPress={handleShare}>
             <Ionicons name="logo-whatsapp" size={20} color="#FFFFFF" />
-            <Text style={[styles.actionBtnText, { fontFamily: 'Cairo_700Bold', color: '#FFFFFF' }]}>مشاركة</Text>
+            <Text style={[styles.actionBtnText, { fontFamily: 'Cairo_700Bold', color: '#FFFFFF' }]}>{t('bookingDetail.share')}</Text>
           </Pressable>
           <Pressable style={({ pressed }) => [styles.actionBtn, { backgroundColor: colors.muted, opacity: pressed ? 0.8 : 1 }]} onPress={handleDownload}>
             <Ionicons name="download-outline" size={20} color={colors.foreground} />
-            <Text style={[styles.actionBtnText, { fontFamily: 'Cairo_700Bold', color: colors.foreground }]}>تحميل PDF</Text>
+            <Text style={[styles.actionBtnText, { fontFamily: 'Cairo_700Bold', color: colors.foreground }]}>{t('bookingDetail.downloadPdf')}</Text>
           </Pressable>
         </View>
-        <Pressable style={({ pressed }) => [styles.supportBtn, { borderColor: '#0A2342', opacity: pressed ? 0.8 : 1 }]} onPress={handleSupport}>
-          <Ionicons name="headset-outline" size={20} color="#0A2342" />
-          <Text style={[styles.supportBtnText, { color: '#0A2342', fontFamily: 'Cairo_700Bold' }]}>التواصل مع الدعم</Text>
+        <Pressable style={({ pressed }) => [styles.supportBtn, { borderColor: '#052B5B', opacity: pressed ? 0.8 : 1 }]} onPress={handleSupport}>
+          <Ionicons name="headset-outline" size={20} color="#052B5B" />
+          <Text style={[styles.supportBtnText, { color: '#052B5B', fontFamily: 'Cairo_700Bold' }]}>{t('bookingDetail.contactSupport')}</Text>
         </Pressable>
       </View>
     </View>

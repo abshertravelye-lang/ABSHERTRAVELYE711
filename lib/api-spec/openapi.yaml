@@ -38,6 +38,10 @@ tags:
     description: Admin/staff account management
   - name: visa-applications
     description: Visa application submissions
+  - name: application-documents
+    description: Per-application document management & additional-document requests
+  - name: visa-required-documents
+    description: Per-visa dynamic required-document configuration
   - name: storage
     description: File upload and object storage
 
@@ -761,6 +765,267 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/VisaApplication"
+
+  /visa-applications/{id}/documents:
+    get:
+      operationId: listApplicationDocuments
+      tags: [application-documents]
+      summary: List documents (with version history) for an application
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Application documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ApplicationDocument"
+        "403":
+          description: Forbidden
+        "404":
+          description: Application not found
+
+  /visa-applications/{id}/documents/request:
+    post:
+      operationId: requestApplicationDocument
+      tags: [application-documents]
+      summary: Request an additional document from the customer (staff)
+      description: Idempotent on (applicationId, documentKey) — a double-click or retry updates the existing slot instead of creating a duplicate.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RequestApplicationDocumentInput"
+      responses:
+        "201":
+          description: New document request created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationDocument"
+        "200":
+          description: Existing document request updated (idempotent)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationDocument"
+
+  /visa-applications/{id}/documents/{docId}/upload:
+    post:
+      operationId: uploadApplicationDocument
+      tags: [application-documents]
+      summary: Upload (or re-upload) a version of a requested document (customer)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: docId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadApplicationDocumentInput"
+      responses:
+        "201":
+          description: New version uploaded, document under review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationDocument"
+        "400":
+          description: Invalid file type / size / storage object
+        "403":
+          description: Forbidden
+
+  /visa-applications/{id}/documents/{docId}/approve:
+    post:
+      operationId: approveApplicationDocument
+      tags: [application-documents]
+      summary: Approve an uploaded document (staff)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: docId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Document approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationDocument"
+
+  /visa-applications/{id}/documents/{docId}/reject:
+    post:
+      operationId: rejectApplicationDocument
+      tags: [application-documents]
+      summary: Reject an uploaded document with a required reason (staff)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: docId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectApplicationDocumentInput"
+      responses:
+        "200":
+          description: Document rejected, re-upload required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationDocument"
+        "400":
+          description: rejectionReason missing
+
+  /visas/{id}/required-documents:
+    get:
+      operationId: listVisaRequiredDocuments
+      tags: [visa-required-documents]
+      summary: List the required-document config for a visa
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Required document definitions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VisaRequiredDocument"
+    post:
+      operationId: createVisaRequiredDocument
+      tags: [visa-required-documents]
+      summary: Add a required-document definition to a visa (super admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VisaRequiredDocumentInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VisaRequiredDocument"
+
+  /visas/{id}/required-documents/{docId}:
+    patch:
+      operationId: updateVisaRequiredDocument
+      tags: [visa-required-documents]
+      summary: Update a required-document definition (super admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: docId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VisaRequiredDocumentUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VisaRequiredDocument"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteVisaRequiredDocument
+      tags: [visa-required-documents]
+      summary: Delete a required-document definition (super admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: docId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
 
   /storage/uploads/request-url:
     post:
@@ -1665,6 +1930,13 @@ components:
         success: { type: boolean }
         fullName: { type: ["string", "null"] }
         fullNameEn: { type: ["string", "null"] }
+        fullNameAr: { type: ["string", "null"] }
+        firstName: { type: ["string", "null"] }
+        lastName: { type: ["string", "null"] }
+        givenName: { type: ["string", "null"] }
+        fatherName: { type: ["string", "null"] }
+        grandName: { type: ["string", "null"] }
+        surname: { type: ["string", "null"] }
         passportNumber: { type: ["string", "null"] }
         nationality: { type: ["string", "null"] }
         gender: { type: ["string", "null"] }
@@ -1672,6 +1944,7 @@ components:
         issueDate: { type: ["string", "null"] }
         expiryDate: { type: ["string", "null"] }
         issuingCountry: { type: ["string", "null"] }
+        placeOfBirth: { type: ["string", "null"] }
         error: { type: ["string", "null"] }
 
     VisaApplicationTracking:
@@ -1932,6 +2205,145 @@ components:
           enum: [received, under_review, awaiting_documents, documents_uploaded, sent_to_embassy, processing, issued, completed, rejected, cancelled]
         adminNotes: { type: string }
         issuedVisaUrl: { type: string }
+
+    ApplicationDocumentVersion:
+      type: object
+      required: [id, documentId, storagePath, uploadedAt, status, versionNumber]
+      properties:
+        id: { type: integer }
+        documentId: { type: integer }
+        storagePath: { type: string }
+        originalFilename: { type: ["string", "null"] }
+        mimeType: { type: ["string", "null"] }
+        size: { type: ["integer", "null"] }
+        uploadedBy: { type: ["string", "null"] }
+        uploadedAt: { type: string }
+        status:
+          type: string
+          enum: [uploaded, approved, rejected]
+        rejectionReason: { type: ["string", "null"] }
+        versionNumber: { type: integer }
+
+    ApplicationDocument:
+      type: object
+      required: [id, applicationId, documentKey, nameAr, nameEn, required, allowedFileType, status, createdAt, updatedAt, versions]
+      properties:
+        id: { type: integer }
+        applicationId: { type: integer }
+        userId: { type: ["string", "null"] }
+        visaId: { type: ["integer", "null"] }
+        documentKey: { type: string }
+        nameAr: { type: string }
+        nameEn: { type: string }
+        description: { type: ["string", "null"] }
+        required: { type: boolean }
+        allowedFileType:
+          type: string
+          enum: [image, pdf, image_pdf]
+        maxFileSizeMb: { type: ["integer", "null"] }
+        status:
+          type: string
+          enum: [required, waiting_customer, uploaded, under_review, approved, rejected, reupload_required]
+        requestedBy: { type: ["string", "null"] }
+        requestDescription: { type: ["string", "null"] }
+        rejectionReason: { type: ["string", "null"] }
+        currentVersionId: { type: ["integer", "null"] }
+        reviewedBy: { type: ["string", "null"] }
+        reviewedAt: { type: ["string", "null"] }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+        currentVersion:
+          oneOf:
+            - $ref: "#/components/schemas/ApplicationDocumentVersion"
+            - type: "null"
+        versions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ApplicationDocumentVersion"
+
+    RequestApplicationDocumentInput:
+      type: object
+      required: [nameAr, nameEn]
+      properties:
+        documentKey: { type: string, description: "Optional stable slug; derived from the name if omitted." }
+        nameAr: { type: string }
+        nameEn: { type: string }
+        description: { type: string }
+        fileType:
+          type: string
+          enum: [image, pdf, image_pdf]
+        required: { type: boolean }
+        maxFileSizeMb: { type: integer }
+
+    UploadApplicationDocumentInput:
+      type: object
+      required: [storagePath]
+      properties:
+        storagePath:
+          type: string
+          description: "Object storage path returned by POST /storage/uploads (must be owned by the caller)."
+
+    RejectApplicationDocumentInput:
+      type: object
+      required: [rejectionReason]
+      properties:
+        rejectionReason: { type: string }
+
+    VisaRequiredDocument:
+      type: object
+      required: [id, visaId, documentKey, nameAr, nameEn, required, allowedFileType, requiredAt, sortOrder, createdAt]
+      properties:
+        id: { type: integer }
+        visaId: { type: integer }
+        documentKey: { type: string }
+        nameAr: { type: string }
+        nameEn: { type: string }
+        description: { type: ["string", "null"] }
+        required: { type: boolean }
+        allowedFileType:
+          type: string
+          enum: [image, pdf, image_pdf]
+        maxFileSizeMb: { type: ["integer", "null"] }
+        requiredAt:
+          type: string
+          enum: [application_start, before_submission, during_processing, optional]
+        sortOrder: { type: integer }
+        createdAt: { type: string }
+
+    VisaRequiredDocumentInput:
+      type: object
+      required: [nameAr, nameEn]
+      properties:
+        documentKey: { type: string }
+        nameAr: { type: string }
+        nameEn: { type: string }
+        description: { type: string }
+        required: { type: boolean }
+        allowedFileType:
+          type: string
+          enum: [image, pdf, image_pdf]
+        maxFileSizeMb: { type: integer }
+        requiredAt:
+          type: string
+          enum: [application_start, before_submission, during_processing, optional]
+        sortOrder: { type: integer }
+
+    VisaRequiredDocumentUpdate:
+      type: object
+      properties:
+        documentKey: { type: string }
+        nameAr: { type: string }
+        nameEn: { type: string }
+        description: { type: string }
+        required: { type: boolean }
+        allowedFileType:
+          type: string
+          enum: [image, pdf, image_pdf]
+        maxFileSizeMb: { type: integer }
+        requiredAt:
+          type: string
+          enum: [application_start, before_submission, during_processing, optional]
+        sortOrder: { type: integer }
 
     Booking:
       type: object

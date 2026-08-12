@@ -1,6 +1,19 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { useLocation } from "wouter";
+import { setNavigationBlocker } from "@/lib/navigation-guard";
 import { useTranslation } from "@/hooks/use-translation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
+import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +22,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCreateVisaApplication, Visa, VisaApplicationInput } from "@workspace/api-client-react";
 import { CountrySelect } from "@/components/country-select";
+import { useObjectUrl } from "@/components/auth-image";
+import { authHeader } from "@/lib/objectMedia";
 import { COUNTRIES } from "@workspace/countries";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -256,7 +271,7 @@ function FileUploadField({ label, value, onChange, required, language, imageOnly
       formData.append("file", file);
       setProgress(40);
       const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
-      const res = await fetch(`${base}/api/storage/uploads`, { method: "POST", body: formData });
+      const res = await fetch(`${base}/api/storage/uploads`, { method: "POST", headers: authHeader(), body: formData });
       setProgress(90);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -280,11 +295,10 @@ function FileUploadField({ label, value, onChange, required, language, imageOnly
   };
 
   const isImage = imageOnly || (value && /\.(jpg|jpeg|png|gif|webp)$/i.test(value));
-  const displayPreview = previewUrl || (value && isImage ? (() => {
-    const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
-    if (value.startsWith("/objects/")) return `${base}/api/storage${value}`;
-    return value.startsWith("/api") ? `${base}${value}` : value;
-  })() : null);
+  // For an existing stored object path, fetch it as a blob with the auth header
+  // (no token in URL). A freshly-picked local previewUrl always takes priority.
+  const storedObjectUrl = useObjectUrl(!previewUrl && value && isImage ? value : null);
+  const displayPreview = previewUrl || storedObjectUrl || null;
 
   return (
     <div className="space-y-1.5">
@@ -520,6 +534,86 @@ export function VisaApplicationWizard({
 
   const hasNationalityFromStep2 = !!data.nationality && history.includes("nationality_check");
 
+  /* ── Unsaved-data guard ──
+   * The wizard is "dirty" once the user has entered any meaningful data and
+   * has not yet reached the terminal success step. Closing the modal while
+   * dirty shows a branded confirmation instead of discarding silently. */
+  const isDirty = useMemo(() => {
+    if (currentStep === "success") return false;
+    return !!(
+      data.hasGcc !== undefined || data.hasAlternative !== undefined ||
+      data.nationality || data.fullName || data.passportNumber ||
+      data.email || data.phone || data.dateOfBirth ||
+      data.passportIssueDate || data.passportExpiryDate ||
+      data.passportImageUrl || data.personalPhotoUrl ||
+      data.residencyImageUrl || data.visaImageUrl ||
+      data.alternativeVisaNumber || data.alternativeVisaExpiry ||
+      data.agreedToTerms
+    );
+  }, [data, currentStep]);
+
+  const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
+  const [, navigate] = useLocation();
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+  // When leaving is triggered by an in-app route change (Link / programmatic
+  // navigate), remember the intended destination so we can complete it on
+  // confirm. `null` means the prompt was triggered by a modal-close instead.
+  const pendingNavRef = useRef<string | null>(null);
+
+  const guardActive = open && isDirty;
+
+  // Native prompt for browser close / hard reload while dirty (spec §7).
+  useEffect(() => {
+    if (!guardActive) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+      return "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [guardActive]);
+
+  // Register the central navigation blocker so BOTH <Link> clicks and
+  // programmatic navigate() calls are intercepted while the wizard is open
+  // with unsaved data.
+  useEffect(() => {
+    if (!guardActive) { setNavigationBlocker(null); return; }
+    setNavigationBlocker((intendedPath: string) => {
+      pendingNavRef.current = intendedPath;
+      setConfirmLeaveOpen(true);
+      return false;
+    });
+    return () => setNavigationBlocker(null);
+  }, [guardActive]);
+
+  /** Guarded close: prompt if there is unsaved data, otherwise close. */
+  const requestClose = (next: boolean) => {
+    if (next) { onOpenChange(true); return; }
+    if (isDirty) { pendingNavRef.current = null; setConfirmLeaveOpen(true); return; }
+    onOpenChange(false);
+  };
+
+  const confirmLeave = () => {
+    setConfirmLeaveOpen(false);
+    const target = pendingNavRef.current;
+    pendingNavRef.current = null;
+    // Clear the blocker so the follow-up navigation / close isn't re-vetoed.
+    setNavigationBlocker(null);
+    onOpenChange(false);
+    if (target) {
+      const base = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
+      const appPath = base && target.startsWith(base) ? target.slice(base.length) || "/" : target;
+      navigateRef.current(appPath, { __bypassGuard: true } as never);
+    }
+  };
+
+  const cancelLeave = () => {
+    pendingNavRef.current = null;
+    setConfirmLeaveOpen(false);
+  };
+
   /* ── Radio option helper ── */
   const RadioOption = ({ value, currentVal, label, desc, onSelect }: {
     value: string; currentVal: boolean | undefined; label: string; desc?: string; onSelect: (v: boolean) => void;
@@ -537,7 +631,7 @@ export function VisaApplicationWizard({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={requestClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0 rounded-2xl" dir={ar ? "rtl" : "ltr"}>
 
         {/* ── Header ── */}
@@ -556,7 +650,7 @@ export function VisaApplicationWizard({
                     {ar ? visa.countryAr : visa.countryEn} — {visa.visaType}
                   </DialogDescription>
                 </div>
-                <button onClick={() => onOpenChange(false)}
+                <button onClick={() => requestClose(false)}
                   className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors">
                   <X className="w-4 h-4" />
                 </button>
@@ -1015,6 +1109,36 @@ export function VisaApplicationWizard({
           )}
         </div>
       </DialogContent>
+
+      {/* Unsaved-data confirmation (branded design-system dialog) */}
+      <AlertDialog open={confirmLeaveOpen} onOpenChange={(o) => { if (!o) cancelLeave(); }}>
+        <AlertDialogContent dir={ar ? "rtl" : "ltr"} className="max-w-md rounded-2xl">
+          <AlertDialogHeader className="items-center text-center sm:text-center">
+            <div className="w-14 h-14 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center mb-2">
+              <AlertTriangle className="w-7 h-7 text-amber-500" />
+            </div>
+            <AlertDialogTitle className="text-[#0d2351] text-xl font-black">
+              {ar ? "لديك بيانات غير محفوظة" : "You have unsaved data"}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-500">
+              {ar
+                ? "إذا غادرت الآن، قد تفقد البيانات التي أدخلتها."
+                : "If you leave now, you may lose the information you entered."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:justify-center">
+            <AlertDialogCancel onClick={cancelLeave} className="rounded-xl font-bold bg-[#0d2351] hover:bg-[#0d2351]/90 text-white border-0">
+              {ar ? "البقاء وإكمال الطلب" : "Stay & continue"}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmLeave}
+              className="rounded-xl font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700"
+            >
+              {ar ? "مغادرة الصفحة" : "Leave page"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

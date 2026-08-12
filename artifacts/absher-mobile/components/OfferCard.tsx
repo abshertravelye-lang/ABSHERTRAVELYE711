@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
-  badgeText: { color: '#0A2342', fontSize: 12 },
+  badgeText: { color: '#052B5B', fontSize: 12 },
   body: { padding: 12 },
   title: { fontSize: 14, marginBottom: 2, textAlign: 'right' },
   duration: { fontSize: 12, textAlign: 'right' },

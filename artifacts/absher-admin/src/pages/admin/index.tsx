@@ -6,8 +6,9 @@ import {
   Users, Globe, Wrench, Building2, Languages, Flag,
   UserCog, CreditCard, BarChart3, Bell, Settings, ScrollText, LogOut, ShieldAlert
 } from "lucide-react";
-import { lazy, Suspense, type ComponentType } from "react";
+import { lazy, Suspense, useState, type ComponentType } from "react";
 import DashboardOverview from "./dashboard-overview";
+import { LogoutConfirmDialog } from "@/components/logout-confirm-dialog";
 
 const ProgramsAdmin = lazy(() => import("./programs-admin"));
 const VisasAdmin = lazy(() => import("./visas-admin"));
@@ -59,6 +60,7 @@ export default function AdminLayout() {
   const { user, logout, hasPermission } = useAdminAuth();
   const [rawLocation] = useLocation();
   const ar = language === "ar";
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
 
   /* wouter gives us the path relative to the WouterRouter base, so strip
      the BASE_URL prefix that was already stripped by the router, but the
@@ -191,7 +193,7 @@ export default function AdminLayout() {
               {initial}
             </div>
             <button
-              onClick={logout}
+              onClick={() => setLogoutConfirmOpen(true)}
               title={ar ? "تسجيل الخروج" : "Logout"}
               className="w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
             >
@@ -199,6 +201,13 @@ export default function AdminLayout() {
             </button>
           </div>
         </header>
+
+        <LogoutConfirmDialog
+          open={logoutConfirmOpen}
+          onOpenChange={setLogoutConfirmOpen}
+          onConfirm={logout}
+          ar={ar}
+        />
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-8">

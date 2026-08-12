@@ -11,6 +11,7 @@ type AuthState = {
 
 type AuthContextValue = AuthState & {
   setAuth: (auth: { user: SafeUser; accessToken: string; refreshToken: string }) => Promise<void>;
+  updateUser: (user: SafeUser) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -19,6 +20,7 @@ const AuthContext = createContext<AuthContextValue>({
   accessToken: null,
   isLoading: true,
   setAuth: async () => {},
+  updateUser: async () => {},
   logout: async () => {},
 });
 
@@ -89,6 +91,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setState({ user: auth.user, accessToken: auth.accessToken, isLoading: false });
   }, []);
 
+  const updateUser = useCallback(async (user: SafeUser) => {
+    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({ ...parsed, user }));
+      } catch {
+        // keep going — in-memory state still updates
+      }
+    }
+    setState((s) => ({ ...s, user }));
+  }, []);
+
   const logout = useCallback(async () => {
     tokenRef.current = null;
     await AsyncStorage.removeItem(STORAGE_KEY);
@@ -96,7 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ ...state, setAuth, logout }}>
+    <AuthContext.Provider value={{ ...state, setAuth, updateUser, logout }}>
       {children}
     </AuthContext.Provider>
   );

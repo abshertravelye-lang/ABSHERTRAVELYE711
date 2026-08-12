@@ -285,6 +285,12 @@ router.patch("/auth/profile", requireAuth, async (req, res) => {
   try {
     const body = profileUpdateSchema.parse(req.body);
 
+    // Postgres rejects "" for date columns — convert empty strings to null
+    const dateFields = ["dateOfBirth", "passportIssueDate", "passportExpiryDate", "gccResidenceExpiry", "europeanDocumentExpiry"] as const;
+    for (const f of dateFields) {
+      if ((body as Record<string, unknown>)[f] === "") (body as Record<string, unknown>)[f] = null;
+    }
+
     // If phone is changing, check uniqueness
     if (body.phone) {
       const existing = await db.select({ id: usersTable.id })

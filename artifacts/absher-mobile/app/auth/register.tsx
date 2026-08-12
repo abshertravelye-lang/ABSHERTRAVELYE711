@@ -84,7 +84,7 @@ export default function RegisterScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView style={[styles.container, { backgroundColor: colors.background }]} keyboardShouldPersistTaps="handled">
-        <LinearGradient colors={['#071525', '#052B5B', '#1E3A5F']} style={[styles.header, { paddingTop: insets.top + 16 }]}>
+        <LinearGradient colors={['#071525', '#0A2342', '#163354']} style={[styles.header, { paddingTop: insets.top + 16 }]}>
           <View style={styles.headerTop}>
             <Pressable onPress={() => router.back()} style={styles.closeBtn} hitSlop={10}>
               <Ionicons name="close" size={24} color="rgba(255,255,255,0.9)" />
@@ -104,7 +104,7 @@ export default function RegisterScreen() {
           </View>
         </LinearGradient>
 
-        <View style={styles.form}>
+        <View style={[styles.form, { backgroundColor: colors.card }]}>
           <View style={styles.nameRow}>
             <View style={{ flex: 1 }}>
               {renderField(t('register.lastName'), 'lastName', t('register.lastNamePlaceholder'))}
@@ -138,7 +138,7 @@ export default function RegisterScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.registerBtn,
-              { backgroundColor: '#D4AF37', opacity: pressed || registerMutation.isPending ? 0.85 : 1 }
+              { backgroundColor: colors.primary, opacity: pressed || registerMutation.isPending ? 0.85 : 1 }
             ]}
             onPress={handleRegister}
             disabled={registerMutation.isPending}
@@ -172,7 +172,7 @@ const styles = StyleSheet.create({
   logo: { width: 170, height: 66 },
   brandTitle: { fontSize: 18, color: '#D4AF37', letterSpacing: 1, marginTop: 4 },
   title: { fontSize: 20, color: '#FFFFFF', marginTop: 8 },
-  form: { padding: 20, gap: 16 },
+  form: { padding: 20, gap: 16, marginTop: -22, borderTopLeftRadius: 30, borderTopRightRadius: 30, shadowColor: '#0A2342', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.08, shadowRadius: 18, elevation: 4 },
   nameRow: { flexDirection: 'row', gap: 12 },
   field: { gap: 7 },
   label: { fontSize: 14, textAlign: 'right' },
@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
   input: { flex: 1, fontSize: 15, textAlign: 'right' },
   phoneInput: { paddingHorizontal: 8, textAlign: 'left', writingDirection: 'ltr' },
   registerBtn: { borderRadius: 16, paddingVertical: 17, alignItems: 'center', marginTop: 14, shadowColor: '#D4AF37', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
-  registerBtnText: { color: '#052B5B', fontSize: 17 },
+  registerBtnText: { color: '#FFFFFF', fontSize: 17 },
   loginRow: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 6 },
   loginHint: { fontSize: 14 },
   loginLink: { fontSize: 14 },

@@ -1,3 +1,4 @@
+- [Git branch wipe recovery](git-branch-wipe-recovery.md) — if "our work was deleted", check reflog/branches for the real state and restore via checkout+patch, never rebuild.
 - [Drizzle-Zod Zod v3 lock](drizzle-zod-compat.md) — drizzle-zod must stay ≤0.5.1; ≥0.8 breaks with Zod v3.
 - [lib tsconfig types-node drop](lib-tsconfig-node-types.md) — lib packages (db, countries) must not declare types:["node"]; tsc --build cannot resolve it in composite mode.
 - [Drizzle decimal as-any inserts](drizzle-decimal-any.md) — db.insert/update with Zod-parsed bodies containing decimal/enum columns needs "as any" to satisfy Drizzle's strict column types.

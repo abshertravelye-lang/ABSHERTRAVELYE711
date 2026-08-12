@@ -75,7 +75,7 @@ export const nav: Domain = {
   "nav.visas": { ar: "التأشيرات", en: "Visas" },
   "nav.flights": { ar: "الرحلات", en: "Flights" },
   "nav.bookings": { ar: "طلباتي", en: "Bookings" },
-  "nav.account": { ar: "حسابي", en: "Account" },
+  "nav.account": { ar: "الملف الشخصي", en: "Profile" },
   "nav.about": { ar: "من نحن", en: "About Us" },
   "nav.contact": { ar: "تواصل معنا", en: "Contact Us" },
   "nav.admin": { ar: "لوحة التحكم", en: "Admin" },
@@ -226,7 +226,7 @@ export const country: Domain = {
 
 /** Profile / account screen and profile editing. */
 export const profile: Domain = {
-  "profile.title": { ar: "حسابي", en: "My Account" },
+  "profile.title": { ar: "الملف الشخصي", en: "My Profile" },
   "profile.edit": { ar: "تعديل الملف الشخصي", en: "Edit profile" },
   "profile.complete": { ar: "ملفك الشخصي مكتمل", en: "Your profile is complete" },
   "profile.firstName": { ar: "الاسم الأول", en: "First name" },

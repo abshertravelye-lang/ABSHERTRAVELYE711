@@ -1,50 +1,40 @@
 import React, { useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, Text, View, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import { Image } from 'expo-image';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
-import { useTheme } from '@/context/ThemeContext';
 import { useLanguage } from '@/context/LanguageContext';
 import ConfirmDialog from '@/components/ConfirmDialog';
-import ProfileHeader from '@/components/profile/ProfileHeader';
-import PassportSummary from '@/components/profile/PassportSummary';
-import DocumentList from '@/components/profile/DocumentList';
-import DownloadedVisas from '@/components/profile/DownloadedVisas';
-import type { SafeUser } from '@workspace/api-client-react';
+import { useListVisaApplications, useListMyBookings } from '@workspace/api-client-react';
 
-const COMPLETION_FIELDS: (keyof SafeUser)[] = [
+const COMPLETION_FIELDS = [
   'firstName', 'lastName', 'phone', 'nationality', 'dateOfBirth',
   'passportNumber', 'passportExpiryDate', 'profilePhotoUrl', 'passportImageUrl',
 ];
 
-function getCompletion(user: SafeUser): number {
-  const filled = COMPLETION_FIELDS.filter((k) => !!user[k]).length;
-  return Math.round((filled / COMPLETION_FIELDS.length) * 100);
-}
-
-// ── Grouped settings list types ────────────────────────────────────────────
-type SettingRow = {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  color: string;
-  value?: string;
-  route?: string;
-  onPress?: () => void;
-  destructive?: boolean;
-};
-
 export default function AccountScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const topInset = Platform.OS === 'web' ? 67 : insets.top;
-  const bottomInset = Platform.OS === 'web' ? 34 : 0;
+  const topInset = Platform.OS === 'web' ? 67 : Math.max(insets.top + 16, 40);
+  const bottomInset = Platform.OS === 'web' ? 34 : Math.max(insets.bottom, 20);
   
   const { user, isLoading, logout } = useAuth();
-  const { t } = useLanguage();
+  const { t, lang, isRTL } = useLanguage();
   const [logoutVisible, setLogoutVisible] = useState(false);
+  
+  const { data: apps, refetch: refetchApps } = useListVisaApplications();
+  const { data: bookings, refetch: refetchBookings } = useListMyBookings();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const refresh = async () => {
+    setRefreshing(true);
+    await Promise.all([refetchApps(), refetchBookings()]);
+    setRefreshing(false);
+  };
 
   const handleLogout = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -60,19 +50,30 @@ export default function AccountScreen() {
 
   if (isLoading) return null;
 
-  // ── Guest view ───────────────────────────────────────────────────────────
+  // Guest View
   if (!user) {
     return (
       <ScrollView
         style={[styles.container, { backgroundColor: colors.background }]}
         contentContainerStyle={{ paddingBottom: bottomInset + 90 }}
       >
-        <View style={[styles.guestHero, { paddingTop: topInset + 40, backgroundColor: colors.card }]}>
+        <View style={[styles.header, { paddingTop: topInset }]}>
+          <View style={[styles.topBar, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+            <View style={{ width: 44 }} />
+            <Image source={require('@/assets/images/absher-travel-logo-nobg.png')} style={styles.logo} contentFit="contain" />
+            <Pressable style={styles.langPill} onPress={() => {}}>
+              <Text style={[styles.lang, { color: colors.primary }]}>{lang === 'ar' ? 'AR' : 'EN'}</Text>
+              <Ionicons name="globe-outline" size={16} color={colors.primary} />
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={[styles.guestHero, { backgroundColor: colors.card }]}>
           <View style={[styles.avatarPlaceholder, { backgroundColor: colors.goldTint, borderColor: colors.accent }]}>
             <Ionicons name="person" size={52} color={colors.accent} />
           </View>
-          <Text style={[styles.guestTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>{t('profile.guestWelcome') as string}</Text>
-          <Text style={[styles.guestSub, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
+          <Text style={[styles.guestTitle, { color: colors.text, fontFamily: 'Cairo_700Bold' }]}>{t('profile.guestWelcome') as string}</Text>
+          <Text style={[styles.guestSub, { color: colors.textSecondary, fontFamily: 'Cairo_400Regular' }]}>
             {t('profile.guestSubtitle') as string}
           </Text>
         </View>
@@ -82,7 +83,7 @@ export default function AccountScreen() {
             style={({ pressed }) => [styles.loginBtn, { backgroundColor: colors.primary, opacity: pressed ? 0.9 : 1 }]}
             onPress={() => router.push('/auth/login')}
           >
-            <Text style={[styles.loginBtnText, { color: colors.primaryForeground, fontFamily: 'Cairo_700Bold' }]}>{t('welcome.login') as string}</Text>
+            <Text style={[styles.loginBtnText, { color: '#FFFFFF', fontFamily: 'Cairo_700Bold' }]}>{t('welcome.login') as string}</Text>
           </Pressable>
           <Pressable
             style={({ pressed }) => [styles.registerBtn, { borderColor: colors.primary, opacity: pressed ? 0.9 : 1 }]}
@@ -91,80 +92,166 @@ export default function AccountScreen() {
             <Text style={[styles.registerBtnText, { color: colors.primary, fontFamily: 'Cairo_600SemiBold' }]}>{t('welcome.register') as string}</Text>
           </Pressable>
         </View>
-
-        <SettingsGroup
-          colors={colors}
-          title={(t('settings.aboutApp') as string) || "عن التطبيق"}
-          rows={[
-            { icon: 'shield-checkmark-outline', label: (t('legal.terms.title') as string) || 'الشروط والأحكام', color: colors.primary, route: '/terms' },
-            { icon: 'lock-closed-outline', label: (t('legal.privacy.title') as string) || 'سياسة الخصوصية', color: colors.secondary, route: '/privacy' },
-          ]}
-        />
       </ScrollView>
     );
   }
 
-  // ── Logged-in view ─────────────────────────────────────────────────────────
-  const completion = getCompletion(user);
+  const filledCount = COMPLETION_FIELDS.filter((k) => !!(user as any)[k]).length;
+  const completion = Math.round((filledCount / COMPLETION_FIELDS.length) * 100);
+  const isComplete = completion >= 100;
+
+  const activeCount = (apps?.filter(a => a.status === 'received' || a.status === 'under_review' || a.status === 'awaiting_documents' || a.status === 'documents_uploaded' || a.status === 'sent_to_embassy').length || 0) + (bookings?.filter(b => b.status === 'pending' || b.status === 'confirmed').length || 0);
+  const completedCount = (apps?.filter(a => a.status === 'issued' || a.status === 'completed' || a.status === 'rejected' || a.status === 'cancelled').length || 0) + (bookings?.filter(b => b.status === 'cancelled').length || 0);
+
+  const stats = [
+    { id: 'active', icon: 'document-text-outline', label: lang === 'ar' ? 'طلبات نشطة' : 'Active requests', count: activeCount },
+    { id: 'completed', icon: 'checkmark-circle-outline', label: lang === 'ar' ? 'طلبات مكتملة' : 'Completed', count: completedCount },
+  ];
+
+  const menuItems = [
+    { id: 'info', icon: 'person-outline', title: lang === 'ar' ? 'المعلومات الشخصية' : 'Personal info', sub: lang === 'ar' ? 'إدارة بياناتك ومعلومات التواصل' : 'Manage your data and contact info', route: '/profile-edit' },
+    { id: 'docs', icon: 'id-card-outline', title: lang === 'ar' ? 'الوثائق والمستندات' : 'Documents', sub: lang === 'ar' ? 'إدارة مستنداتك وملفاتك الشخصية' : 'Manage your files and documents', route: '/profile-edit' },
+    { id: 'pay', icon: 'wallet-outline', title: lang === 'ar' ? 'وسائل الدفع' : 'Payment methods', sub: lang === 'ar' ? 'إدارة بطاقاتك وطرق الدفع الخاصة بك' : 'Manage your cards and payment methods', route: '/wallet' },
+    { id: 'sec', icon: 'shield-checkmark-outline', title: lang === 'ar' ? 'الأمان والخصوصية' : 'Security and Privacy', sub: lang === 'ar' ? 'إعدادات الأمان والخصوصية' : 'Security settings and privacy', route: '/settings' },
+    { id: 'notif', icon: 'notifications-outline', title: lang === 'ar' ? 'الإشعارات' : 'Notifications', sub: lang === 'ar' ? 'تخصيص الإشعارات والتنبيهات' : 'Customize notifications and alerts', route: '/notifications' },
+    { id: 'help', icon: 'headset-outline', title: lang === 'ar' ? 'الدعم والمساعدة' : 'Help & Support', sub: lang === 'ar' ? 'تواصل معنا للحصول على المساعدة' : 'Contact us for assistance', action: () => Alert.alert(t('support.contactUs') as string, t('settings.supportAvailable') as string) },
+    { id: 'logout', icon: 'log-out-outline', title: lang === 'ar' ? 'تسجيل الخروج' : 'Logout', sub: lang === 'ar' ? 'تسجيل الخروج من حسابك' : 'Sign out of your account', action: handleLogout, destructive: true },
+  ];
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={{ paddingBottom: bottomInset + 90 }}>
-      <ProfileHeader 
-        user={user} 
-        completion={completion} 
-        onEditPress={() => router.push('/profile-edit' as never)} 
-        topInset={topInset} 
-      />
-
-      <PassportSummary user={user} onEditPress={() => router.push('/profile-edit' as never)} />
-
-      <DocumentList user={user} onUploadPress={() => router.push('/profile-edit' as never)} />
-      
-      <DownloadedVisas />
-
-      <View style={styles.shortcutsRow}>
-        <Shortcut colors={colors} icon="calendar-outline" label={(t('nav.bookings') as string) || "حجوزاتي"} onPress={() => router.push('/(tabs)/bookings' as never)} />
-        <Shortcut colors={colors} icon="wallet-outline" label={(t('payment.wallet') as string) || "المحفظة"} onPress={() => router.push('/wallet' as never)} />
+    <ScrollView 
+      style={[styles.container, { backgroundColor: colors.background }]} 
+      contentContainerStyle={{ paddingBottom: bottomInset + 90 }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.accent} />}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={[styles.header, { paddingTop: topInset }]}>
+        <View style={[styles.topBar, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+          <Pressable style={styles.iconBtn} onPress={() => router.push('/(tabs)/notifications')}>
+            <Ionicons name="notifications-outline" size={23} color={colors.primary} />
+          </Pressable>
+          <Image source={require('@/assets/images/absher-travel-logo-nobg.png')} style={styles.logo} contentFit="contain" />
+          <Pressable style={styles.langPill} onPress={() => {}}>
+            <Text style={[styles.lang, { color: colors.primary }]}>{lang === 'ar' ? 'AR' : 'EN'}</Text>
+            <Ionicons name="globe-outline" size={16} color={colors.primary} />
+          </Pressable>
+        </View>
       </View>
 
-      <SettingsGroup
-        colors={colors}
-        title={(t('settings.advancedSettings') as string) || "الإعدادات المتقدمة"}
-        rows={[
-          { icon: 'settings-outline', label: (t('settings.generalSettings') as string) || 'الإعدادات العامة', color: '#64748B', route: '/settings' },
-          { icon: 'notifications-outline', label: (t('settings.notifications') as string) || 'الإشعارات', color: colors.secondary, route: '/notifications' },
-          { icon: 'person-circle-outline', label: (t('profile.edit') as string) || 'تعديل الملف الشخصي', color: colors.accent, route: '/profile-edit' },
-        ]}
-      />
+      <View style={{ paddingHorizontal: 20, marginTop: 16 }}>
+        <View style={[styles.userCard, { backgroundColor: colors.card, shadowColor: colors.primary }]}>
+          <View style={[styles.userInfoRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+            
+            <View style={[styles.avatarWrap, { borderColor: colors.accent }]}>
+              {user.profilePhotoUrl ? (
+                <Image source={{ uri: user.profilePhotoUrl }} style={styles.avatarImg} contentFit="cover" />
+              ) : (
+                <View style={[styles.avatarImg, { backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }]}>
+                  <Text style={{ color: '#FFF', fontSize: 24, fontFamily: 'Cairo_700Bold' }}>{user.firstName?.charAt(0) || user.email?.charAt(0).toUpperCase() || '?'}</Text>
+                </View>
+              )}
+              <View style={[styles.verifiedBadge, { backgroundColor: colors.success, borderColor: colors.card }]}>
+                <Ionicons name="checkmark" size={12} color="#FFF" />
+              </View>
+            </View>
 
-      <SettingsGroup
-        colors={colors}
-        title={(t('settings.supportInfo') as string) || "الدعم والمعلومات"}
-        rows={[
-          { icon: 'help-buoy-outline', label: (t('support.contactUs') as string) || 'الدعم / تواصل معنا', color: colors.success, onPress: () => Alert.alert((t('support.contactUs') as string) || 'تواصل معنا', (t('settings.supportAvailable') as string) || 'فريق الدعم متاح لمساعدتك عبر قنوات التواصل داخل التطبيق.') },
-          { icon: 'shield-checkmark-outline', label: (t('legal.terms.title') as string) || 'الشروط والأحكام', color: colors.primary, route: '/terms' },
-          { icon: 'lock-closed-outline', label: (t('legal.privacy.title') as string) || 'سياسة الخصوصية', color: colors.secondary, route: '/privacy' },
-        ]}
-      />
+            <View style={[styles.userDetails, { alignItems: isRTL ? 'flex-end' : 'flex-start' }]}>
+              <Text style={[styles.userName, { color: colors.text, fontFamily: 'Cairo_700Bold', textAlign: isRTL ? 'right' : 'left' }]}>
+                {user.firstName} {user.lastName}
+              </Text>
+              <Text style={[styles.userEmail, { color: colors.textSecondary, fontFamily: 'Cairo_400Regular', textAlign: isRTL ? 'right' : 'left' }]}>
+                {user.email}
+              </Text>
+              {user.phone && (
+                <Text style={[styles.userPhone, { color: colors.textSecondary, fontFamily: 'Cairo_400Regular', textAlign: isRTL ? 'right' : 'left' }]}>
+                  {user.phone}
+                </Text>
+              )}
+            </View>
+            
+            <Pressable onPress={() => router.push('/profile-edit')} style={{ padding: 8 }}>
+              <Ionicons name={isRTL ? "chevron-back" : "chevron-forward"} size={20} color={colors.textSecondary} />
+            </Pressable>
+          </View>
 
-      <Pressable
-        style={({ pressed }) => [styles.logoutBtn, { borderColor: colors.destructive, opacity: pressed ? 0.8 : 1 }]}
-        onPress={handleLogout}
-      >
-        <Ionicons name="log-out-outline" size={22} color={colors.destructive} />
-        <Text style={[styles.logoutText, { color: colors.destructive, fontFamily: 'Cairo_600SemiBold' }]}>{(t('profile.logout') as string) || "تسجيل الخروج"}</Text>
-      </Pressable>
+          <View style={[styles.completionBanner, { backgroundColor: isComplete ? '#F0FDF4' : colors.goldTint }]}>
+            <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+               <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 8 }}>
+                 <Text style={[styles.completionText, { color: isComplete ? colors.success : colors.warning, fontFamily: 'Cairo_600SemiBold' }]}>
+                   {isComplete ? (lang === 'ar' ? 'تم إكمال الملف الشخصي' : 'Profile completed') : (lang === 'ar' ? 'أكمل ملفك الشخصي' : 'Complete your profile')}
+                 </Text>
+               </View>
+               <Ionicons name="checkmark-circle" size={20} color={isComplete ? colors.success : colors.warning} />
+            </View>
+            {!isComplete && (
+               <Text style={[styles.completionSub, { color: colors.textSecondary, fontFamily: 'Cairo_400Regular', textAlign: isRTL ? 'right' : 'left', marginTop: 4 }]}>
+                 {lang === 'ar' ? 'ملفك الشخصي غير مكتمل، يرجى إكماله للاستفادة من جميع خدماتنا.' : 'Your profile is incomplete, please complete it.'}
+               </Text>
+            )}
+            {isComplete && (
+               <Text style={[styles.completionSub, { color: colors.textSecondary, fontFamily: 'Cairo_400Regular', textAlign: isRTL ? 'right' : 'left', marginTop: 4 }]}>
+                 {lang === 'ar' ? 'ملفك الشخصي مكتمل وجاهز للاستفادة من جميع خدماتنا.' : 'Your profile is complete and ready.'}
+               </Text>
+            )}
+          </View>
+        </View>
 
-      <Text style={[styles.version, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{(t('settings.version') as string) || "الإصدار"} 1.0.0</Text>
+        {stats.length > 0 && (
+          <View style={[styles.statsStrip, { backgroundColor: colors.card, shadowColor: colors.primary, flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+            {stats.map((stat, idx) => (
+              <React.Fragment key={stat.id}>
+                <View style={styles.statItem}>
+                  <Ionicons name={stat.icon as any} size={24} color={colors.primary} />
+                  <Text style={[styles.statCount, { color: colors.text, fontFamily: 'Cairo_700Bold' }]}>{stat.count}</Text>
+                  <Text style={[styles.statLabel, { color: colors.textSecondary, fontFamily: 'Cairo_400Regular' }]}>{stat.label}</Text>
+                </View>
+                {idx < stats.length - 1 && <View style={[styles.statDivider, { backgroundColor: colors.border }]} />}
+              </React.Fragment>
+            ))}
+          </View>
+        )}
+
+        <View style={[styles.menuList, { backgroundColor: colors.card, shadowColor: colors.primary }]}>
+          {menuItems.map((item, index) => {
+            const isLast = index === menuItems.length - 1;
+            const itemColor = item.destructive ? colors.error : colors.primary;
+            return (
+              <Pressable
+                key={item.id}
+                style={({ pressed }) => [
+                  styles.menuRow,
+                  { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1, flexDirection: isRTL ? 'row-reverse' : 'row' },
+                  isLast && { borderBottomWidth: 0 }
+                ]}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  if (item.action) item.action();
+                  else if (item.route) router.push(item.route as any);
+                }}
+              >
+                <View style={[styles.menuIconWrap, { backgroundColor: item.destructive ? 'rgba(220,38,38,0.1)' : colors.iconBg }]}>
+                  <Ionicons name={item.icon as any} size={22} color={itemColor} />
+                </View>
+                <View style={[styles.menuTextWrap, { alignItems: isRTL ? 'flex-end' : 'flex-start' }]}>
+                  <Text style={[styles.menuTitle, { color: item.destructive ? colors.error : colors.text, fontFamily: 'Cairo_600SemiBold', textAlign: isRTL ? 'right' : 'left' }]}>{item.title}</Text>
+                  <Text style={[styles.menuSub, { color: colors.textSecondary, fontFamily: 'Cairo_400Regular', textAlign: isRTL ? 'right' : 'left' }]}>{item.sub}</Text>
+                </View>
+                <Ionicons name={isRTL ? "chevron-back" : "chevron-forward"} size={20} color={colors.textSecondary} />
+              </Pressable>
+            );
+          })}
+        </View>
+
+      </View>
 
       <ConfirmDialog
         visible={logoutVisible}
         icon="log-out-outline"
         confirmStyle="destructive"
-        title={(t('profile.logoutConfirmTitle') as string) || "هل تريد تسجيل الخروج؟"}
-        message={(t('profile.logoutConfirmBody') as string) || "هل أنت متأكد أنك تريد تسجيل الخروج من حسابك؟"}
-        cancelLabel={(t('common.cancel') as string) || "إلغاء"}
-        confirmLabel={(t('profile.logout') as string) || "تسجيل الخروج"}
+        title={t('profile.logoutConfirmTitle') as string || 'هل تريد تسجيل الخروج؟'}
+        message={t('profile.logoutConfirmBody') as string || 'هل أنت متأكد أنك تريد تسجيل الخروج من حسابك؟'}
+        cancelLabel={t('common.cancel') as string || 'إلغاء'}
+        confirmLabel={t('profile.logout') as string || 'تسجيل الخروج'}
         onCancel={() => setLogoutVisible(false)}
         onConfirm={confirmLogout}
       />
@@ -172,104 +259,48 @@ export default function AccountScreen() {
   );
 }
 
-// ── Sub-components ─────────────────────────────────────────────────────────
-
-function Shortcut({
-  colors, icon, label, onPress,
-}: {
-  colors: ReturnType<typeof useColors>;
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      style={({ pressed }) => [styles.shortcut, { backgroundColor: colors.card, shadowColor: colors.primary, opacity: pressed ? 0.85 : 1 }]}
-      onPress={onPress}
-    >
-      <View style={[styles.shortcutIcon, { backgroundColor: colors.goldTint }]}>
-        <Ionicons name={icon} size={22} color={colors.accent} />
-      </View>
-      <Text style={[styles.shortcutLabel, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function SettingsGroup({
-  colors, title, rows,
-}: {
-  colors: ReturnType<typeof useColors>;
-  title: string;
-  rows: SettingRow[];
-}) {
-  return (
-    <View style={styles.group}>
-      <Text style={[styles.groupTitle, { color: colors.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>{title}</Text>
-      <View style={[styles.groupCard, { backgroundColor: colors.card, shadowColor: colors.primary, borderColor: colors.border }]}>
-        {rows.map((row, i) => {
-          const last = i === rows.length - 1;
-          return (
-            <Pressable
-              key={row.label}
-              style={({ pressed }) => [
-                styles.row,
-                { borderBottomColor: colors.border, opacity: pressed ? 0.7 : 1 },
-                last && { borderBottomWidth: 0 },
-              ]}
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                if (row.onPress) row.onPress();
-                else if (row.route) router.push(row.route as never);
-              }}
-            >
-              {row.value ? (
-                <Text style={[styles.rowValue, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{row.value}</Text>
-              ) : (
-                <Ionicons name="chevron-back" size={18} color={colors.mutedForeground} />
-              )}
-              <Text style={[styles.rowLabel, { color: colors.foreground, fontFamily: 'Cairo_400Regular' }]}>{row.label}</Text>
-              <View style={[styles.rowIcon, { backgroundColor: `${row.color}22` }]}>
-                <Ionicons name={row.icon} size={20} color={row.color} />
-              </View>
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
-
-  // Guest
-  guestHero: { paddingHorizontal: 20, paddingBottom: 36, alignItems: 'center', gap: 12, borderBottomLeftRadius: 32, borderBottomRightRadius: 32 },
-  avatarPlaceholder: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center', marginBottom: 10, borderWidth: 2 },
-  guestTitle: { fontSize: 26 },
-  guestSub: { fontSize: 15, textAlign: 'center', lineHeight: 22 },
-  authButtons: { padding: 20, gap: 14, marginTop: 10 },
-  loginBtn: { borderRadius: 16, paddingVertical: 16, alignItems: 'center', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
-  loginBtnText: { fontSize: 17 },
-  registerBtn: { borderRadius: 16, paddingVertical: 16, alignItems: 'center', borderWidth: 2 },
+  header: { paddingHorizontal: 20, paddingBottom: 16 },
+  topBar: { justifyContent: 'space-between', alignItems: 'center' },
+  iconBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', elevation: 2, shadowColor: '#0A2342', shadowOpacity: 0.05, shadowRadius: 8 },
+  logo: { width: 140, height: 40 },
+  langPill: { flexDirection: 'row', gap: 5, alignItems: 'center', backgroundColor: '#FFFFFF', paddingHorizontal: 12, paddingVertical: 9, borderRadius: 20, elevation: 2, shadowColor: '#0A2342', shadowOpacity: 0.05, shadowRadius: 8 },
+  lang: { fontFamily: 'Cairo_700Bold', fontSize: 12 },
+  
+  guestHero: { margin: 20, padding: 32, alignItems: 'center', borderRadius: 24, shadowColor: '#0A2342', shadowOpacity: 0.05, shadowRadius: 12, elevation: 2 },
+  avatarPlaceholder: { width: 90, height: 90, borderRadius: 45, alignItems: 'center', justifyContent: 'center', marginBottom: 16, borderWidth: 2 },
+  guestTitle: { fontSize: 22, marginBottom: 8 },
+  guestSub: { fontSize: 14, textAlign: 'center', lineHeight: 22 },
+  authButtons: { paddingHorizontal: 20, gap: 12 },
+  loginBtn: { borderRadius: 16, paddingVertical: 16, alignItems: 'center', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 },
+  loginBtnText: { fontSize: 16 },
+  registerBtn: { borderRadius: 16, paddingVertical: 16, alignItems: 'center', borderWidth: 1.5 },
   registerBtnText: { fontSize: 16 },
 
-  // Shortcuts
-  shortcutsRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 20, marginTop: 24 },
-  shortcut: { flex: 1, borderRadius: 18, paddingVertical: 20, alignItems: 'center', gap: 10, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
-  shortcutIcon: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  shortcutLabel: { fontSize: 14 },
+  userCard: { borderRadius: 24, padding: 20, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 12, elevation: 2 },
+  userInfoRow: { alignItems: 'center', justifyContent: 'space-between' },
+  avatarWrap: { position: 'relative', width: 70, height: 70, borderRadius: 35, borderWidth: 2, padding: 2 },
+  avatarImg: { width: '100%', height: '100%', borderRadius: 35 },
+  verifiedBadge: { position: 'absolute', bottom: 0, right: 0, width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', borderWidth: 2 },
+  userDetails: { flex: 1, paddingHorizontal: 16 },
+  userName: { fontSize: 18, marginBottom: 2 },
+  userEmail: { fontSize: 13, marginBottom: 2 },
+  userPhone: { fontSize: 13 },
+  completionBanner: { marginTop: 20, padding: 12, borderRadius: 12 },
+  completionText: { fontSize: 13 },
+  completionSub: { fontSize: 11, lineHeight: 18 },
 
-  // Groups
-  group: { marginTop: 28 },
-  groupTitle: { fontSize: 13, paddingHorizontal: 24, marginBottom: 8, textAlign: 'right' },
-  groupCard: { marginHorizontal: 20, borderRadius: 18, borderWidth: 1, overflow: 'hidden', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
-  row: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: StyleSheet.hairlineWidth, gap: 14 },
-  rowIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  rowLabel: { flex: 1, fontSize: 15, textAlign: 'right' },
-  rowValue: { fontSize: 14 },
+  statsStrip: { marginTop: 16, borderRadius: 20, paddingVertical: 16, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 12, elevation: 2, alignItems: 'center', justifyContent: 'space-evenly' },
+  statItem: { flex: 1, alignItems: 'center', gap: 4 },
+  statCount: { fontSize: 20, marginTop: 4 },
+  statLabel: { fontSize: 12 },
+  statDivider: { width: 1, height: '60%' },
 
-  // Logout
-  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginHorizontal: 20, marginTop: 32, borderRadius: 16, borderWidth: 2, paddingVertical: 16, gap: 10 },
-  logoutText: { fontSize: 16 },
-  version: { textAlign: 'center', fontSize: 12, marginTop: 24, marginBottom: 12 },
+  menuList: { marginTop: 16, borderRadius: 24, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 12, elevation: 2, overflow: 'hidden' },
+  menuRow: { alignItems: 'center', padding: 16, borderBottomWidth: StyleSheet.hairlineWidth, gap: 12 },
+  menuIconWrap: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  menuTextWrap: { flex: 1, gap: 2 },
+  menuTitle: { fontSize: 15 },
+  menuSub: { fontSize: 12 },
 });

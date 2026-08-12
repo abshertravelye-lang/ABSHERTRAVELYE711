@@ -46,8 +46,8 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={{ flexGrow: 1 }}>
-        {/* Header */}
-        <LinearGradient colors={['#071525', '#052B5B', '#1E3A5F']} style={[styles.header, { paddingTop: insets.top + 16 }]}>
+        {/* Airy navy travel header */}
+        <LinearGradient colors={['#071525', '#0A2342', '#163354']} style={[styles.header, { paddingTop: insets.top + 16 }]}>
           <View style={styles.headerTop}>
             <Pressable onPress={() => router.back()} style={styles.closeBtn} hitSlop={10}>
               <Ionicons name="close" size={24} color="rgba(255,255,255,0.9)" />
@@ -67,7 +67,7 @@ export default function LoginScreen() {
           </View>
         </LinearGradient>
 
-        <View style={styles.form}>
+        <View style={[styles.form, { backgroundColor: colors.card }]}>
           {/* Email */}
           <View style={styles.field}>
             <Text style={[styles.label, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold', writingDirection }]}>{t('login.email')}</Text>
@@ -114,7 +114,7 @@ export default function LoginScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.loginBtn,
-              { backgroundColor: '#D4AF37', opacity: pressed || loginMutation.isPending ? 0.85 : 1 }
+              { backgroundColor: colors.primary, opacity: pressed || loginMutation.isPending ? 0.85 : 1 }
             ]}
             onPress={handleLogin}
             disabled={loginMutation.isPending}
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
   brandTitle: { fontSize: 20, color: '#D4AF37', letterSpacing: 1, marginTop: 8 },
   brandSubtitle: { fontSize: 16, color: 'rgba(255,255,255,0.85)' },
   title: { fontSize: 22, color: '#FFFFFF', marginTop: 12 },
-  form: { padding: 20, gap: 18, flex: 1 },
+  form: { padding: 20, gap: 18, flex: 1, marginTop: -22, borderTopLeftRadius: 30, borderTopRightRadius: 30, shadowColor: '#0A2342', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.08, shadowRadius: 18, elevation: 4 },
   field: { gap: 8 },
   label: { fontSize: 14, textAlign: 'right' },
   inputRow: { flexDirection: 'row', alignItems: 'center', borderRadius: 14, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 15, gap: 12 },
@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
   forgotWrap: { alignSelf: 'flex-start', marginTop: -6 },
   forgotLink: { fontSize: 13 },
   loginBtn: { borderRadius: 16, paddingVertical: 17, alignItems: 'center', marginTop: 12, shadowColor: '#D4AF37', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
-  loginBtnText: { color: '#052B5B', fontSize: 17 },
+  loginBtnText: { color: '#FFFFFF', fontSize: 17 },
   registerRow: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 8 },
   registerHint: { fontSize: 14 },
   registerLink: { fontSize: 14 },

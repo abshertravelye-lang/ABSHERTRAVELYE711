@@ -3,10 +3,10 @@
  */
 
 const staticColors = {
-  primaryNavy: '#062B5B',
-  secondaryBlue: '#0D4A8C',
-  premiumGold: '#D4A017',
-  premiumGoldActive: '#F4C542',
+  primaryNavy: '#0A2342',
+  secondaryBlue: '#163354',
+  premiumGold: '#C9A24B',
+  premiumGoldActive: '#DAB868',
   umrahGreen: '#0B5E3B',
   skyBlue: '#38BDF8',
   success: '#16A34A',
@@ -14,23 +14,23 @@ const staticColors = {
   error: '#DC2626',
   
   // Legacy adapter tokens (to keep existing screens compiling)
-  navy: '#062B5B',
-  gold: '#D4A017',
-  cyan: '#0D4A8C', 
+  navy: '#0A2342',
+  gold: '#C9A24B',
+  cyan: '#163354', 
   radius: 12,
 };
 
 const light = {
   // New tokens
-  background: '#F7F9FC',
+  background: '#F4F6F9',
   card: '#FFFFFF',
-  text: '#0F172A',
+  text: '#0A2342',
   textSecondary: '#64748B',
   border: '#E2E8F0',
-  primary: '#062B5B', // Navy
-  primaryActive: '#0D4A8C', // Secondary Blue
-  accent: '#D4A017',  // Gold
-  accentActive: '#F4C542',
+  primary: '#0A2342', // Navy
+  primaryActive: '#163354', 
+  accent: '#C9A24B',  // Gold
+  accentActive: '#DAB868',
   success: staticColors.success,
   warning: staticColors.warning,
   error: staticColors.error,
@@ -38,34 +38,34 @@ const light = {
   skyBlue: staticColors.skyBlue,
   
   // Legacy adapter tokens
-  foreground: '#0F172A',
-  cardForeground: '#0F172A',
+  foreground: '#0A2342',
+  cardForeground: '#0A2342',
   muted: '#F1F5F9',
   mutedForeground: '#64748B',
   input: '#E2E8F0',
   primaryForeground: '#FFFFFF',
-  secondary: '#0D4A8C',
+  secondary: '#163354',
   secondaryForeground: '#FFFFFF',
-  accentForeground: '#062B5B',
+  accentForeground: '#0A2342',
   destructive: staticColors.error,
   destructiveForeground: '#FFFFFF',
   iconBg: '#EBF0F8',
   goldTint: '#FBF6E4',
   cyanTint: '#E0F2FE',
-  tint: '#062B5B',
+  tint: '#0A2342',
 };
 
 const dark = {
   // New tokens
-  background: '#031B3A',
-  card: '#062B5B',
+  background: '#041021', // Darker navy for dark mode
+  card: '#0A2342',
   text: '#FFFFFF',
   textSecondary: '#CBD5E1',
-  border: '#0D4A8C', // Soft border in dark
-  primary: '#D4A017', // Gold becomes primary in dark mode for contrast
-  primaryActive: '#F4C542',
-  accent: '#D4A017',
-  accentActive: '#F4C542',
+  border: '#163354',
+  primary: '#C9A24B',
+  primaryActive: '#DAB868',
+  accent: '#C9A24B',
+  accentActive: '#DAB868',
   success: staticColors.success,
   warning: staticColors.warning,
   error: staticColors.error,
@@ -75,19 +75,19 @@ const dark = {
   // Legacy adapter tokens
   foreground: '#FFFFFF',
   cardForeground: '#FFFFFF',
-  muted: '#0D4A8C',
+  muted: '#163354',
   mutedForeground: '#CBD5E1',
-  input: '#0D4A8C',
-  primaryForeground: '#062B5B',
+  input: '#163354',
+  primaryForeground: '#0A2342',
   secondary: '#38BDF8',
   secondaryForeground: '#FFFFFF',
-  accentForeground: '#062B5B',
+  accentForeground: '#0A2342',
   destructive: staticColors.error,
   destructiveForeground: '#FFFFFF',
-  iconBg: 'rgba(212,160,23,0.14)',
-  goldTint: 'rgba(212,160,23,0.18)',
-  cyanTint: 'rgba(13,74,140,0.14)',
-  tint: '#D4A017',
+  iconBg: 'rgba(201,162,75,0.14)',
+  goldTint: 'rgba(201,162,75,0.18)',
+  cyanTint: 'rgba(22,51,84,0.14)',
+  tint: '#C9A24B',
 };
 
 const colors = {

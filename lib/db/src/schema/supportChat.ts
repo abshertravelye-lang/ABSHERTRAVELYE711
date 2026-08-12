@@ -1,4 +1,5 @@
-import { pgTable, uuid, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, integer, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 import { usersTable } from "./users";
@@ -21,7 +22,13 @@ export const supportConversationsTable = pgTable("support_conversations", {
   staffUnreadCount: integer("staff_unread_count").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => ({
+  // At most one OPEN conversation per registered user (partial unique index).
+  // Applied manually via psql; mirrored here for schema parity.
+  oneOpenPerUser: uniqueIndex("support_conversations_one_open_per_user")
+    .on(t.userId)
+    .where(sql`status = 'open' AND user_id IS NOT NULL`),
+}));
 
 export const supportMessagesTable = pgTable("support_messages", {
   id: uuid("id").primaryKey().defaultRandom(),

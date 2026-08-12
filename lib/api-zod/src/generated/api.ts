@@ -2996,11 +2996,16 @@ export const CreateGuestSupportConversationResponse = zod.object({
 
 
 /**
+ * Provide the guest token via the `x-guest-token` header (preferred). The `token` query param is still accepted for backward compatibility but is deprecated. Only works while the conversation is unclaimed; once claimed by an account the token is revoked (404).
  * @summary List messages for a guest conversation by token (no auth)
  */
 export const ListGuestSupportMessagesQueryParams = zod.object({
-  "token": zod.coerce.string(),
+  "token": zod.coerce.string().optional().describe('Deprecated — use the x-guest-token header instead.'),
   "after": zod.coerce.string().optional()
+})
+
+export const ListGuestSupportMessagesHeader = zod.object({
+  "x-guest-token": zod.string().optional().describe('Guest conversation token (preferred over the query param).')
 })
 
 export const ListGuestSupportMessagesResponseItem = zod.object({
@@ -3015,14 +3020,19 @@ export const ListGuestSupportMessagesResponse = zod.array(ListGuestSupportMessag
 
 
 /**
+ * Provide the guest token via the `x-guest-token` header (preferred); the `token` body field is deprecated but still accepted. Only works while the conversation is unclaimed.
  * @summary Send a guest message by token (no auth)
  */
+export const SendGuestSupportMessageHeader = zod.object({
+  "x-guest-token": zod.string().optional().describe('Guest conversation token (preferred over the body field).')
+})
+
 export const sendGuestSupportMessageBodyBodyMax = 2000;
 
 
 
 export const SendGuestSupportMessageBody = zod.object({
-  "token": zod.string(),
+  "token": zod.string().optional().describe('Deprecated — send the token via the x-guest-token header instead.'),
   "body": zod.string().min(1).max(sendGuestSupportMessageBodyBodyMax)
 })
 
@@ -3037,10 +3047,15 @@ export const SendGuestSupportMessageResponse = zod.object({
 
 
 /**
+ * Atomic, one-time claim. Provide the guest token via the `x-guest-token` header (preferred) or the deprecated `token` body field. On success the guest token is revoked so it can never be replayed. Returns 409 if the token is unknown or the conversation was already claimed (by this or another account).
  * @summary Link a guest conversation to the calling account
  */
+export const ClaimGuestSupportConversationHeader = zod.object({
+  "x-guest-token": zod.string().optional().describe('Guest conversation token (preferred over the body field).')
+})
+
 export const ClaimGuestSupportConversationBody = zod.object({
-  "token": zod.string()
+  "token": zod.string().optional().describe('Deprecated — send the token via the x-guest-token header instead.')
 })
 
 export const ClaimGuestSupportConversationResponse = zod.object({

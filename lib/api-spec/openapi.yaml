@@ -1878,11 +1878,24 @@ paths:
       operationId: listGuestSupportMessages
       tags: [support-chat]
       summary: List messages for a guest conversation by token (no auth)
+      description: >-
+        Provide the guest token via the `x-guest-token` header (preferred).
+        The `token` query param is still accepted for backward compatibility
+        but is deprecated. Only works while the conversation is unclaimed;
+        once claimed by an account the token is revoked (404).
       security: []
       parameters:
+        - name: x-guest-token
+          in: header
+          required: false
+          description: Guest conversation token (preferred over the query param).
+          schema:
+            type: string
         - name: token
           in: query
-          required: true
+          required: false
+          deprecated: true
+          description: Deprecated — use the x-guest-token header instead.
           schema:
             type: string
         - name: after
@@ -1904,7 +1917,18 @@ paths:
       operationId: sendGuestSupportMessage
       tags: [support-chat]
       summary: Send a guest message by token (no auth)
+      description: >-
+        Provide the guest token via the `x-guest-token` header (preferred);
+        the `token` body field is deprecated but still accepted. Only works
+        while the conversation is unclaimed.
       security: []
+      parameters:
+        - name: x-guest-token
+          in: header
+          required: false
+          description: Guest conversation token (preferred over the body field).
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -1928,8 +1952,21 @@ paths:
       operationId: claimGuestSupportConversation
       tags: [support-chat]
       summary: Link a guest conversation to the calling account
+      description: >-
+        Atomic, one-time claim. Provide the guest token via the
+        `x-guest-token` header (preferred) or the deprecated `token` body
+        field. On success the guest token is revoked so it can never be
+        replayed. Returns 409 if the token is unknown or the conversation was
+        already claimed (by this or another account).
       security:
         - bearerAuth: []
+      parameters:
+        - name: x-guest-token
+          in: header
+          required: false
+          description: Guest conversation token (preferred over the body field).
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -1943,10 +1980,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SupportConversation"
-        "404":
-          description: Conversation not found
+        "400":
+          description: Missing guest token
         "409":
-          description: Already linked to another account
+          description: Token invalid or conversation already claimed
 
   /support/admin/conversations:
     get:
@@ -3120,16 +3157,21 @@ components:
 
     GuestMessageInput:
       type: object
-      required: [token, body]
+      required: [body]
       properties:
-        token: { type: string }
+        token:
+          type: string
+          deprecated: true
+          description: Deprecated — send the token via the x-guest-token header instead.
         body: { type: string, minLength: 1, maxLength: 2000 }
 
     ClaimGuestConversationInput:
       type: object
-      required: [token]
       properties:
-        token: { type: string }
+        token:
+          type: string
+          deprecated: true
+          description: Deprecated — send the token via the x-guest-token header instead.
 
     SupportConversationStatusInput:
       type: object

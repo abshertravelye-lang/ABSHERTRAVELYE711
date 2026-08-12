@@ -1470,7 +1470,11 @@ export interface GuestConversationResponse {
 }
 
 export interface GuestMessageInput {
-  token: string;
+  /**
+     * Deprecated — send the token via the x-guest-token header instead.
+     * @deprecated
+     */
+  token?: string;
   /**
      * @minLength 1
      * @maxLength 2000
@@ -1479,7 +1483,11 @@ export interface GuestMessageInput {
 }
 
 export interface ClaimGuestConversationInput {
-  token: string;
+  /**
+     * Deprecated — send the token via the x-guest-token header instead.
+     * @deprecated
+     */
+  token?: string;
 }
 
 export type SupportConversationStatusInputStatus = typeof SupportConversationStatusInputStatus[keyof typeof SupportConversationStatusInputStatus];
@@ -2125,7 +2133,10 @@ after?: string;
 };
 
 export type ListGuestSupportMessagesParams = {
-token: string;
+/**
+ * Deprecated — use the x-guest-token header instead.
+ */
+token?: string;
 after?: string;
 };
 

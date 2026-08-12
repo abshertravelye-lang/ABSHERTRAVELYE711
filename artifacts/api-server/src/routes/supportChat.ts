@@ -6,7 +6,7 @@ import {
   supportMessagesTable,
   usersTable,
 } from "@workspace/db";
-import { and, asc, desc, eq, gt } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth, requirePermission } from "../middleware/auth";
 import { notifyUser } from "../lib/notify";
@@ -94,27 +94,54 @@ async function loadMessages(conversationId: string, after?: string) {
 
 // ── Customer (authenticated) ────────────────────────────────────────────────
 
-// Get-or-create the caller's single open conversation.
-router.post("/support/conversation", requireAuth, async (req, res) => {
-  try {
-    const userId = req.user!.sub;
-    const [existing] = await db
-      .select()
-      .from(supportConversationsTable)
-      .where(
-        and(
-          eq(supportConversationsTable.userId, userId),
-          eq(supportConversationsTable.status, "open"),
-        ),
-      )
-      .orderBy(desc(supportConversationsTable.lastMessageAt))
-      .limit(1);
-    if (existing) return res.json(formatConversation(existing));
+// Find the caller's single open conversation, if any.
+async function findOpenConversation(userId: string) {
+  const [conv] = await db
+    .select()
+    .from(supportConversationsTable)
+    .where(
+      and(
+        eq(supportConversationsTable.userId, userId),
+        eq(supportConversationsTable.status, "open"),
+      ),
+    )
+    .orderBy(desc(supportConversationsTable.lastMessageAt))
+    .limit(1);
+  return conv ?? null;
+}
 
+/**
+ * Get-or-create the caller's single OPEN conversation. The DB enforces at most
+ * one open conversation per user via the partial unique index
+ * `support_conversations_one_open_per_user`; if a concurrent request wins the
+ * insert race we get a 23505 unique violation and simply re-fetch the winner.
+ */
+async function getOrCreateOpenConversation(userId: string) {
+  const existing = await findOpenConversation(userId);
+  if (existing) return existing;
+  try {
     const [created] = await db
       .insert(supportConversationsTable)
       .values({ userId, status: "open" })
       .returning();
+    return created;
+  } catch (e) {
+    if (e && typeof e === "object" && (e as { code?: string }).code === "23505") {
+      const winner = await findOpenConversation(userId);
+      if (winner) return winner;
+    }
+    throw e;
+  }
+}
+
+// Get-or-create the caller's single open conversation.
+router.post("/support/conversation", requireAuth, async (req, res) => {
+  try {
+    const userId = req.user!.sub;
+    const existing = await findOpenConversation(userId);
+    if (existing) return res.json(formatConversation(existing));
+
+    const created = await getOrCreateOpenConversation(userId);
     res.status(201).json(formatConversation(created));
   } catch (e) {
     req.log.error(e);
@@ -126,26 +153,15 @@ router.get("/support/messages", requireAuth, async (req, res) => {
   try {
     const userId = req.user!.sub;
     const after = typeof req.query.after === "string" ? req.query.after : undefined;
-    const [conv] = await db
-      .select()
-      .from(supportConversationsTable)
-      .where(
-        and(
-          eq(supportConversationsTable.userId, userId),
-          eq(supportConversationsTable.status, "open"),
-        ),
-      )
-      .orderBy(desc(supportConversationsTable.lastMessageAt))
-      .limit(1);
+    const conv = await findOpenConversation(userId);
     if (!conv) return res.json([]);
 
     const rows = await loadMessages(conv.id, after);
-    if (conv.customerUnreadCount > 0) {
-      await db
-        .update(supportConversationsTable)
-        .set({ customerUnreadCount: 0, updatedAt: new Date() })
-        .where(eq(supportConversationsTable.id, conv.id));
-    }
+    // Reset AFTER fetching messages (reset races are acceptable).
+    await db
+      .update(supportConversationsTable)
+      .set({ customerUnreadCount: 0, updatedAt: new Date() })
+      .where(eq(supportConversationsTable.id, conv.id));
     res.json(rows.map(formatMessage));
   } catch (e) {
     req.log.error(e);
@@ -158,34 +174,19 @@ router.post("/support/messages", requireAuth, async (req, res) => {
     const userId = req.user!.sub;
     const { body } = bodySchema.parse(req.body);
 
-    let [conv] = await db
-      .select()
-      .from(supportConversationsTable)
-      .where(
-        and(
-          eq(supportConversationsTable.userId, userId),
-          eq(supportConversationsTable.status, "open"),
-        ),
-      )
-      .orderBy(desc(supportConversationsTable.lastMessageAt))
-      .limit(1);
-    if (!conv) {
-      [conv] = await db
-        .insert(supportConversationsTable)
-        .values({ userId, status: "open" })
-        .returning();
-    }
+    const conv = await getOrCreateOpenConversation(userId);
 
     const [msg] = await db
       .insert(supportMessagesTable)
       .values({ conversationId: conv.id, sender: "customer", senderUserId: userId, body })
       .returning();
 
+    // Atomic DB-side increment avoids lost updates under concurrency.
     await db
       .update(supportConversationsTable)
       .set({
         lastMessageAt: msg.createdAt,
-        staffUnreadCount: conv.staffUnreadCount + 1,
+        staffUnreadCount: sql`${supportConversationsTable.staffUnreadCount} + 1`,
         updatedAt: new Date(),
       })
       .where(eq(supportConversationsTable.id, conv.id));
@@ -218,30 +219,46 @@ router.post("/support/guest/conversation", async (req, res) => {
   }
 });
 
+// Extract the guest token, preferring the 'x-guest-token' header over the
+// (backward-compatible) query param / body field.
+function extractGuestToken(req: import("express").Request, fromQuery?: string): string | undefined {
+  const header = req.headers["x-guest-token"];
+  const headerToken = Array.isArray(header) ? header[0] : header;
+  if (typeof headerToken === "string" && headerToken.length > 0) return headerToken;
+  return fromQuery && fromQuery.length > 0 ? fromQuery : undefined;
+}
+
+// A guest token only resolves a conversation while it is UNCLAIMED
+// (user_id IS NULL). Once claimed the token is nulled, so it is dead.
 async function findGuestConversation(token: string | undefined) {
   if (!token) return null;
   const [conv] = await db
     .select()
     .from(supportConversationsTable)
-    .where(eq(supportConversationsTable.guestToken, token))
+    .where(
+      and(
+        eq(supportConversationsTable.guestToken, token),
+        isNull(supportConversationsTable.userId),
+      ),
+    )
     .limit(1);
   return conv ?? null;
 }
 
 router.get("/support/guest/messages", async (req, res) => {
   try {
-    const token = typeof req.query.token === "string" ? req.query.token : undefined;
+    const queryToken = typeof req.query.token === "string" ? req.query.token : undefined;
+    const token = extractGuestToken(req, queryToken);
     const after = typeof req.query.after === "string" ? req.query.after : undefined;
     const conv = await findGuestConversation(token);
     if (!conv) return res.status(404).json({ error: "Conversation not found" });
 
     const rows = await loadMessages(conv.id, after);
-    if (conv.customerUnreadCount > 0) {
-      await db
-        .update(supportConversationsTable)
-        .set({ customerUnreadCount: 0, updatedAt: new Date() })
-        .where(eq(supportConversationsTable.id, conv.id));
-    }
+    // Reset AFTER fetching messages (reset races are acceptable).
+    await db
+      .update(supportConversationsTable)
+      .set({ customerUnreadCount: 0, updatedAt: new Date() })
+      .where(eq(supportConversationsTable.id, conv.id));
     res.json(rows.map(formatMessage));
   } catch (e) {
     req.log.error(e);
@@ -250,13 +267,16 @@ router.get("/support/guest/messages", async (req, res) => {
 });
 
 const guestPostSchema = z.object({
-  token: z.string().min(1),
+  // Backward-compat: token may arrive in the body; the 'x-guest-token' header
+  // is preferred when present.
+  token: z.string().min(1).optional(),
   body: z.string().trim().min(1).max(MAX_BODY_LEN),
 });
 
 router.post("/support/guest/messages", async (req, res) => {
   try {
-    const { token, body } = guestPostSchema.parse(req.body);
+    const parsed = guestPostSchema.parse(req.body);
+    const token = extractGuestToken(req, parsed.token);
     const conv = await findGuestConversation(token);
     if (!conv) return res.status(404).json({ error: "Conversation not found" });
     if (guestRateLimited(conv.id)) {
@@ -268,16 +288,17 @@ router.post("/support/guest/messages", async (req, res) => {
       .values({
         conversationId: conv.id,
         sender: "customer",
-        senderUserId: conv.userId ?? null,
-        body,
+        senderUserId: null,
+        body: parsed.body,
       })
       .returning();
 
+    // Atomic DB-side increment avoids lost updates under concurrency.
     await db
       .update(supportConversationsTable)
       .set({
         lastMessageAt: msg.createdAt,
-        staffUnreadCount: conv.staffUnreadCount + 1,
+        staffUnreadCount: sql`${supportConversationsTable.staffUnreadCount} + 1`,
         updatedAt: new Date(),
       })
       .where(eq(supportConversationsTable.id, conv.id));
@@ -291,24 +312,54 @@ router.post("/support/guest/messages", async (req, res) => {
 });
 
 // Link a guest conversation to the calling account (preserves history).
-const claimSchema = z.object({ token: z.string().min(1) });
+const claimSchema = z.object({ token: z.string().min(1).optional() });
 router.post("/support/guest/claim", requireAuth, async (req, res) => {
   try {
     const userId = req.user!.sub;
-    const { token } = claimSchema.parse(req.body);
-    const conv = await findGuestConversation(token);
-    if (!conv) return res.status(404).json({ error: "Conversation not found" });
-    if (conv.userId && conv.userId !== userId) {
-      return res.status(409).json({ error: "Conversation already linked to another account" });
-    }
-    if (conv.userId === userId) return res.json(formatConversation(conv));
+    const parsed = claimSchema.parse(req.body);
+    const token = extractGuestToken(req, parsed.token);
+    if (!token) return res.status(400).json({ error: "Missing guest token" });
 
-    const [updated] = await db
-      .update(supportConversationsTable)
-      .set({ userId, updatedAt: new Date() })
-      .where(eq(supportConversationsTable.id, conv.id))
-      .returning();
-    res.json(formatConversation(updated));
+    // Atomic, one-time claim: only succeeds while the conversation is still an
+    // unclaimed guest conversation (user_id IS NULL). The guest_token is nulled
+    // so it can never be replayed. This prevents claim races and ownership
+    // overwrites without a read-then-write window.
+    let updated: ConversationRow | undefined;
+    try {
+      [updated] = await db
+        .update(supportConversationsTable)
+        .set({ userId, guestToken: null, updatedAt: new Date() })
+        .where(
+          and(
+            eq(supportConversationsTable.guestToken, token),
+            isNull(supportConversationsTable.userId),
+          ),
+        )
+        .returning();
+    } catch (err) {
+      // The partial unique index enforces at most one OPEN conversation per
+      // user; if the caller already has one, the claim conflicts.
+      if (err && typeof err === "object" && (err as { code?: string }).code === "23505") {
+        return res
+          .status(409)
+          .json({ error: "You already have an open conversation; close it before claiming another" });
+      }
+      throw err;
+    }
+
+    if (updated) return res.json(formatConversation(updated));
+
+    // Nothing updated: either the token is unknown/expired (404) or it was
+    // already claimed (by this or another account) → 409.
+    const [existing] = await db
+      .select({ id: supportConversationsTable.id, userId: supportConversationsTable.userId })
+      .from(supportConversationsTable)
+      .where(eq(supportConversationsTable.guestToken, token))
+      .limit(1);
+    if (!existing) {
+      return res.status(409).json({ error: "Conversation already claimed or token invalid" });
+    }
+    return res.status(409).json({ error: "Conversation already linked to an account" });
   } catch (e) {
     if (e instanceof z.ZodError) return res.status(400).json({ error: "Invalid input", details: e.issues });
     req.log.error(e);
@@ -391,12 +442,11 @@ router.get(
       if (!conv) return res.status(404).json({ error: "Conversation not found" });
 
       const rows = await loadMessages(conv.id);
-      if (conv.staffUnreadCount > 0) {
-        await db
-          .update(supportConversationsTable)
-          .set({ staffUnreadCount: 0, updatedAt: new Date() })
-          .where(eq(supportConversationsTable.id, conv.id));
-      }
+      // Reset AFTER fetching messages (reset races are acceptable).
+      await db
+        .update(supportConversationsTable)
+        .set({ staffUnreadCount: 0, updatedAt: new Date() })
+        .where(eq(supportConversationsTable.id, conv.id));
       res.json(rows.map(formatMessage));
     } catch (e) {
       req.log.error(e);
@@ -429,11 +479,12 @@ router.post(
         })
         .returning();
 
+      // Atomic DB-side increment avoids lost updates under concurrency.
       await db
         .update(supportConversationsTable)
         .set({
           lastMessageAt: msg.createdAt,
-          customerUnreadCount: conv.customerUnreadCount + 1,
+          customerUnreadCount: sql`${supportConversationsTable.customerUnreadCount} + 1`,
           updatedAt: new Date(),
         })
         .where(eq(supportConversationsTable.id, conv.id));

@@ -6522,7 +6522,7 @@ export const useCreateGuestSupportConversation = <TError = ErrorType<unknown>,
       return useMutation(getCreateGuestSupportConversationMutationOptions(options));
     }
 
-export const getListGuestSupportMessagesUrl = (params: ListGuestSupportMessagesParams,) => {
+export const getListGuestSupportMessagesUrl = (params?: ListGuestSupportMessagesParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -6538,9 +6538,10 @@ export const getListGuestSupportMessagesUrl = (params: ListGuestSupportMessagesP
 }
 
 /**
+ * Provide the guest token via the `x-guest-token` header (preferred). The `token` query param is still accepted for backward compatibility but is deprecated. Only works while the conversation is unclaimed; once claimed by an account the token is revoked (404).
  * @summary List messages for a guest conversation by token (no auth)
  */
-export const listGuestSupportMessages = async (params: ListGuestSupportMessagesParams, options?: RequestInit): Promise<SupportMessage[]> => {
+export const listGuestSupportMessages = async (params?: ListGuestSupportMessagesParams, options?: RequestInit): Promise<SupportMessage[]> => {
 
   return customFetch<SupportMessage[]>(getListGuestSupportMessagesUrl(params),
   {
@@ -6562,7 +6563,7 @@ export const getListGuestSupportMessagesQueryKey = (params?: ListGuestSupportMes
     }
 
 
-export const getListGuestSupportMessagesQueryOptions = <TData = Awaited<ReturnType<typeof listGuestSupportMessages>>, TError = ErrorType<void>>(params: ListGuestSupportMessagesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGuestSupportMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getListGuestSupportMessagesQueryOptions = <TData = Awaited<ReturnType<typeof listGuestSupportMessages>>, TError = ErrorType<void>>(params?: ListGuestSupportMessagesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGuestSupportMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -6589,7 +6590,7 @@ export type ListGuestSupportMessagesQueryError = ErrorType<void>
  */
 
 export function useListGuestSupportMessages<TData = Awaited<ReturnType<typeof listGuestSupportMessages>>, TError = ErrorType<void>>(
- params: ListGuestSupportMessagesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGuestSupportMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: ListGuestSupportMessagesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listGuestSupportMessages>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
@@ -6615,6 +6616,7 @@ export const getSendGuestSupportMessageUrl = () => {
 }
 
 /**
+ * Provide the guest token via the `x-guest-token` header (preferred); the `token` body field is deprecated but still accepted. Only works while the conversation is unclaimed.
  * @summary Send a guest message by token (no auth)
  */
 export const sendGuestSupportMessage = async (guestMessageInput: GuestMessageInput, options?: RequestInit): Promise<SupportMessage> => {
@@ -6685,6 +6687,7 @@ export const getClaimGuestSupportConversationUrl = () => {
 }
 
 /**
+ * Atomic, one-time claim. Provide the guest token via the `x-guest-token` header (preferred) or the deprecated `token` body field. On success the guest token is revoked so it can never be replayed. Returns 409 if the token is unknown or the conversation was already claimed (by this or another account).
  * @summary Link a guest conversation to the calling account
  */
 export const claimGuestSupportConversation = async (claimGuestConversationInput: ClaimGuestConversationInput, options?: RequestInit): Promise<SupportConversation> => {

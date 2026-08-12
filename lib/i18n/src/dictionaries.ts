@@ -182,6 +182,28 @@ export const auth: Domain = {
   },
   "register.missingTitle": { ar: "بيانات ناقصة", en: "Missing information" },
   "register.errorTitle": { ar: "خطأ", en: "Error" },
+  // Auth screen redesign
+  "auth.tagline": { ar: "شريكك المميز في السفر", en: "Your Premium Travel Partner" },
+  "auth.tabLogin": { ar: "تسجيل الدخول", en: "Sign In" },
+  "auth.tabRegister": { ar: "إنشاء حساب", en: "Sign Up" },
+  "auth.identifier": { ar: "البريد الإلكتروني أو رقم الجوال", en: "Email or phone number" },
+  "auth.identifierPlaceholder": {
+    ar: "أدخل بريدك الإلكتروني أو رقم جوالك",
+    en: "Enter your email or phone number",
+  },
+  "auth.orContinue": { ar: "أو تابع عبر", en: "Or continue with" },
+  "auth.googleSignIn": { ar: "تسجيل الدخول بحساب Google", en: "Sign in with Google" },
+  "auth.googleSoonTitle": { ar: "قريباً", en: "Coming soon" },
+  "auth.googleSoonBody": {
+    ar: "سيتوفر تسجيل الدخول عبر Google قريباً",
+    en: "Sign-in with Google will be available soon",
+  },
+  "auth.trust.secure.title": { ar: "آمن وموثوق", en: "Safe & Secure" },
+  "auth.trust.secure.caption": { ar: "حماية بياناتك ومعاملاتك", en: "Protecting your data & transactions" },
+  "auth.trust.support.title": { ar: "دعم على مدار الساعة", en: "24/7 Support" },
+  "auth.trust.support.caption": { ar: "فريق دعم متخصص لمساعدتك", en: "A dedicated team to help you" },
+  "auth.trust.experience.title": { ar: "خبرة موثوقة", en: "Trusted Expertise" },
+  "auth.trust.experience.caption": { ar: "سنوات من الخبرة في خدمتك", en: "Years of experience at your service" },
   // forgot password
   "forgot.title1": { ar: "نسيت كلمة المرور؟", en: "Forgot password?" },
   "forgot.title2": { ar: "تم إرسال الرابط", en: "Link sent" },

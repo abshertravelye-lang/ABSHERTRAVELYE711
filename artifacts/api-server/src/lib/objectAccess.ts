@@ -4,6 +4,7 @@ import {
   objectUploadsTable,
   applicationDocumentVersionsTable,
   visaApplicationSubmissionsTable,
+  umrahApplicationsTable,
 } from '@workspace/db';
 import { and, eq, isNull, or } from 'drizzle-orm';
 
@@ -72,7 +73,21 @@ export async function isVisaApplicationObject(objectPath: string): Promise<boole
       ),
     )
     .limit(1);
-  return !!submission;
+  if (submission) return true;
+
+  const [umrah] = await db
+    .select({ id: umrahApplicationsTable.id })
+    .from(umrahApplicationsTable)
+    .where(
+      or(
+        eq(umrahApplicationsTable.sponsorResidencyImageUrl, objectPath),
+        eq(umrahApplicationsTable.passportImageUrl, objectPath),
+        eq(umrahApplicationsTable.personalPhotoUrl, objectPath),
+        eq(umrahApplicationsTable.issuedVisaUrl, objectPath),
+      ),
+    )
+    .limit(1);
+  return !!umrah;
 }
 
 /**
@@ -141,7 +156,21 @@ async function callerOwnsIssuedVisa(userId: string, objectPath: string): Promise
       ),
     )
     .limit(1);
-  return !!row;
+  if (row) return true;
+
+  // Same grant for Umrah applications: issuedVisaUrl is staff-written only, so
+  // the owning pilgrim may download the issued Umrah visa file.
+  const [umrah] = await db
+    .select({ id: umrahApplicationsTable.id })
+    .from(umrahApplicationsTable)
+    .where(
+      and(
+        eq(umrahApplicationsTable.issuedVisaUrl, objectPath),
+        eq(umrahApplicationsTable.userId, userId),
+      ),
+    )
+    .limit(1);
+  return !!umrah;
 }
 
 /**

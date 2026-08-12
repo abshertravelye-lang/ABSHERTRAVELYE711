@@ -28,6 +28,7 @@ import type {
   ContactInput,
   ContactMessage,
   DashboardStats,
+  DeletePushToken200,
   Destination,
   DestinationInput,
   DestinationUpdate,
@@ -37,6 +38,7 @@ import type {
   ErrorResponse,
   FlightSearchResults,
   GetRecentBookingsParams,
+  GetUmrahConfigParams,
   HealthStatus,
   ListBookingsParams,
   ListMyBookingsParams,
@@ -50,6 +52,8 @@ import type {
   LogoutUserBody,
   MarkAllNotificationsRead200,
   Notification,
+  NotificationSendRequest,
+  NotificationSendResponse,
   OcrPassportBody,
   OcrResult,
   Offer,
@@ -60,6 +64,9 @@ import type {
   ProgramInput,
   ProgramUpdate,
   ProviderStatus,
+  PushToken,
+  PushTokenDelete,
+  PushTokenRegister,
   RefreshToken200,
   RefreshTokenBody,
   RegisterInput,
@@ -67,6 +74,12 @@ import type {
   RequestApplicationDocumentInput,
   SafeUser,
   SearchFlightsParams,
+  UmrahApplication,
+  UmrahApplicationAdmin,
+  UmrahApplicationCreate,
+  UmrahApplicationCreated,
+  UmrahApplicationStatusUpdate,
+  UmrahConfig,
   UploadApplicationDocumentInput,
   UploadUrlRequest,
   UploadUrlResponse,
@@ -2860,6 +2873,532 @@ export const useUpdateVisaApplication = <TError = ErrorType<unknown>,
       return useMutation(getUpdateVisaApplicationMutationOptions(options));
     }
 
+export const getGetUmrahConfigUrl = (params?: GetUmrahConfigParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/umrah/config?${stringifiedParams}` : `/api/umrah/config`
+}
+
+/**
+ * @summary Get Umrah declaration text and fee for a nationality
+ */
+export const getUmrahConfig = async (params?: GetUmrahConfigParams, options?: RequestInit): Promise<UmrahConfig> => {
+
+  return customFetch<UmrahConfig>(getGetUmrahConfigUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUmrahConfigQueryKey = (params?: GetUmrahConfigParams,) => {
+    return [
+    `/api/umrah/config`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetUmrahConfigQueryOptions = <TData = Awaited<ReturnType<typeof getUmrahConfig>>, TError = ErrorType<unknown>>(params?: GetUmrahConfigParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUmrahConfig>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUmrahConfigQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUmrahConfig>>> = ({ signal }) => getUmrahConfig(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUmrahConfig>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUmrahConfigQueryResult = NonNullable<Awaited<ReturnType<typeof getUmrahConfig>>>
+export type GetUmrahConfigQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get Umrah declaration text and fee for a nationality
+ */
+
+export function useGetUmrahConfig<TData = Awaited<ReturnType<typeof getUmrahConfig>>, TError = ErrorType<unknown>>(
+ params?: GetUmrahConfigParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUmrahConfig>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUmrahConfigQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListUmrahApplicationsUrl = () => {
+
+
+
+
+  return `/api/umrah-applications`
+}
+
+/**
+ * @summary List the caller's own Umrah applications
+ */
+export const listUmrahApplications = async ( options?: RequestInit): Promise<UmrahApplication[]> => {
+
+  return customFetch<UmrahApplication[]>(getListUmrahApplicationsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListUmrahApplicationsQueryKey = () => {
+    return [
+    `/api/umrah-applications`
+    ] as const;
+    }
+
+
+export const getListUmrahApplicationsQueryOptions = <TData = Awaited<ReturnType<typeof listUmrahApplications>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUmrahApplications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListUmrahApplicationsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listUmrahApplications>>> = ({ signal }) => listUmrahApplications({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listUmrahApplications>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListUmrahApplicationsQueryResult = NonNullable<Awaited<ReturnType<typeof listUmrahApplications>>>
+export type ListUmrahApplicationsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List the caller's own Umrah applications
+ */
+
+export function useListUmrahApplications<TData = Awaited<ReturnType<typeof listUmrahApplications>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUmrahApplications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListUmrahApplicationsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateUmrahApplicationUrl = () => {
+
+
+
+
+  return `/api/umrah-applications`
+}
+
+/**
+ * @summary Submit a new Umrah visa application
+ */
+export const createUmrahApplication = async (umrahApplicationCreate: UmrahApplicationCreate, options?: RequestInit): Promise<UmrahApplicationCreated> => {
+
+  return customFetch<UmrahApplicationCreated>(getCreateUmrahApplicationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(umrahApplicationCreate)
+  }
+);}
+
+
+
+
+export const getCreateUmrahApplicationMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createUmrahApplication>>, TError,{data: BodyType<UmrahApplicationCreate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createUmrahApplication>>, TError,{data: BodyType<UmrahApplicationCreate>}, TContext> => {
+
+const mutationKey = ['createUmrahApplication'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createUmrahApplication>>, {data: BodyType<UmrahApplicationCreate>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createUmrahApplication(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateUmrahApplicationMutationResult = NonNullable<Awaited<ReturnType<typeof createUmrahApplication>>>
+    export type CreateUmrahApplicationMutationBody = BodyType<UmrahApplicationCreate>
+    export type CreateUmrahApplicationMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Submit a new Umrah visa application
+ */
+export const useCreateUmrahApplication = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createUmrahApplication>>, TError,{data: BodyType<UmrahApplicationCreate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createUmrahApplication>>,
+        TError,
+        {data: BodyType<UmrahApplicationCreate>},
+        TContext
+      > => {
+      return useMutation(getCreateUmrahApplicationMutationOptions(options));
+    }
+
+export const getPayUmrahApplicationUrl = (id: string,) => {
+
+
+
+
+  return `/api/umrah-applications/${id}/pay`
+}
+
+/**
+ * @summary Pay for an Umrah application (owner only)
+ */
+export const payUmrahApplication = async (id: string, options?: RequestInit): Promise<UmrahApplication> => {
+
+  return customFetch<UmrahApplication>(getPayUmrahApplicationUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getPayUmrahApplicationMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof payUmrahApplication>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof payUmrahApplication>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['payUmrahApplication'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof payUmrahApplication>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  payUmrahApplication(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PayUmrahApplicationMutationResult = NonNullable<Awaited<ReturnType<typeof payUmrahApplication>>>
+
+    export type PayUmrahApplicationMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Pay for an Umrah application (owner only)
+ */
+export const usePayUmrahApplication = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof payUmrahApplication>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof payUmrahApplication>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getPayUmrahApplicationMutationOptions(options));
+    }
+
+export const getListUmrahApplicationsAdminUrl = () => {
+
+
+
+
+  return `/api/umrah-applications/admin/list`
+}
+
+/**
+ * @summary List all Umrah applications with user info (admin)
+ */
+export const listUmrahApplicationsAdmin = async ( options?: RequestInit): Promise<UmrahApplicationAdmin[]> => {
+
+  return customFetch<UmrahApplicationAdmin[]>(getListUmrahApplicationsAdminUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListUmrahApplicationsAdminQueryKey = () => {
+    return [
+    `/api/umrah-applications/admin/list`
+    ] as const;
+    }
+
+
+export const getListUmrahApplicationsAdminQueryOptions = <TData = Awaited<ReturnType<typeof listUmrahApplicationsAdmin>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUmrahApplicationsAdmin>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListUmrahApplicationsAdminQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listUmrahApplicationsAdmin>>> = ({ signal }) => listUmrahApplicationsAdmin({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listUmrahApplicationsAdmin>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListUmrahApplicationsAdminQueryResult = NonNullable<Awaited<ReturnType<typeof listUmrahApplicationsAdmin>>>
+export type ListUmrahApplicationsAdminQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List all Umrah applications with user info (admin)
+ */
+
+export function useListUmrahApplicationsAdmin<TData = Awaited<ReturnType<typeof listUmrahApplicationsAdmin>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listUmrahApplicationsAdmin>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListUmrahApplicationsAdminQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetUmrahApplicationUrl = (id: string,) => {
+
+
+
+
+  return `/api/umrah-applications/${id}`
+}
+
+/**
+ * @summary Get an Umrah application
+ */
+export const getUmrahApplication = async (id: string, options?: RequestInit): Promise<UmrahApplication> => {
+
+  return customFetch<UmrahApplication>(getGetUmrahApplicationUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUmrahApplicationQueryKey = (id: string,) => {
+    return [
+    `/api/umrah-applications/${id}`
+    ] as const;
+    }
+
+
+export const getGetUmrahApplicationQueryOptions = <TData = Awaited<ReturnType<typeof getUmrahApplication>>, TError = ErrorType<unknown>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUmrahApplication>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUmrahApplicationQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUmrahApplication>>> = ({ signal }) => getUmrahApplication(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUmrahApplication>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUmrahApplicationQueryResult = NonNullable<Awaited<ReturnType<typeof getUmrahApplication>>>
+export type GetUmrahApplicationQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get an Umrah application
+ */
+
+export function useGetUmrahApplication<TData = Awaited<ReturnType<typeof getUmrahApplication>>, TError = ErrorType<unknown>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUmrahApplication>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUmrahApplicationQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateUmrahApplicationUrl = (id: string,) => {
+
+
+
+
+  return `/api/umrah-applications/${id}`
+}
+
+/**
+ * @summary Update an Umrah application status (admin)
+ */
+export const updateUmrahApplication = async (id: string,
+    umrahApplicationStatusUpdate: UmrahApplicationStatusUpdate, options?: RequestInit): Promise<UmrahApplication> => {
+
+  return customFetch<UmrahApplication>(getUpdateUmrahApplicationUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(umrahApplicationStatusUpdate)
+  }
+);}
+
+
+
+
+export const getUpdateUmrahApplicationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUmrahApplication>>, TError,{id: string;data: BodyType<UmrahApplicationStatusUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateUmrahApplication>>, TError,{id: string;data: BodyType<UmrahApplicationStatusUpdate>}, TContext> => {
+
+const mutationKey = ['updateUmrahApplication'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateUmrahApplication>>, {id: string;data: BodyType<UmrahApplicationStatusUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateUmrahApplication(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateUmrahApplicationMutationResult = NonNullable<Awaited<ReturnType<typeof updateUmrahApplication>>>
+    export type UpdateUmrahApplicationMutationBody = BodyType<UmrahApplicationStatusUpdate>
+    export type UpdateUmrahApplicationMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update an Umrah application status (admin)
+ */
+export const useUpdateUmrahApplication = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateUmrahApplication>>, TError,{id: string;data: BodyType<UmrahApplicationStatusUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateUmrahApplication>>,
+        TError,
+        {id: string;data: BodyType<UmrahApplicationStatusUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateUmrahApplicationMutationOptions(options));
+    }
+
 export const getListApplicationDocumentsUrl = (id: number,) => {
 
 
@@ -5094,6 +5633,293 @@ export const useMarkAllNotificationsRead = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getMarkAllNotificationsReadMutationOptions(options));
+    }
+
+export const getSendNotificationUrl = () => {
+
+
+
+
+  return `/api/notifications/send`
+}
+
+/**
+ * @summary Admin — create and push a notification to users (requires 'notifications' permission)
+ */
+export const sendNotification = async (notificationSendRequest: NotificationSendRequest, options?: RequestInit): Promise<NotificationSendResponse> => {
+
+  return customFetch<NotificationSendResponse>(getSendNotificationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(notificationSendRequest)
+  }
+);}
+
+
+
+
+export const getSendNotificationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendNotification>>, TError,{data: BodyType<NotificationSendRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendNotification>>, TError,{data: BodyType<NotificationSendRequest>}, TContext> => {
+
+const mutationKey = ['sendNotification'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendNotification>>, {data: BodyType<NotificationSendRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  sendNotification(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendNotificationMutationResult = NonNullable<Awaited<ReturnType<typeof sendNotification>>>
+    export type SendNotificationMutationBody = BodyType<NotificationSendRequest>
+    export type SendNotificationMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Admin — create and push a notification to users (requires 'notifications' permission)
+ */
+export const useSendNotification = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendNotification>>, TError,{data: BodyType<NotificationSendRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendNotification>>,
+        TError,
+        {data: BodyType<NotificationSendRequest>},
+        TContext
+      > => {
+      return useMutation(getSendNotificationMutationOptions(options));
+    }
+
+export const getListAdminNotificationHistoryUrl = () => {
+
+
+
+
+  return `/api/notifications/admin/history`
+}
+
+/**
+ * @summary Admin — recent admin-sent notifications (requires 'notifications' permission)
+ */
+export const listAdminNotificationHistory = async ( options?: RequestInit): Promise<Notification[]> => {
+
+  return customFetch<Notification[]>(getListAdminNotificationHistoryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminNotificationHistoryQueryKey = () => {
+    return [
+    `/api/notifications/admin/history`
+    ] as const;
+    }
+
+
+export const getListAdminNotificationHistoryQueryOptions = <TData = Awaited<ReturnType<typeof listAdminNotificationHistory>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminNotificationHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminNotificationHistoryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminNotificationHistory>>> = ({ signal }) => listAdminNotificationHistory({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminNotificationHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminNotificationHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminNotificationHistory>>>
+export type ListAdminNotificationHistoryQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Admin — recent admin-sent notifications (requires 'notifications' permission)
+ */
+
+export function useListAdminNotificationHistory<TData = Awaited<ReturnType<typeof listAdminNotificationHistory>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminNotificationHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminNotificationHistoryQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRegisterPushTokenUrl = () => {
+
+
+
+
+  return `/api/push-tokens`
+}
+
+/**
+ * @summary Register (upsert) a device push token for the authenticated user
+ */
+export const registerPushToken = async (pushTokenRegister: PushTokenRegister, options?: RequestInit): Promise<PushToken> => {
+
+  return customFetch<PushToken>(getRegisterPushTokenUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(pushTokenRegister)
+  }
+);}
+
+
+
+
+export const getRegisterPushTokenMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerPushToken>>, TError,{data: BodyType<PushTokenRegister>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof registerPushToken>>, TError,{data: BodyType<PushTokenRegister>}, TContext> => {
+
+const mutationKey = ['registerPushToken'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof registerPushToken>>, {data: BodyType<PushTokenRegister>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  registerPushToken(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RegisterPushTokenMutationResult = NonNullable<Awaited<ReturnType<typeof registerPushToken>>>
+    export type RegisterPushTokenMutationBody = BodyType<PushTokenRegister>
+    export type RegisterPushTokenMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Register (upsert) a device push token for the authenticated user
+ */
+export const useRegisterPushToken = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerPushToken>>, TError,{data: BodyType<PushTokenRegister>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof registerPushToken>>,
+        TError,
+        {data: BodyType<PushTokenRegister>},
+        TContext
+      > => {
+      return useMutation(getRegisterPushTokenMutationOptions(options));
+    }
+
+export const getDeletePushTokenUrl = () => {
+
+
+
+
+  return `/api/push-tokens`
+}
+
+/**
+ * @summary Delete a device push token (on logout)
+ */
+export const deletePushToken = async (pushTokenDelete: PushTokenDelete, options?: RequestInit): Promise<DeletePushToken200> => {
+
+  return customFetch<DeletePushToken200>(getDeletePushTokenUrl(),
+  {
+    ...options,
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(pushTokenDelete)
+  }
+);}
+
+
+
+
+export const getDeletePushTokenMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePushToken>>, TError,{data: BodyType<PushTokenDelete>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deletePushToken>>, TError,{data: BodyType<PushTokenDelete>}, TContext> => {
+
+const mutationKey = ['deletePushToken'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deletePushToken>>, {data: BodyType<PushTokenDelete>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  deletePushToken(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeletePushTokenMutationResult = NonNullable<Awaited<ReturnType<typeof deletePushToken>>>
+    export type DeletePushTokenMutationBody = BodyType<PushTokenDelete>
+    export type DeletePushTokenMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete a device push token (on logout)
+ */
+export const useDeletePushToken = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePushToken>>, TError,{data: BodyType<PushTokenDelete>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deletePushToken>>,
+        TError,
+        {data: BodyType<PushTokenDelete>},
+        TContext
+      > => {
+      return useMutation(getDeletePushTokenMutationOptions(options));
     }
 
 export const getListEmployeesUrl = () => {

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { visaApplicationSubmissionsTable, visasTable, notificationsTable, usersTable } from "@workspace/db";
+import { visaApplicationSubmissionsTable, visasTable, usersTable } from "@workspace/db";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import {
   ListVisaApplicationsQueryParams,
@@ -18,6 +18,7 @@ import path from "path";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { isAuthorizedForObject, findUnownedObjectPath } from "../lib/objectAccess";
 import { seedApplicationDocuments } from "./applicationDocuments";
+import { notifyUser } from "../lib/notify";
 
 const objectStorageService = new ObjectStorageService();
 
@@ -667,8 +668,8 @@ router.post("/visa-applications", requireAuth, async (req, res) => {
       req.log.error({ err: seedErr }, "Failed to seed application documents");
     }
 
-    // Send notification
-    await db.insert(notificationsTable).values({
+    // Send notification (in-app row + real push to all devices)
+    await notifyUser({
       userId,
       ...STATUS_MESSAGES.received,
       relatedEntityType: "visa_application",
@@ -727,7 +728,7 @@ router.patch("/visa-applications/:id", requireAuth, requirePermission("visa_appl
       if (body.status) {
         const copy = STATUS_MESSAGES[body.status];
         if (copy) {
-          await db.insert(notificationsTable).values({
+          await notifyUser({
             userId: row.userId,
             ...copy,
             relatedEntityType: "visa_application",
@@ -742,7 +743,7 @@ router.patch("/visa-applications/:id", requireAuth, requirePermission("visa_appl
         body.adminNotes.trim().length > 0 &&
         body.adminNotes !== (prev.adminNotes ?? "");
       if (noteChanged) {
-        await db.insert(notificationsTable).values({
+        await notifyUser({
           userId: row.userId,
           titleAr: "ملاحظة من الإدارة",
           titleEn: "A note from our team",
@@ -759,7 +760,7 @@ router.patch("/visa-applications/:id", requireAuth, requirePermission("visa_appl
         body.issuedVisaUrl.trim().length > 0 &&
         body.issuedVisaUrl !== (prev.issuedVisaUrl ?? "");
       if (fileChanged) {
-        await db.insert(notificationsTable).values({
+        await notifyUser({
           userId: row.userId,
           titleAr: "تأشيرتك جاهزة للتحميل",
           titleEn: "Your visa is ready to download",

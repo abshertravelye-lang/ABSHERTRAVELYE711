@@ -6,12 +6,12 @@ import {
   visaRequiredDocumentsTable,
   visaApplicationSubmissionsTable,
   objectUploadsTable,
-  notificationsTable,
   usersTable,
 } from "@workspace/db";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { requireAuth, requirePermission, requireSuperAdmin, hasStaffPermission } from "../middleware/auth";
 import { logAudit } from "../lib/audit";
+import { notifyUser, notifyManyUsers } from "../lib/notify";
 import {
   RequestApplicationDocumentBody,
   UploadApplicationDocumentBody,
@@ -231,7 +231,7 @@ async function notifyCustomer(
   extraMessage?: string,
 ) {
   if (!userId) return;
-  await db.insert(notificationsTable).values({
+  await notifyUser({
     userId,
     titleAr: copy.titleAr,
     titleEn: copy.titleEn,
@@ -259,17 +259,14 @@ async function notifyStaff(
     recipients = admins.map((a) => a.id);
   }
   if (recipients.length === 0) return;
-  await db.insert(notificationsTable).values(
-    recipients.map((userId) => ({
-      userId,
-      titleAr: copy.titleAr,
-      titleEn: copy.titleEn,
-      messageAr: copy.messageAr,
-      messageEn: copy.messageEn,
-      relatedEntityType: "visa_application",
-      relatedEntityId: String(applicationId),
-    })),
-  );
+  await notifyManyUsers(recipients, {
+    titleAr: copy.titleAr,
+    titleEn: copy.titleEn,
+    messageAr: copy.messageAr,
+    messageEn: copy.messageEn,
+    relatedEntityType: "visa_application",
+    relatedEntityId: String(applicationId),
+  });
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

@@ -16,6 +16,8 @@ export const usersTable = pgTable("users", {
   gender: genderEnum("gender"),
   dateOfBirth: date("date_of_birth"),
   role: userRoleEnum("role").notNull().default("customer"),
+  // Preferred notification / UI language ('ar' | 'en'). Drives push copy.
+  preferredLanguage: text("preferred_language").notNull().default("ar"),
   // Staff permission keys (admin sections). Empty for customers; super_admin bypasses.
   permissions: jsonb("permissions").$type<string[]>().notNull().default([]),
   isActive: boolean("is_active").notNull().default(true),

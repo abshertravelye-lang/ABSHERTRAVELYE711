@@ -38,6 +38,8 @@ tags:
     description: Admin/staff account management
   - name: visa-applications
     description: Visa application submissions
+  - name: umrah-applications
+    description: Umrah visa application service (independent workflow)
   - name: application-documents
     description: Per-application document management & additional-document requests
   - name: visa-required-documents
@@ -766,6 +768,150 @@ paths:
               schema:
                 $ref: "#/components/schemas/VisaApplication"
 
+  /umrah/config:
+    get:
+      operationId: getUmrahConfig
+      tags: [umrah-applications]
+      summary: Get Umrah declaration text and fee for a nationality
+      parameters:
+        - name: nationality
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Umrah config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UmrahConfig"
+
+  /umrah-applications:
+    get:
+      operationId: listUmrahApplications
+      tags: [umrah-applications]
+      summary: List the caller's own Umrah applications
+      responses:
+        "200":
+          description: List of Umrah applications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UmrahApplication"
+    post:
+      operationId: createUmrahApplication
+      tags: [umrah-applications]
+      summary: Submit a new Umrah visa application
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UmrahApplicationCreate"
+      responses:
+        "201":
+          description: Created (awaiting payment)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UmrahApplicationCreated"
+        "409":
+          description: Duplicate active application
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Validation error (e.g. no sponsor)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /umrah-applications/{id}/pay:
+    post:
+      operationId: payUmrahApplication
+      tags: [umrah-applications]
+      summary: Pay for an Umrah application (owner only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paid and submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UmrahApplication"
+        "409":
+          description: Application cannot be paid for
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /umrah-applications/admin/list:
+    get:
+      operationId: listUmrahApplicationsAdmin
+      tags: [umrah-applications]
+      summary: List all Umrah applications with user info (admin)
+      responses:
+        "200":
+          description: List of Umrah applications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UmrahApplicationAdmin"
+
+  /umrah-applications/{id}:
+    get:
+      operationId: getUmrahApplication
+      tags: [umrah-applications]
+      summary: Get an Umrah application
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Umrah application details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UmrahApplication"
+    patch:
+      operationId: updateUmrahApplication
+      tags: [umrah-applications]
+      summary: Update an Umrah application status (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UmrahApplicationStatusUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UmrahApplication"
+
   /visa-applications/{id}/documents:
     get:
       operationId: listApplicationDocuments
@@ -1484,6 +1630,89 @@ paths:
                 properties:
                   updated: { type: integer }
 
+  /notifications/send:
+    post:
+      operationId: sendNotification
+      tags: [notifications]
+      security:
+        - bearerAuth: []
+      summary: Admin — create and push a notification to users (requires 'notifications' permission)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationSendRequest"
+      responses:
+        "200":
+          description: Sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationSendResponse"
+
+  /notifications/admin/history:
+    get:
+      operationId: listAdminNotificationHistory
+      tags: [notifications]
+      security:
+        - bearerAuth: []
+      summary: Admin — recent admin-sent notifications (requires 'notifications' permission)
+      responses:
+        "200":
+          description: Admin-sent notification history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+
+  # ── PUSH TOKENS ──────────────────────────────────────────────────────────
+
+  /push-tokens:
+    post:
+      operationId: registerPushToken
+      tags: [notifications]
+      security:
+        - bearerAuth: []
+      summary: Register (upsert) a device push token for the authenticated user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushTokenRegister"
+      responses:
+        "201":
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PushToken"
+    delete:
+      operationId: deletePushToken
+      tags: [notifications]
+      security:
+        - bearerAuth: []
+      summary: Delete a device push token (on logout)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushTokenDelete"
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deleted]
+                properties:
+                  deleted: { type: integer }
+
   # ── EMPLOYEES / STAFF ────────────────────────────────────────────────────
 
   /employees:
@@ -2115,6 +2344,120 @@ components:
         ineligibleMessageAr: { type: string }
         ineligibleMessageEn: { type: string }
 
+    UmrahConfig:
+      type: object
+      required: [declarationAr, declarationEn]
+      properties:
+        declarationAr: { type: string }
+        declarationEn: { type: string }
+        feeForNationality:
+          type: object
+          required: [amount, currency]
+          properties:
+            amount: { type: number }
+            currency: { type: string }
+
+    UmrahApplication:
+      type: object
+      required: [id, userId, trackingNumber, sponsorAvailable, passportImageUrl, personalPhotoUrl, phone, emergencyPhone, feeCurrency, paymentStatus, status, declarationAccepted, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        userId: { type: string }
+        trackingNumber: { type: string }
+        sponsorAvailable: { type: boolean }
+        sponsorResidencyImageUrl: { type: ["string", "null"] }
+        sponsorPhone: { type: ["string", "null"] }
+        passportImageUrl: { type: string }
+        personalPhotoUrl: { type: string }
+        fullName: { type: ["string", "null"] }
+        passportNumber: { type: ["string", "null"] }
+        nationality: { type: ["string", "null"] }
+        dateOfBirth: { type: ["string", "null"] }
+        gender:
+          type: ["string", "null"]
+          enum: [male, female, null]
+        passportIssueDate: { type: ["string", "null"] }
+        passportExpiryDate: { type: ["string", "null"] }
+        phone: { type: string }
+        contactEmail: { type: ["string", "null"] }
+        emergencyPhone: { type: string }
+        feeAmount: { type: ["number", "null"] }
+        feeCurrency: { type: string }
+        paymentStatus:
+          type: string
+          enum: [unpaid, paid, failed]
+        paymentReference: { type: ["string", "null"] }
+        paidAt: { type: ["string", "null"] }
+        status:
+          type: string
+          enum: [awaiting_payment, submitted, under_review, processing, approved, rejected, completed]
+        adminNotes: { type: ["string", "null"] }
+        issuedVisaUrl: { type: ["string", "null"] }
+        declarationAccepted: { type: boolean }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+
+    UmrahApplicationAdmin:
+      allOf:
+        - $ref: "#/components/schemas/UmrahApplication"
+        - type: object
+          required: [user]
+          properties:
+            user:
+              type: object
+              properties:
+                firstName: { type: ["string", "null"] }
+                lastName: { type: ["string", "null"] }
+                email: { type: ["string", "null"] }
+                phone: { type: ["string", "null"] }
+
+    UmrahApplicationCreate:
+      type: object
+      required: [sponsorAvailable, sponsorResidencyImageUrl, sponsorPhone, passportImageUrl, personalPhotoUrl, phone, emergencyPhone, declarationAccepted]
+      properties:
+        sponsorAvailable: { type: boolean }
+        sponsorResidencyImageUrl: { type: string }
+        sponsorPhone: { type: string }
+        passportImageUrl: { type: string }
+        personalPhotoUrl: { type: string }
+        fullName: { type: string }
+        passportNumber: { type: string }
+        nationality: { type: string }
+        dateOfBirth: { type: string }
+        gender:
+          type: string
+          enum: [male, female]
+        passportIssueDate: { type: string }
+        passportExpiryDate: { type: string }
+        phone: { type: string }
+        contactEmail: { type: string }
+        emergencyPhone: { type: string }
+        declarationAccepted: { type: boolean }
+
+    UmrahApplicationCreated:
+      type: object
+      required: [id, trackingNumber, feeCurrency, paymentStatus, status]
+      properties:
+        id: { type: string }
+        trackingNumber: { type: string }
+        feeAmount: { type: ["number", "null"] }
+        feeCurrency: { type: string }
+        paymentStatus:
+          type: string
+          enum: [unpaid, paid, failed]
+        status:
+          type: string
+          enum: [awaiting_payment, submitted, under_review, processing, approved, rejected, completed]
+
+    UmrahApplicationStatusUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [awaiting_payment, submitted, under_review, processing, approved, rejected, completed]
+        adminNotes: { type: string }
+        issuedVisaUrl: { type: string }
+
     VisaApplication:
       type: object
       required: [id, visaId, eligibilityPath, fullName, nationality, passportNumber, passportIssueDate, passportExpiryDate, dateOfBirth, gender, email, phone, agreedToTerms, status, createdAt, updatedAt]
@@ -2480,7 +2823,51 @@ components:
         relatedEntityType: { type: ["string", "null"] }
         relatedEntityId: { type: ["string", "null"] }
         isRead: { type: boolean }
+        sentBy: { type: ["string", "null"] }
         createdAt: { type: string }
+
+    PushTokenRegister:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string }
+        platform: { type: string, enum: [ios, android, web] }
+        deviceName: { type: string }
+
+    PushToken:
+      type: object
+      required: [id, token]
+      properties:
+        id: { type: string }
+        token: { type: string }
+        platform: { type: ["string", "null"] }
+        deviceName: { type: ["string", "null"] }
+
+    PushTokenDelete:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string }
+
+    NotificationSendRequest:
+      type: object
+      required: [titleAr, titleEn, messageAr, messageEn, audience]
+      properties:
+        titleAr: { type: string }
+        titleEn: { type: string }
+        messageAr: { type: string }
+        messageEn: { type: string }
+        audience: { type: string, enum: [all, users] }
+        userIds:
+          type: array
+          items: { type: string }
+        url: { type: string }
+
+    NotificationSendResponse:
+      type: object
+      required: [sentCount]
+      properties:
+        sentCount: { type: integer }
 
     Employee:
       type: object
@@ -2556,6 +2943,7 @@ components:
         gender: { type: string, enum: [male, female, other] }
         dateOfBirth: { type: string, format: date }
         profilePhotoUrl: { type: string }
+        preferredLanguage: { type: string, enum: [ar, en] }
         passportNumber: { type: string }
         passportIssueCountry: { type: string }
         passportIssuePlace: { type: string }
@@ -2586,6 +2974,7 @@ components:
         gender: { type: ["string", "null"] }
         dateOfBirth: { type: ["string", "null"] }
         role: { type: string, enum: [customer, agent, admin, super_admin] }
+        preferredLanguage: { type: string, enum: [ar, en] }
         isActive: { type: boolean }
         emailVerifiedAt: { type: ["string", "null"] }
         phoneVerifiedAt: { type: ["string", "null"] }

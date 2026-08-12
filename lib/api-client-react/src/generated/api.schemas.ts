@@ -686,6 +686,190 @@ export interface VisaUpdate {
   ineligibleMessageEn?: string;
 }
 
+export type UmrahConfigFeeForNationality = {
+  amount: number;
+  currency: string;
+};
+
+export interface UmrahConfig {
+  declarationAr: string;
+  declarationEn: string;
+  feeForNationality?: UmrahConfigFeeForNationality;
+}
+
+/**
+ * @nullable
+ */
+export type UmrahApplicationGender = typeof UmrahApplicationGender[keyof typeof UmrahApplicationGender] | null;
+
+
+export const UmrahApplicationGender = {
+  male: 'male',
+  female: 'female',
+} as const;
+
+export type UmrahApplicationPaymentStatus = typeof UmrahApplicationPaymentStatus[keyof typeof UmrahApplicationPaymentStatus];
+
+
+export const UmrahApplicationPaymentStatus = {
+  unpaid: 'unpaid',
+  paid: 'paid',
+  failed: 'failed',
+} as const;
+
+export type UmrahApplicationStatus = typeof UmrahApplicationStatus[keyof typeof UmrahApplicationStatus];
+
+
+export const UmrahApplicationStatus = {
+  awaiting_payment: 'awaiting_payment',
+  submitted: 'submitted',
+  under_review: 'under_review',
+  processing: 'processing',
+  approved: 'approved',
+  rejected: 'rejected',
+  completed: 'completed',
+} as const;
+
+export interface UmrahApplication {
+  id: string;
+  userId: string;
+  trackingNumber: string;
+  sponsorAvailable: boolean;
+  /** @nullable */
+  sponsorResidencyImageUrl?: string | null;
+  /** @nullable */
+  sponsorPhone?: string | null;
+  passportImageUrl: string;
+  personalPhotoUrl: string;
+  /** @nullable */
+  fullName?: string | null;
+  /** @nullable */
+  passportNumber?: string | null;
+  /** @nullable */
+  nationality?: string | null;
+  /** @nullable */
+  dateOfBirth?: string | null;
+  /** @nullable */
+  gender?: UmrahApplicationGender;
+  /** @nullable */
+  passportIssueDate?: string | null;
+  /** @nullable */
+  passportExpiryDate?: string | null;
+  phone: string;
+  /** @nullable */
+  contactEmail?: string | null;
+  emergencyPhone: string;
+  /** @nullable */
+  feeAmount?: number | null;
+  feeCurrency: string;
+  paymentStatus: UmrahApplicationPaymentStatus;
+  /** @nullable */
+  paymentReference?: string | null;
+  /** @nullable */
+  paidAt?: string | null;
+  status: UmrahApplicationStatus;
+  /** @nullable */
+  adminNotes?: string | null;
+  /** @nullable */
+  issuedVisaUrl?: string | null;
+  declarationAccepted: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type UmrahApplicationAdminUser = {
+  /** @nullable */
+  firstName?: string | null;
+  /** @nullable */
+  lastName?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+};
+
+export type UmrahApplicationAdmin = UmrahApplication & {
+  user: UmrahApplicationAdminUser;
+};
+
+export type UmrahApplicationCreateGender = typeof UmrahApplicationCreateGender[keyof typeof UmrahApplicationCreateGender];
+
+
+export const UmrahApplicationCreateGender = {
+  male: 'male',
+  female: 'female',
+} as const;
+
+export interface UmrahApplicationCreate {
+  sponsorAvailable: boolean;
+  sponsorResidencyImageUrl: string;
+  sponsorPhone: string;
+  passportImageUrl: string;
+  personalPhotoUrl: string;
+  fullName?: string;
+  passportNumber?: string;
+  nationality?: string;
+  dateOfBirth?: string;
+  gender?: UmrahApplicationCreateGender;
+  passportIssueDate?: string;
+  passportExpiryDate?: string;
+  phone: string;
+  contactEmail?: string;
+  emergencyPhone: string;
+  declarationAccepted: boolean;
+}
+
+export type UmrahApplicationCreatedPaymentStatus = typeof UmrahApplicationCreatedPaymentStatus[keyof typeof UmrahApplicationCreatedPaymentStatus];
+
+
+export const UmrahApplicationCreatedPaymentStatus = {
+  unpaid: 'unpaid',
+  paid: 'paid',
+  failed: 'failed',
+} as const;
+
+export type UmrahApplicationCreatedStatus = typeof UmrahApplicationCreatedStatus[keyof typeof UmrahApplicationCreatedStatus];
+
+
+export const UmrahApplicationCreatedStatus = {
+  awaiting_payment: 'awaiting_payment',
+  submitted: 'submitted',
+  under_review: 'under_review',
+  processing: 'processing',
+  approved: 'approved',
+  rejected: 'rejected',
+  completed: 'completed',
+} as const;
+
+export interface UmrahApplicationCreated {
+  id: string;
+  trackingNumber: string;
+  /** @nullable */
+  feeAmount?: number | null;
+  feeCurrency: string;
+  paymentStatus: UmrahApplicationCreatedPaymentStatus;
+  status: UmrahApplicationCreatedStatus;
+}
+
+export type UmrahApplicationStatusUpdateStatus = typeof UmrahApplicationStatusUpdateStatus[keyof typeof UmrahApplicationStatusUpdateStatus];
+
+
+export const UmrahApplicationStatusUpdateStatus = {
+  awaiting_payment: 'awaiting_payment',
+  submitted: 'submitted',
+  under_review: 'under_review',
+  processing: 'processing',
+  approved: 'approved',
+  rejected: 'rejected',
+  completed: 'completed',
+} as const;
+
+export interface UmrahApplicationStatusUpdate {
+  status?: UmrahApplicationStatusUpdateStatus;
+  adminNotes?: string;
+  issuedVisaUrl?: string;
+}
+
 export type VisaApplicationEligibilityPath = typeof VisaApplicationEligibilityPath[keyof typeof VisaApplicationEligibilityPath];
 
 
@@ -1230,7 +1414,59 @@ export interface Notification {
   /** @nullable */
   relatedEntityId?: string | null;
   isRead: boolean;
+  /** @nullable */
+  sentBy?: string | null;
   createdAt: string;
+}
+
+export type PushTokenRegisterPlatform = typeof PushTokenRegisterPlatform[keyof typeof PushTokenRegisterPlatform];
+
+
+export const PushTokenRegisterPlatform = {
+  ios: 'ios',
+  android: 'android',
+  web: 'web',
+} as const;
+
+export interface PushTokenRegister {
+  token: string;
+  platform?: PushTokenRegisterPlatform;
+  deviceName?: string;
+}
+
+export interface PushToken {
+  id: string;
+  token: string;
+  /** @nullable */
+  platform?: string | null;
+  /** @nullable */
+  deviceName?: string | null;
+}
+
+export interface PushTokenDelete {
+  token: string;
+}
+
+export type NotificationSendRequestAudience = typeof NotificationSendRequestAudience[keyof typeof NotificationSendRequestAudience];
+
+
+export const NotificationSendRequestAudience = {
+  all: 'all',
+  users: 'users',
+} as const;
+
+export interface NotificationSendRequest {
+  titleAr: string;
+  titleEn: string;
+  messageAr: string;
+  messageEn: string;
+  audience: NotificationSendRequestAudience;
+  userIds?: string[];
+  url?: string;
+}
+
+export interface NotificationSendResponse {
+  sentCount: number;
 }
 
 export type EmployeeRole = typeof EmployeeRole[keyof typeof EmployeeRole];
@@ -1329,6 +1565,14 @@ export const ProfileUpdateGender = {
   other: 'other',
 } as const;
 
+export type ProfileUpdatePreferredLanguage = typeof ProfileUpdatePreferredLanguage[keyof typeof ProfileUpdatePreferredLanguage];
+
+
+export const ProfileUpdatePreferredLanguage = {
+  ar: 'ar',
+  en: 'en',
+} as const;
+
 export interface ProfileUpdate {
   firstName?: string;
   lastName?: string;
@@ -1339,6 +1583,7 @@ export interface ProfileUpdate {
   gender?: ProfileUpdateGender;
   dateOfBirth?: string;
   profilePhotoUrl?: string;
+  preferredLanguage?: ProfileUpdatePreferredLanguage;
   passportNumber?: string;
   passportIssueCountry?: string;
   passportIssuePlace?: string;
@@ -1367,6 +1612,14 @@ export const SafeUserRole = {
   super_admin: 'super_admin',
 } as const;
 
+export type SafeUserPreferredLanguage = typeof SafeUserPreferredLanguage[keyof typeof SafeUserPreferredLanguage];
+
+
+export const SafeUserPreferredLanguage = {
+  ar: 'ar',
+  en: 'en',
+} as const;
+
 export interface SafeUser {
   id: string;
   /** @nullable */
@@ -1384,6 +1637,7 @@ export interface SafeUser {
   /** @nullable */
   dateOfBirth?: string | null;
   role: SafeUserRole;
+  preferredLanguage?: SafeUserPreferredLanguage;
   isActive: boolean;
   /** @nullable */
   emailVerifiedAt?: string | null;
@@ -1570,6 +1824,10 @@ export const ListVisaApplicationsStatus = {
   rejected: 'rejected',
 } as const;
 
+export type GetUmrahConfigParams = {
+nationality?: string;
+};
+
 export type ListMyBookingsParams = {
 type?: ListMyBookingsType;
 };
@@ -1705,5 +1963,9 @@ unreadOnly?: boolean;
 
 export type MarkAllNotificationsRead200 = {
   updated: number;
+};
+
+export type DeletePushToken200 = {
+  deleted: number;
 };
 

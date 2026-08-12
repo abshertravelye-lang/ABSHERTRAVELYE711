@@ -270,6 +270,7 @@ const profileUpdateSchema = z.object({
   gender: z.enum(["male", "female", "other"]).optional(),
   dateOfBirth: z.string().optional(),
   profilePhotoUrl: z.string().optional(),
+  preferredLanguage: z.enum(["ar", "en"]).optional(),
   // Passport
   passportNumber: z.string().optional(),
   passportIssueCountry: z.string().optional(),

@@ -3161,3 +3161,609 @@ export const UpdateAdminSupportConversationResponse = zod.object({
 })
 
 
+/**
+ * @summary List all travel agencies (permission - employees)
+ */
+export const ListAgenciesResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "contactEmail": zod.string().nullish(),
+  "contactPhone": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "status": zod.enum(['active', 'suspended', 'pending']),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListAgenciesResponse = zod.array(ListAgenciesResponseItem)
+
+
+/**
+ * @summary Create a travel agency (permission - employees)
+ */
+export const CreateAgencyBody = zod.object({
+  "name": zod.string(),
+  "contactEmail": zod.string().optional(),
+  "contactPhone": zod.string().optional(),
+  "address": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "status": zod.enum(['active', 'suspended', 'pending']).optional()
+})
+
+export const CreateAgencyResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "contactEmail": zod.string().nullish(),
+  "contactPhone": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "status": zod.enum(['active', 'suspended', 'pending']),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Get an agency (permission - employees)
+ */
+export const GetAgencyParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetAgencyResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "contactEmail": zod.string().nullish(),
+  "contactPhone": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "status": zod.enum(['active', 'suspended', 'pending']),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Update agency info / status (permission - employees)
+ */
+export const UpdateAgencyParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateAgencyBody = zod.object({
+  "name": zod.string().optional(),
+  "contactEmail": zod.string().optional(),
+  "contactPhone": zod.string().optional(),
+  "address": zod.string().optional(),
+  "notes": zod.string().optional(),
+  "status": zod.enum(['active', 'suspended', 'pending']).optional()
+})
+
+export const UpdateAgencyResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "contactEmail": zod.string().nullish(),
+  "contactPhone": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "status": zod.enum(['active', 'suspended', 'pending']),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary List an agency's agent accounts (permission - employees)
+ */
+export const ListAgencyAgentsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListAgencyAgentsResponseItem = zod.object({
+  "id": zod.string(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "role": zod.string(),
+  "agencyId": zod.number().nullish(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.string(),
+  "lastLoginAt": zod.string().nullish()
+})
+export const ListAgencyAgentsResponse = zod.array(ListAgencyAgentsResponseItem)
+
+
+/**
+ * @summary Create an agent account for an agency (permission - employees)
+ */
+export const CreateAgencyAgentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const createAgencyAgentBodyPasswordMin = 8;
+
+
+
+export const CreateAgencyAgentBody = zod.object({
+  "email": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "password": zod.string().min(createAgencyAgentBodyPasswordMin),
+  "firstName": zod.string(),
+  "lastName": zod.string().optional()
+})
+
+export const CreateAgencyAgentResponse = zod.object({
+  "id": zod.string(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "role": zod.string(),
+  "agencyId": zod.number().nullish(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.string(),
+  "lastLoginAt": zod.string().nullish()
+})
+
+
+/**
+ * @summary Reset an agent account password (permission - employees)
+ */
+export const ResetAgentPasswordParams = zod.object({
+  "agentId": zod.coerce.string()
+})
+
+export const resetAgentPasswordBodyPasswordMin = 8;
+
+
+
+export const ResetAgentPasswordBody = zod.object({
+  "password": zod.string().min(resetAgentPasswordBodyPasswordMin)
+})
+
+export const ResetAgentPasswordResponse = zod.unknown()
+
+
+/**
+ * @summary Activate / deactivate / edit an agent account (permission - employees)
+ */
+export const UpdateAgentAccountParams = zod.object({
+  "agentId": zod.coerce.string()
+})
+
+export const UpdateAgentAccountBody = zod.object({
+  "isActive": zod.boolean().optional(),
+  "firstName": zod.string().optional(),
+  "lastName": zod.string().optional()
+})
+
+export const UpdateAgentAccountResponse = zod.object({
+  "id": zod.string(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "role": zod.string(),
+  "agencyId": zod.number().nullish(),
+  "isActive": zod.boolean(),
+  "createdAt": zod.string(),
+  "lastLoginAt": zod.string().nullish()
+})
+
+
+/**
+ * @summary List an agency's configured visa services & prices (permission - employees)
+ */
+export const ListAgencyVisaServicesParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListAgencyVisaServicesResponseItem = zod.object({
+  "id": zod.number(),
+  "agencyId": zod.number(),
+  "visaId": zod.number(),
+  "enabled": zod.boolean(),
+  "agentPrice": zod.string(),
+  "currency": zod.string(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListAgencyVisaServicesResponse = zod.array(ListAgencyVisaServicesResponseItem)
+
+
+/**
+ * @summary Upsert an agency's visa services & agent prices (permission - employees)
+ */
+export const PutAgencyVisaServicesParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const PutAgencyVisaServicesBody = zod.object({
+  "services": zod.array(zod.object({
+  "visaId": zod.number(),
+  "enabled": zod.boolean(),
+  "agentPrice": zod.union([zod.number(),zod.string()]),
+  "currency": zod.string().optional()
+}))
+})
+
+export const PutAgencyVisaServicesResponseItem = zod.object({
+  "id": zod.number(),
+  "agencyId": zod.number(),
+  "visaId": zod.number(),
+  "enabled": zod.boolean(),
+  "agentPrice": zod.string(),
+  "currency": zod.string(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const PutAgencyVisaServicesResponse = zod.array(PutAgencyVisaServicesResponseItem)
+
+
+/**
+ * @summary List agent applications across all agencies (permission - visa_applications)
+ */
+export const ListAgentApplicationsQueryParams = zod.object({
+  "agencyId": zod.coerce.number().optional(),
+  "status": zod.coerce.string().optional()
+})
+
+export const ListAgentApplicationsResponseItem = zod.object({
+  "id": zod.number(),
+  "trackingNumber": zod.string().nullable(),
+  "visaId": zod.number(),
+  "agencyId": zod.number().nullish(),
+  "submittedByAgentId": zod.string().nullish(),
+  "agentPrice": zod.string().nullish(),
+  "fullName": zod.string().optional(),
+  "fullNameEn": zod.string().nullish(),
+  "nationality": zod.string().optional(),
+  "gender": zod.string().optional(),
+  "dateOfBirth": zod.string().optional(),
+  "email": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "passportNumber": zod.string().optional(),
+  "passportIssueDate": zod.string().nullish(),
+  "passportExpiryDate": zod.string().optional(),
+  "passportIssuingCountry": zod.string().nullish(),
+  "countryOfResidence": zod.string().nullish(),
+  "passportImageUrl": zod.string().nullish(),
+  "personalPhotoUrl": zod.string().nullish(),
+  "residencyImageUrl": zod.string().nullish(),
+  "residencyBackImageUrl": zod.string().nullish(),
+  "visaImageUrl": zod.string().nullish(),
+  "customFieldResponses": zod.record(zod.string(), zod.unknown()).optional(),
+  "agreedToTerms": zod.boolean().optional(),
+  "status": zod.string(),
+  "adminNotes": zod.string().nullish(),
+  "issuedVisaUrl": zod.string().nullish(),
+  "agencyName": zod.string().nullish(),
+  "agentName": zod.string().nullish(),
+  "visaType": zod.string().nullish(),
+  "countryEn": zod.string().nullish(),
+  "countryAr": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListAgentApplicationsResponse = zod.array(ListAgentApplicationsResponseItem)
+
+
+/**
+ * @summary Get an agent application (permission - visa_applications)
+ */
+export const GetAgentApplicationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetAgentApplicationResponse = zod.object({
+  "id": zod.number(),
+  "trackingNumber": zod.string().nullable(),
+  "visaId": zod.number(),
+  "agencyId": zod.number().nullish(),
+  "submittedByAgentId": zod.string().nullish(),
+  "agentPrice": zod.string().nullish(),
+  "fullName": zod.string().optional(),
+  "fullNameEn": zod.string().nullish(),
+  "nationality": zod.string().optional(),
+  "gender": zod.string().optional(),
+  "dateOfBirth": zod.string().optional(),
+  "email": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "passportNumber": zod.string().optional(),
+  "passportIssueDate": zod.string().nullish(),
+  "passportExpiryDate": zod.string().optional(),
+  "passportIssuingCountry": zod.string().nullish(),
+  "countryOfResidence": zod.string().nullish(),
+  "passportImageUrl": zod.string().nullish(),
+  "personalPhotoUrl": zod.string().nullish(),
+  "residencyImageUrl": zod.string().nullish(),
+  "residencyBackImageUrl": zod.string().nullish(),
+  "visaImageUrl": zod.string().nullish(),
+  "customFieldResponses": zod.record(zod.string(), zod.unknown()).optional(),
+  "agreedToTerms": zod.boolean().optional(),
+  "status": zod.string(),
+  "adminNotes": zod.string().nullish(),
+  "issuedVisaUrl": zod.string().nullish(),
+  "agencyName": zod.string().nullish(),
+  "agentName": zod.string().nullish(),
+  "visaType": zod.string().nullish(),
+  "countryEn": zod.string().nullish(),
+  "countryAr": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Update an agent application status / notes; notifies the agent (permission - visa_applications)
+ */
+export const UpdateAgentApplicationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateAgentApplicationBody = zod.object({
+  "status": zod.enum(['received', 'under_review', 'awaiting_documents', 'documents_uploaded', 'sent_to_embassy', 'processing', 'issued', 'completed', 'rejected', 'cancelled']).optional(),
+  "adminNotes": zod.string().optional(),
+  "issuedVisaUrl": zod.string().optional()
+})
+
+export const UpdateAgentApplicationResponse = zod.object({
+  "id": zod.number(),
+  "trackingNumber": zod.string().nullable(),
+  "visaId": zod.number(),
+  "agencyId": zod.number().nullish(),
+  "submittedByAgentId": zod.string().nullish(),
+  "agentPrice": zod.string().nullish(),
+  "fullName": zod.string().optional(),
+  "fullNameEn": zod.string().nullish(),
+  "nationality": zod.string().optional(),
+  "gender": zod.string().optional(),
+  "dateOfBirth": zod.string().optional(),
+  "email": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "passportNumber": zod.string().optional(),
+  "passportIssueDate": zod.string().nullish(),
+  "passportExpiryDate": zod.string().optional(),
+  "passportIssuingCountry": zod.string().nullish(),
+  "countryOfResidence": zod.string().nullish(),
+  "passportImageUrl": zod.string().nullish(),
+  "personalPhotoUrl": zod.string().nullish(),
+  "residencyImageUrl": zod.string().nullish(),
+  "residencyBackImageUrl": zod.string().nullish(),
+  "visaImageUrl": zod.string().nullish(),
+  "customFieldResponses": zod.record(zod.string(), zod.unknown()).optional(),
+  "agreedToTerms": zod.boolean().optional(),
+  "status": zod.string(),
+  "adminNotes": zod.string().nullish(),
+  "issuedVisaUrl": zod.string().nullish(),
+  "agencyName": zod.string().nullish(),
+  "agentName": zod.string().nullish(),
+  "visaType": zod.string().nullish(),
+  "countryEn": zod.string().nullish(),
+  "countryAr": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Current agent's account + agency info & status
+ */
+export const GetAgentMeResponse = zod.object({
+  "agent": zod.object({
+  "id": zod.string().optional(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish()
+}),
+  "agency": zod.object({
+  "id": zod.number().optional(),
+  "name": zod.string().optional(),
+  "status": zod.enum(['active', 'suspended', 'pending']).optional(),
+  "contactEmail": zod.string().nullish(),
+  "contactPhone": zod.string().nullish()
+})
+})
+
+
+/**
+ * @summary Agent dashboard statistics (active agency only)
+ */
+export const GetAgentDashboardResponse = zod.object({
+  "agencyName": zod.string(),
+  "agencyStatus": zod.enum(['active', 'suspended', 'pending']),
+  "stats": zod.object({
+  "total": zod.number().optional(),
+  "submitted": zod.number().optional(),
+  "approved": zod.number().optional(),
+  "rejected": zod.number().optional(),
+  "inProgress": zod.number().optional(),
+  "byStatus": zod.record(zod.string(), zod.number()).optional()
+})
+})
+
+
+/**
+ * @summary Visa services enabled for the agent's agency with AGENT price
+ */
+export const GetAgentVisaServicesResponseItem = zod.object({
+  "serviceId": zod.number().optional(),
+  "visaId": zod.number(),
+  "agentPrice": zod.string(),
+  "currency": zod.string().optional(),
+  "countryAr": zod.string().optional(),
+  "countryEn": zod.string().optional(),
+  "countryCode": zod.string().nullish(),
+  "visaType": zod.string().optional(),
+  "category": zod.string().optional(),
+  "descriptionAr": zod.string().nullish(),
+  "descriptionEn": zod.string().nullish(),
+  "processingDays": zod.number().optional(),
+  "stayDuration": zod.number().nullish(),
+  "validityDays": zod.number().nullish(),
+  "entryType": zod.string().optional(),
+  "allowedNationalities": zod.array(zod.string()).optional(),
+  "blockedNationalities": zod.array(zod.string()).optional(),
+  "imageUrl": zod.string().nullish(),
+  "requiresPassportImage": zod.boolean().optional(),
+  "requiresPersonalPhoto": zod.boolean().optional()
+})
+export const GetAgentVisaServicesResponse = zod.array(GetAgentVisaServicesResponseItem)
+
+
+/**
+ * @summary List applications for the agent's own agency
+ */
+export const ListMyAgentApplicationsResponseItem = zod.object({
+  "id": zod.number(),
+  "trackingNumber": zod.string().nullable(),
+  "visaId": zod.number(),
+  "agencyId": zod.number().nullish(),
+  "submittedByAgentId": zod.string().nullish(),
+  "agentPrice": zod.string().nullish(),
+  "fullName": zod.string().optional(),
+  "fullNameEn": zod.string().nullish(),
+  "nationality": zod.string().optional(),
+  "gender": zod.string().optional(),
+  "dateOfBirth": zod.string().optional(),
+  "email": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "passportNumber": zod.string().optional(),
+  "passportIssueDate": zod.string().nullish(),
+  "passportExpiryDate": zod.string().optional(),
+  "passportIssuingCountry": zod.string().nullish(),
+  "countryOfResidence": zod.string().nullish(),
+  "passportImageUrl": zod.string().nullish(),
+  "personalPhotoUrl": zod.string().nullish(),
+  "residencyImageUrl": zod.string().nullish(),
+  "residencyBackImageUrl": zod.string().nullish(),
+  "visaImageUrl": zod.string().nullish(),
+  "customFieldResponses": zod.record(zod.string(), zod.unknown()).optional(),
+  "agreedToTerms": zod.boolean().optional(),
+  "status": zod.string(),
+  "adminNotes": zod.string().nullish(),
+  "issuedVisaUrl": zod.string().nullish(),
+  "agencyName": zod.string().nullish(),
+  "agentName": zod.string().nullish(),
+  "visaType": zod.string().nullish(),
+  "countryEn": zod.string().nullish(),
+  "countryAr": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListMyAgentApplicationsResponse = zod.array(ListMyAgentApplicationsResponseItem)
+
+
+/**
+ * @summary Submit a new visa application (price applied server-side)
+ */
+export const SubmitAgentApplicationBody = zod.object({
+  "visaId": zod.number(),
+  "applicantNationality": zod.string(),
+  "fullName": zod.string(),
+  "fullNameEn": zod.string().optional(),
+  "gender": zod.enum(['male', 'female']),
+  "dateOfBirth": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "passportNumber": zod.string(),
+  "passportIssueDate": zod.string(),
+  "passportExpiryDate": zod.string(),
+  "passportIssuingCountry": zod.string().optional(),
+  "countryOfResidence": zod.string().optional(),
+  "passportImageUrl": zod.string().optional(),
+  "personalPhotoUrl": zod.string().optional(),
+  "residencyImageUrl": zod.string().optional(),
+  "residencyBackImageUrl": zod.string().optional(),
+  "visaImageUrl": zod.string().optional(),
+  "customFieldResponses": zod.record(zod.string(), zod.unknown()).optional(),
+  "agreedToTerms": zod.boolean().optional()
+})
+
+export const SubmitAgentApplicationResponse = zod.object({
+  "id": zod.number(),
+  "trackingNumber": zod.string().nullable(),
+  "visaId": zod.number(),
+  "agencyId": zod.number().nullish(),
+  "submittedByAgentId": zod.string().nullish(),
+  "agentPrice": zod.string().nullish(),
+  "fullName": zod.string().optional(),
+  "fullNameEn": zod.string().nullish(),
+  "nationality": zod.string().optional(),
+  "gender": zod.string().optional(),
+  "dateOfBirth": zod.string().optional(),
+  "email": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "passportNumber": zod.string().optional(),
+  "passportIssueDate": zod.string().nullish(),
+  "passportExpiryDate": zod.string().optional(),
+  "passportIssuingCountry": zod.string().nullish(),
+  "countryOfResidence": zod.string().nullish(),
+  "passportImageUrl": zod.string().nullish(),
+  "personalPhotoUrl": zod.string().nullish(),
+  "residencyImageUrl": zod.string().nullish(),
+  "residencyBackImageUrl": zod.string().nullish(),
+  "visaImageUrl": zod.string().nullish(),
+  "customFieldResponses": zod.record(zod.string(), zod.unknown()).optional(),
+  "agreedToTerms": zod.boolean().optional(),
+  "status": zod.string(),
+  "adminNotes": zod.string().nullish(),
+  "issuedVisaUrl": zod.string().nullish(),
+  "agencyName": zod.string().nullish(),
+  "agentName": zod.string().nullish(),
+  "visaType": zod.string().nullish(),
+  "countryEn": zod.string().nullish(),
+  "countryAr": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Get one application belonging to the agent's agency
+ */
+export const GetMyAgentApplicationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetMyAgentApplicationResponse = zod.object({
+  "id": zod.number(),
+  "trackingNumber": zod.string().nullable(),
+  "visaId": zod.number(),
+  "agencyId": zod.number().nullish(),
+  "submittedByAgentId": zod.string().nullish(),
+  "agentPrice": zod.string().nullish(),
+  "fullName": zod.string().optional(),
+  "fullNameEn": zod.string().nullish(),
+  "nationality": zod.string().optional(),
+  "gender": zod.string().optional(),
+  "dateOfBirth": zod.string().optional(),
+  "email": zod.string().optional(),
+  "phone": zod.string().optional(),
+  "passportNumber": zod.string().optional(),
+  "passportIssueDate": zod.string().nullish(),
+  "passportExpiryDate": zod.string().optional(),
+  "passportIssuingCountry": zod.string().nullish(),
+  "countryOfResidence": zod.string().nullish(),
+  "passportImageUrl": zod.string().nullish(),
+  "personalPhotoUrl": zod.string().nullish(),
+  "residencyImageUrl": zod.string().nullish(),
+  "residencyBackImageUrl": zod.string().nullish(),
+  "visaImageUrl": zod.string().nullish(),
+  "customFieldResponses": zod.record(zod.string(), zod.unknown()).optional(),
+  "agreedToTerms": zod.boolean().optional(),
+  "status": zod.string(),
+  "adminNotes": zod.string().nullish(),
+  "issuedVisaUrl": zod.string().nullish(),
+  "agencyName": zod.string().nullish(),
+  "agentName": zod.string().nullish(),
+  "visaType": zod.string().nullish(),
+  "countryEn": zod.string().nullish(),
+  "countryAr": zod.string().nullish(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+

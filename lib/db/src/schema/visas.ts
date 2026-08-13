@@ -175,6 +175,14 @@ export const visaApplicationSubmissionsTable = pgTable("visa_application_submiss
   status: visaApplicationSubmissionStatusEnum("status").notNull().default("received"),
   adminNotes: text("admin_notes"),
   issuedVisaUrl: text("issued_visa_url"),
+  // ── B2B Agent Portal (additive; reuses this table for agent applications) ──
+  // When an application is submitted by a travel agent, agencyId + the agent's
+  // user id are recorded, plus the agency-specific price captured server-side.
+  // Agent applications use an AG-YYYY-NNNNNN tracking prefix. Null for normal
+  // customer applications.
+  agencyId: integer("agency_id"),
+  submittedByAgentId: uuid("submitted_by_agent_id"),
+  agentPrice: numeric("agent_price", { precision: 10, scale: 2 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

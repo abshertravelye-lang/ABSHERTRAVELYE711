@@ -318,12 +318,20 @@ export default function UmrahVisaWizard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authUser]);
 
+  // Reordered wizard per updated spec:
+  //  0) host residency  1) host phone  2) declaration  3) passport + OCR
+  //  4) personal photo  5) contact info (prefilled)  6) fee  7) payment
   const STEP_LABELS = [
-    tr(lang, 'المستضيف', 'Host'),
-    tr(lang, 'المعتمر', 'Pilgrim'),
+    tr(lang, 'الإقامة', 'Residency'),
+    tr(lang, 'الجوال', 'Phone'),
     tr(lang, 'الإقرار', 'Declaration'),
+    tr(lang, 'الجواز', 'Passport'),
+    tr(lang, 'الصورة', 'Photo'),
+    tr(lang, 'التواصل', 'Contact'),
+    tr(lang, 'الرسوم', 'Fee'),
     tr(lang, 'الدفع', 'Payment'),
   ];
+  const LAST_STEP = STEP_LABELS.length - 1;
 
   const [step, setStep] = useState(0);
 
@@ -350,6 +358,18 @@ export default function UmrahVisaWizard() {
   const [busyDoc, setBusyDoc] = useState<string | null>(null);
   const [ocrRunning, setOcrRunning] = useState(false);
   const [ocrDone, setOcrDone] = useState(false);
+
+  // Silently prefill contact info from the signed-in account so the pilgrim
+  // never has to re-enter data we already have. Runs once, only fills empties.
+  const prefilledRef = useRef(false);
+  useEffect(() => {
+    if (prefilledRef.current || !authUser) return;
+    prefilledRef.current = true;
+    if (authUser.phone) setPhone((p) => p || authUser.phone!.replace(/^\+966/, ''));
+    if (authUser.email) setContactEmail((e) => e || authUser.email!);
+    if (authUser.nationality) setNationality((n) => n || authUser.nationality!);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authUser]);
 
   // ── Step 2: declaration ────────────────────────────────────────────────────
   const [declared, setDeclared] = useState(false);
@@ -481,25 +501,41 @@ export default function UmrahVisaWizard() {
 
   // ── Validation + step advance ─────────────────────────────────────────────
   const validate = (s: number): boolean => {
+    // 0) host residency (gated by the host question)
     if (s === 0) {
       if (hasHost !== true) { setNoHostModal(true); return false; }
       if (!sponsorResidencyImageUrl) { Alert.alert(tr(lang, 'مستند مطلوب', 'Document required'), tr(lang, 'يرجى إرفاق صورة إقامة المستضيف.', 'Please upload the host residency image.')); return false; }
+      return true;
+    }
+    // 1) host phone
+    if (s === 1) {
       if (!/^5\d{8}$/.test(hostPhoneDigits)) { Alert.alert(tr(lang, 'رقم غير صحيح', 'Invalid number'), tr(lang, 'أدخل رقم جوال المستضيف: 9 أرقام تبدأ بـ 5.', 'Enter the host phone: 9 digits starting with 5.')); return false; }
       return true;
     }
-    if (s === 1) {
-      if (!passportImageUrl) { Alert.alert(tr(lang, 'مستند مطلوب', 'Document required'), tr(lang, 'يرجى إرفاق صورة الجواز.', 'Please upload the passport image.')); return false; }
-      if (!personalPhotoUrl) { Alert.alert(tr(lang, 'مستند مطلوب', 'Document required'), tr(lang, 'يرجى إرفاق الصورة الشخصية.', 'Please upload the personal photo.')); return false; }
-      if (!fullName.trim()) { Alert.alert(tr(lang, 'بيانات ناقصة', 'Missing data'), tr(lang, 'يرجى إدخال اسم المعتمر.', 'Please enter the pilgrim name.')); return false; }
-      if (!nationality.trim()) { Alert.alert(tr(lang, 'بيانات ناقصة', 'Missing data'), tr(lang, 'يرجى إدخال الجنسية.', 'Please enter the nationality.')); return false; }
-      if (!/^5\d{8}$/.test(phone) && phone.trim().length < 7) { Alert.alert(tr(lang, 'رقم غير صحيح', 'Invalid number'), tr(lang, 'يرجى إدخال رقم جوال المعتمر.', 'Please enter the pilgrim phone.')); return false; }
-      if (!emergencyPhone.trim() || emergencyPhone.trim().length < 7) { Alert.alert(tr(lang, 'رقم غير صحيح', 'Invalid number'), tr(lang, 'يرجى إدخال رقم قريب أو صديق للطوارئ.', 'Please enter an emergency contact phone.')); return false; }
-      return true;
-    }
+    // 2) declaration
     if (s === 2) {
       if (!declared) { Alert.alert(tr(lang, 'الإقرار مطلوب', 'Declaration required'), tr(lang, 'يرجى قراءة الإقرار والموافقة عليه قبل المتابعة.', 'Please read and accept the declaration to continue.')); return false; }
       return true;
     }
+    // 3) passport image + OCR-extracted fields
+    if (s === 3) {
+      if (!passportImageUrl) { Alert.alert(tr(lang, 'مستند مطلوب', 'Document required'), tr(lang, 'يرجى إرفاق صورة الجواز.', 'Please upload the passport image.')); return false; }
+      if (!fullName.trim()) { Alert.alert(tr(lang, 'بيانات ناقصة', 'Missing data'), tr(lang, 'يرجى إدخال اسم المعتمر.', 'Please enter the pilgrim name.')); return false; }
+      if (!nationality.trim()) { Alert.alert(tr(lang, 'بيانات ناقصة', 'Missing data'), tr(lang, 'يرجى إدخال الجنسية.', 'Please enter the nationality.')); return false; }
+      return true;
+    }
+    // 4) personal photo
+    if (s === 4) {
+      if (!personalPhotoUrl) { Alert.alert(tr(lang, 'مستند مطلوب', 'Document required'), tr(lang, 'يرجى إرفاق الصورة الشخصية.', 'Please upload the personal photo.')); return false; }
+      return true;
+    }
+    // 5) contact info
+    if (s === 5) {
+      if (!/^5\d{8}$/.test(phone) && phone.trim().length < 7) { Alert.alert(tr(lang, 'رقم غير صحيح', 'Invalid number'), tr(lang, 'يرجى إدخال رقم جوال المعتمر.', 'Please enter the pilgrim phone.')); return false; }
+      if (!emergencyPhone.trim() || emergencyPhone.trim().length < 7) { Alert.alert(tr(lang, 'رقم غير صحيح', 'Invalid number'), tr(lang, 'يرجى إدخال رقم قريب أو صديق للطوارئ.', 'Please enter an emergency contact phone.')); return false; }
+      return true;
+    }
+    // 6) fee display — nothing to validate before payment
     return true;
   };
 
@@ -663,10 +699,10 @@ export default function UmrahVisaWizard() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* ── STEP 0: HOST ─────────────────────────────────────────────── */}
+          {/* ── STEP 0: HOST QUESTION + RESIDENCY ────────────────────────── */}
           {step === 0 && (
             <View style={styles.stepWrap}>
-              <StepHead icon="business-outline" title={tr(lang, 'بيانات المستضيف', 'Host details')} sub={tr(lang, 'تأشيرة العمرة تتطلب مستضيفاً في المملكة العربية السعودية', 'Umrah visa requires a host in Saudi Arabia')} />
+              <StepHead icon="business-outline" title={tr(lang, 'المستضيف والإقامة', 'Host & residency')} sub={tr(lang, 'تأشيرة العمرة تتطلب مستضيفاً في المملكة العربية السعودية', 'Umrah visa requires a host in Saudi Arabia')} />
 
               <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
                 <Text style={[styles.questionText, { color: c.foreground, fontFamily: 'Cairo_700Bold' }]}>
@@ -703,28 +739,6 @@ export default function UmrahVisaWizard() {
                     onPick={(a) => uploadDoc(setSponsorResidencyImageUrl, 'sponsorResidency', a)}
                     onRemove={() => setSponsorResidencyImageUrl('')}
                   />
-
-                  {!!sponsorResidencyImageUrl && (
-                    <View style={f.wrap}>
-                      <Text style={[f.label, { color: c.foreground, fontFamily: 'Cairo_600SemiBold' }]}>
-                        {tr(lang, 'رقم جوال المستضيف المسجل في أبشر', 'Host phone registered in Absher')}<Text style={{ color: c.destructive }}> *</Text>
-                      </Text>
-                      <View style={[styles.phoneRow, { backgroundColor: c.muted, borderColor: c.border }]}>
-                        <TextInput
-                          value={hostPhoneDigits}
-                          onChangeText={(v) => setHostPhoneDigits(v.replace(/[^0-9]/g, '').slice(0, 9))}
-                          placeholder="5XXXXXXXX"
-                          placeholderTextColor={c.mutedForeground}
-                          keyboardType="number-pad"
-                          maxLength={9}
-                          style={[styles.phoneInput, { color: c.foreground, fontFamily: 'Cairo_400Regular' }]}
-                        />
-                        <View style={[styles.phonePrefix, { borderColor: c.border }]}>
-                          <Text style={[styles.phonePrefixText, { color: c.foreground, fontFamily: 'Cairo_700Bold' }]}>+966</Text>
-                        </View>
-                      </View>
-                    </View>
-                  )}
                 </View>
               )}
 
@@ -732,79 +746,31 @@ export default function UmrahVisaWizard() {
             </View>
           )}
 
-          {/* ── STEP 1: APPLICANT ───────────────────────────────────────── */}
+          {/* ── STEP 1: HOST PHONE ───────────────────────────────────────── */}
           {step === 1 && (
             <View style={styles.stepWrap}>
-              <StepHead icon="person-outline" title={tr(lang, 'بيانات المعتمر', 'Pilgrim details')} sub={tr(lang, 'أرفق صورة الجواز لاستخراج البيانات تلقائياً', 'Upload the passport to auto-extract data')} />
+              <StepHead icon="call-outline" title={tr(lang, 'رقم جوال المستضيف', 'Host phone number')} sub={tr(lang, 'رقم الجوال المسجل في أبشر لدى المستضيف', 'The host phone registered in Absher')} />
 
-              <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border, gap: 16 }]}>
-                <DocField
-                  lang={lang}
-                  label={tr(lang, 'صورة الجواز', 'Passport image')}
-                  hint={tr(lang, 'الصفحة الأولى مع البيانات', 'The main data page')}
-                  icon="card-outline"
-                  required
-                  value={passportImageUrl}
-                  busy={busyDoc === 'passport'}
-                  onPick={handlePassportScan}
-                  onRemove={() => { setPassportImageUrl(''); setOcrDone(false); }}
-                />
-                {ocrRunning && (
-                  <View style={styles.ocrRow}>
-                    <ActivityIndicator color={colors.gold} />
-                    <Text style={[styles.ocrText, { color: c.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>{tr(lang, 'جارٍ استخراج بيانات الجواز...', 'Extracting passport data...')}</Text>
-                  </View>
-                )}
-                {ocrDone && !ocrRunning && (
-                  <View style={styles.ocrRow}>
-                    <Ionicons name="sparkles" size={16} color={c.success} />
-                    <Text style={[styles.ocrText, { color: c.success, fontFamily: 'Cairo_600SemiBold' }]}>{tr(lang, 'تم استخراج البيانات — راجعها وعدّلها إن لزم', 'Data extracted — review and edit if needed')}</Text>
-                  </View>
-                )}
-
-                <DocField
-                  lang={lang}
-                  label={tr(lang, 'الصورة الشخصية', 'Personal photo')}
-                  hint={tr(lang, 'صورة حديثة بخلفية بيضاء', 'Recent photo, white background')}
-                  icon="person-circle-outline"
-                  required
-                  allowPdf={false}
-                  value={personalPhotoUrl}
-                  busy={busyDoc === 'personalPhoto'}
-                  onPick={(a) => uploadDoc(setPersonalPhotoUrl, 'personalPhoto', a)}
-                  onRemove={() => setPersonalPhotoUrl('')}
-                />
-              </View>
-
-              <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border, gap: 14 }]}>
-                <Field label={tr(lang, 'الاسم الكامل', 'Full name')} value={fullName} onChangeText={setFullName} required />
-                <Field label={tr(lang, 'رقم الجواز', 'Passport number')} value={passportNumber} onChangeText={setPassportNumber} ltr autoCapitalize="characters" />
-                <Field label={tr(lang, 'الجنسية', 'Nationality')} value={nationality} onChangeText={setNationality} required />
-                <View style={{ flexDirection: 'row-reverse', gap: 12 }}>
-                  <View style={{ flex: 1 }}><Field label={tr(lang, 'تاريخ الميلاد', 'Date of birth')} value={dateOfBirth} onChangeText={setDateOfBirth} placeholder="YYYY-MM-DD" ltr /></View>
-                </View>
-                <View style={{ flexDirection: 'row-reverse', gap: 12 }}>
-                  <View style={{ flex: 1 }}><Field label={tr(lang, 'تاريخ الإصدار', 'Issue date')} value={passportIssueDate} onChangeText={setPassportIssueDate} placeholder="YYYY-MM-DD" ltr /></View>
-                  <View style={{ flex: 1 }}><Field label={tr(lang, 'تاريخ الانتهاء', 'Expiry date')} value={passportExpiryDate} onChangeText={setPassportExpiryDate} placeholder="YYYY-MM-DD" ltr /></View>
-                </View>
+              <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
                 <View style={f.wrap}>
-                  <Text style={[f.label, { color: c.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{tr(lang, 'الجنس', 'Gender')}</Text>
-                  <View style={{ flexDirection: 'row-reverse', gap: 10 }}>
-                    {(['male', 'female'] as Gender[]).map((g) => (
-                      <Pressable key={g} onPress={() => setGender(g)} style={[styles.genderBtn, { backgroundColor: gender === g ? colors.umrahGreen : c.muted, borderColor: c.border }]}>
-                        <Text style={[styles.genderText, { color: gender === g ? '#FFFFFF' : c.foreground, fontFamily: 'Cairo_600SemiBold' }]}>
-                          {g === 'male' ? tr(lang, 'ذكر', 'Male') : tr(lang, 'أنثى', 'Female')}
-                        </Text>
-                      </Pressable>
-                    ))}
+                  <Text style={[f.label, { color: c.foreground, fontFamily: 'Cairo_600SemiBold' }]}>
+                    {tr(lang, 'رقم جوال المستضيف المسجل في أبشر', 'Host phone registered in Absher')}<Text style={{ color: c.destructive }}> *</Text>
+                  </Text>
+                  <View style={[styles.phoneRow, { backgroundColor: c.muted, borderColor: c.border }]}>
+                    <TextInput
+                      value={hostPhoneDigits}
+                      onChangeText={(v) => setHostPhoneDigits(v.replace(/[^0-9]/g, '').slice(0, 9))}
+                      placeholder="5XXXXXXXX"
+                      placeholderTextColor={c.mutedForeground}
+                      keyboardType="number-pad"
+                      maxLength={9}
+                      style={[styles.phoneInput, { color: c.foreground, fontFamily: 'Cairo_400Regular' }]}
+                    />
+                    <View style={[styles.phonePrefix, { borderColor: c.border }]}>
+                      <Text style={[styles.phonePrefixText, { color: c.foreground, fontFamily: 'Cairo_700Bold' }]}>+966</Text>
+                    </View>
                   </View>
                 </View>
-              </View>
-
-              <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border, gap: 14 }]}>
-                <Field label={tr(lang, 'رقم جوال المعتمر', 'Pilgrim phone')} value={phone} onChangeText={setPhone} keyboardType="phone-pad" ltr required placeholder="+966 5X XXX XXXX" />
-                <Field label={tr(lang, 'بريد التواصل (اختياري)', 'Contact email (optional)')} value={contactEmail} onChangeText={setContactEmail} keyboardType="email-address" ltr autoCapitalize="none" placeholder="example@email.com" />
-                <Field label={tr(lang, 'رقم جوال قريب أو صديق للطوارئ', 'Emergency contact phone (relative/friend)')} value={emergencyPhone} onChangeText={setEmergencyPhone} keyboardType="phone-pad" ltr required placeholder="+966 5X XXX XXXX" />
               </View>
 
               <NextButton label={tr(lang, 'التالي', 'Next')} onPress={handleNext} />
@@ -844,8 +810,134 @@ export default function UmrahVisaWizard() {
             </View>
           )}
 
-          {/* ── STEP 3: PAYMENT ─────────────────────────────────────────── */}
+          {/* ── STEP 3: PASSPORT + OCR ──────────────────────────────────── */}
           {step === 3 && (
+            <View style={styles.stepWrap}>
+              <StepHead icon="card-outline" title={tr(lang, 'صورة الجواز', 'Passport image')} sub={tr(lang, 'أرفق صورة الجواز لاستخراج البيانات تلقائياً', 'Upload the passport to auto-extract data')} />
+
+              <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border, gap: 16 }]}>
+                <DocField
+                  lang={lang}
+                  label={tr(lang, 'صورة الجواز', 'Passport image')}
+                  hint={tr(lang, 'الصفحة الأولى مع البيانات', 'The main data page')}
+                  icon="card-outline"
+                  required
+                  value={passportImageUrl}
+                  busy={busyDoc === 'passport'}
+                  onPick={handlePassportScan}
+                  onRemove={() => { setPassportImageUrl(''); setOcrDone(false); }}
+                />
+                {ocrRunning && (
+                  <View style={styles.ocrRow}>
+                    <ActivityIndicator color={colors.gold} />
+                    <Text style={[styles.ocrText, { color: c.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>{tr(lang, 'جارٍ استخراج بيانات الجواز...', 'Extracting passport data...')}</Text>
+                  </View>
+                )}
+                {ocrDone && !ocrRunning && (
+                  <View style={styles.ocrRow}>
+                    <Ionicons name="sparkles" size={16} color={c.success} />
+                    <Text style={[styles.ocrText, { color: c.success, fontFamily: 'Cairo_600SemiBold' }]}>{tr(lang, 'تم استخراج البيانات — راجعها وعدّلها إن لزم', 'Data extracted — review and edit if needed')}</Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border, gap: 14 }]}>
+                <Field label={tr(lang, 'الاسم الكامل', 'Full name')} value={fullName} onChangeText={setFullName} required />
+                <Field label={tr(lang, 'رقم الجواز', 'Passport number')} value={passportNumber} onChangeText={setPassportNumber} ltr autoCapitalize="characters" />
+                <Field label={tr(lang, 'الجنسية', 'Nationality')} value={nationality} onChangeText={setNationality} required />
+                <View style={{ flexDirection: 'row-reverse', gap: 12 }}>
+                  <View style={{ flex: 1 }}><Field label={tr(lang, 'تاريخ الميلاد', 'Date of birth')} value={dateOfBirth} onChangeText={setDateOfBirth} placeholder="YYYY-MM-DD" ltr /></View>
+                </View>
+                <View style={{ flexDirection: 'row-reverse', gap: 12 }}>
+                  <View style={{ flex: 1 }}><Field label={tr(lang, 'تاريخ الإصدار', 'Issue date')} value={passportIssueDate} onChangeText={setPassportIssueDate} placeholder="YYYY-MM-DD" ltr /></View>
+                  <View style={{ flex: 1 }}><Field label={tr(lang, 'تاريخ الانتهاء', 'Expiry date')} value={passportExpiryDate} onChangeText={setPassportExpiryDate} placeholder="YYYY-MM-DD" ltr /></View>
+                </View>
+                <View style={f.wrap}>
+                  <Text style={[f.label, { color: c.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{tr(lang, 'الجنس', 'Gender')}</Text>
+                  <View style={{ flexDirection: 'row-reverse', gap: 10 }}>
+                    {(['male', 'female'] as Gender[]).map((g) => (
+                      <Pressable key={g} onPress={() => setGender(g)} style={[styles.genderBtn, { backgroundColor: gender === g ? colors.umrahGreen : c.muted, borderColor: c.border }]}>
+                        <Text style={[styles.genderText, { color: gender === g ? '#FFFFFF' : c.foreground, fontFamily: 'Cairo_600SemiBold' }]}>
+                          {g === 'male' ? tr(lang, 'ذكر', 'Male') : tr(lang, 'أنثى', 'Female')}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              </View>
+
+              <NextButton label={tr(lang, 'التالي', 'Next')} onPress={handleNext} />
+            </View>
+          )}
+
+          {/* ── STEP 4: PERSONAL PHOTO ──────────────────────────────────── */}
+          {step === 4 && (
+            <View style={styles.stepWrap}>
+              <StepHead icon="person-circle-outline" title={tr(lang, 'الصورة الشخصية', 'Personal photo')} sub={tr(lang, 'صورة حديثة واضحة بخلفية بيضاء', 'A recent, clear photo with a white background')} />
+
+              <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border, gap: 16 }]}>
+                <DocField
+                  lang={lang}
+                  label={tr(lang, 'الصورة الشخصية', 'Personal photo')}
+                  hint={tr(lang, 'صورة حديثة بخلفية بيضاء', 'Recent photo, white background')}
+                  icon="person-circle-outline"
+                  required
+                  allowPdf={false}
+                  value={personalPhotoUrl}
+                  busy={busyDoc === 'personalPhoto'}
+                  onPick={(a) => uploadDoc(setPersonalPhotoUrl, 'personalPhoto', a)}
+                  onRemove={() => setPersonalPhotoUrl('')}
+                />
+              </View>
+
+              <NextButton label={tr(lang, 'التالي', 'Next')} onPress={handleNext} />
+            </View>
+          )}
+
+          {/* ── STEP 5: CONTACT INFO (prefilled) ────────────────────────── */}
+          {step === 5 && (
+            <View style={styles.stepWrap}>
+              <StepHead icon="chatbubbles-outline" title={tr(lang, 'بيانات التواصل', 'Contact details')} sub={tr(lang, 'تم تعبئة بياناتك تلقائياً — عدّلها إن لزم', 'Your details were prefilled — edit if needed')} />
+
+              <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border, gap: 14 }]}>
+                <Field label={tr(lang, 'رقم جوال المعتمر', 'Pilgrim phone')} value={phone} onChangeText={setPhone} keyboardType="phone-pad" ltr required placeholder="+966 5X XXX XXXX" />
+                <Field label={tr(lang, 'بريد التواصل (اختياري)', 'Contact email (optional)')} value={contactEmail} onChangeText={setContactEmail} keyboardType="email-address" ltr autoCapitalize="none" placeholder="example@email.com" />
+                <Field label={tr(lang, 'رقم جوال قريب أو صديق للطوارئ', 'Emergency contact phone (relative/friend)')} value={emergencyPhone} onChangeText={setEmergencyPhone} keyboardType="phone-pad" ltr required placeholder="+966 5X XXX XXXX" />
+              </View>
+
+              <NextButton label={tr(lang, 'التالي', 'Next')} onPress={handleNext} />
+            </View>
+          )}
+
+          {/* ── STEP 6: FEE ─────────────────────────────────────────────── */}
+          {step === 6 && (
+            <View style={styles.stepWrap}>
+              <StepHead icon="pricetag-outline" title={tr(lang, 'رسوم التأشيرة', 'Visa fee')} sub={tr(lang, 'الرسوم محددة حسب جنسية المعتمر', 'The fee is set according to the pilgrim nationality')} />
+
+              <View style={[styles.card, { backgroundColor: c.goldTint, borderColor: colors.gold, alignItems: 'center', gap: 6 }]}>
+                <Text style={[styles.feeLabel, { color: c.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>{tr(lang, 'رسوم تأشيرة العمرة', 'Umrah visa fee')}</Text>
+                {configLoading ? (
+                  <ActivityIndicator color={colors.gold} style={{ marginVertical: 8 }} />
+                ) : fee ? (
+                  <Text style={[styles.feeAmount, { color: colors.umrahGreen, fontFamily: 'Cairo_700Bold' }]}>
+                    {fee.amount} {fee.currency}
+                  </Text>
+                ) : (
+                  <Text style={[styles.feeAmount, { color: colors.umrahGreen, fontFamily: 'Cairo_700Bold' }]}>—</Text>
+                )}
+                {!!nationality && (
+                  <Text style={[styles.stepSub, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular', textAlign: 'center' }]}>
+                    {tr(lang, `الجنسية: ${nationality}`, `Nationality: ${nationality}`)}
+                  </Text>
+                )}
+              </View>
+
+              <NextButton label={tr(lang, 'المتابعة للسداد', 'Continue to payment')} onPress={handleNext} />
+            </View>
+          )}
+
+          {/* ── STEP 7: PAYMENT ─────────────────────────────────────────── */}
+          {step === 7 && (
             <View style={styles.stepWrap}>
               <StepHead icon="card-outline" title={tr(lang, 'الدفع', 'Payment')} sub={tr(lang, 'تأشيرة العمرة تتطلب الدفع مقدماً', 'The Umrah visa requires payment upfront')} />
 

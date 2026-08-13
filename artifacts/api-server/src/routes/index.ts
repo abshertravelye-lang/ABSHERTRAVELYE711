@@ -21,6 +21,8 @@ import settingsRouter from "./settings";
 import auditLogsRouter from "./auditLogs";
 import pushTokensRouter from "./pushTokens";
 import supportChatRouter from "./supportChat";
+import agenciesRouter from "./agencies";
+import agentRouter from "./agent";
 
 const router: IRouter = Router();
 
@@ -46,5 +48,7 @@ router.use(employeesRouter);
 router.use(settingsRouter);
 router.use(auditLogsRouter);
 router.use(supportChatRouter);
+router.use(agenciesRouter);
+router.use(agentRouter);
 
 export default router;

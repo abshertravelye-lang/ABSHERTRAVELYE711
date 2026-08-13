@@ -2,6 +2,7 @@ import {
   db,
   usersTable,
   objectUploadsTable,
+  applicationDocumentsTable,
   applicationDocumentVersionsTable,
   visaApplicationSubmissionsTable,
   umrahApplicationsTable,
@@ -132,10 +133,68 @@ export async function isAuthorizedForObject(userId: string, objectPath: string):
   try {
     if (await callerHasVisaDocAccess(userId, objectPath)) return true;
     if (await callerOwnsObject(userId, objectPath)) return true;
-    return await callerOwnsIssuedVisa(userId, objectPath);
+    if (await callerOwnsIssuedVisa(userId, objectPath)) return true;
+    return await agentCanReadAgencyObject(userId, objectPath);
   } catch {
     return false;
   }
+}
+
+/**
+ * B2B Agent Portal read-grant. A travel-portal agent (role "agent" WITH a
+ * non-null agency_id) may read ONLY objects tied to an agent application that
+ * belongs to THE AGENT'S OWN AGENCY. Enforces section 12: agents can never
+ * download documents belonging to another agency. Staff employees (role
+ * "agent" WITHOUT agency_id) are handled by callerHasVisaDocAccess instead.
+ */
+async function agentCanReadAgencyObject(userId: string, objectPath: string): Promise<boolean> {
+  const [user] = await db
+    .select({ role: usersTable.role, isActive: usersTable.isActive, agencyId: usersTable.agencyId })
+    .from(usersTable)
+    .where(and(eq(usersTable.id, userId), isNull(usersTable.deletedAt)));
+  if (!user || !user.isActive || user.role !== 'agent' || user.agencyId == null) return false;
+
+  // The object must be referenced by a submission belonging to the agent's agency.
+  const [submission] = await db
+    .select({ id: visaApplicationSubmissionsTable.id })
+    .from(visaApplicationSubmissionsTable)
+    .where(
+      and(
+        eq(visaApplicationSubmissionsTable.agencyId, user.agencyId),
+        or(
+          eq(visaApplicationSubmissionsTable.passportImageUrl, objectPath),
+          eq(visaApplicationSubmissionsTable.personalPhotoUrl, objectPath),
+          eq(visaApplicationSubmissionsTable.residencyImageUrl, objectPath),
+          eq(visaApplicationSubmissionsTable.residencyBackImageUrl, objectPath),
+          eq(visaApplicationSubmissionsTable.visaImageUrl, objectPath),
+          eq(visaApplicationSubmissionsTable.issuedVisaUrl, objectPath),
+        ),
+      ),
+    )
+    .limit(1);
+  if (submission) return true;
+
+  // Also cover document versions attached to that agency's applications
+  // (versions → application_documents.applicationId → submission.agencyId).
+  const [version] = await db
+    .select({ id: applicationDocumentVersionsTable.id })
+    .from(applicationDocumentVersionsTable)
+    .innerJoin(
+      applicationDocumentsTable,
+      eq(applicationDocumentVersionsTable.documentId, applicationDocumentsTable.id),
+    )
+    .innerJoin(
+      visaApplicationSubmissionsTable,
+      eq(applicationDocumentsTable.applicationId, visaApplicationSubmissionsTable.id),
+    )
+    .where(
+      and(
+        eq(applicationDocumentVersionsTable.storagePath, objectPath),
+        eq(visaApplicationSubmissionsTable.agencyId, user.agencyId),
+      ),
+    )
+    .limit(1);
+  return !!version;
 }
 
 /**

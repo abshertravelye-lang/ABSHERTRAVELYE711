@@ -45,7 +45,7 @@ export default function AccountScreen() {
     setLogoutVisible(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
     await logout();
-    router.replace('/welcome');
+    router.replace('/auth/login');
   };
 
   if (isLoading) return null;

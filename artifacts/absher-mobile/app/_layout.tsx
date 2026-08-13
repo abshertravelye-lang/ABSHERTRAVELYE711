@@ -96,7 +96,7 @@ function BootstrapGate({ appReady, onRouted }: { appReady: boolean; onRouted: ()
       if (!onboarded) {
         router.replace('/onboarding');
       } else if (!user) {
-        router.replace('/welcome');
+        router.replace('/auth/login');
       }
       // Authenticated + onboarded users stay on the default (tabs) route.
 

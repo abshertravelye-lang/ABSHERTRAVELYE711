@@ -1912,6 +1912,292 @@ export interface ProviderStatus {
   isAvailable: boolean;
 }
 
+export type AgencyStatus = typeof AgencyStatus[keyof typeof AgencyStatus];
+
+
+export const AgencyStatus = {
+  active: 'active',
+  suspended: 'suspended',
+  pending: 'pending',
+} as const;
+
+export interface Agency {
+  id: number;
+  name: string;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  address?: string | null;
+  notes?: string | null;
+  status: AgencyStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AgencyInputStatus = typeof AgencyInputStatus[keyof typeof AgencyInputStatus];
+
+
+export const AgencyInputStatus = {
+  active: 'active',
+  suspended: 'suspended',
+  pending: 'pending',
+} as const;
+
+export interface AgencyInput {
+  name: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  address?: string;
+  notes?: string;
+  status?: AgencyInputStatus;
+}
+
+export type AgencyUpdateStatus = typeof AgencyUpdateStatus[keyof typeof AgencyUpdateStatus];
+
+
+export const AgencyUpdateStatus = {
+  active: 'active',
+  suspended: 'suspended',
+  pending: 'pending',
+} as const;
+
+export interface AgencyUpdate {
+  name?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  address?: string;
+  notes?: string;
+  status?: AgencyUpdateStatus;
+}
+
+export interface AgentAccount {
+  id: string;
+  email?: string | null;
+  phone?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  role: string;
+  agencyId?: number | null;
+  isActive: boolean;
+  createdAt: string;
+  lastLoginAt?: string | null;
+}
+
+export interface AgentAccountInput {
+  email?: string;
+  phone?: string;
+  /** @minLength 8 */
+  password: string;
+  firstName: string;
+  lastName?: string;
+}
+
+export interface AgentAccountUpdate {
+  isActive?: boolean;
+  firstName?: string;
+  lastName?: string;
+}
+
+export interface ResetPasswordInput {
+  /** @minLength 8 */
+  password: string;
+}
+
+export interface AgencyVisaService {
+  id: number;
+  agencyId: number;
+  visaId: number;
+  enabled: boolean;
+  agentPrice: string;
+  currency: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AgencyVisaServicesInputServicesItem = {
+  visaId: number;
+  enabled: boolean;
+  agentPrice: number | string;
+  currency?: string;
+};
+
+export interface AgencyVisaServicesInput {
+  services: AgencyVisaServicesInputServicesItem[];
+}
+
+export interface AgentVisaService {
+  serviceId?: number;
+  visaId: number;
+  agentPrice: string;
+  currency?: string;
+  countryAr?: string;
+  countryEn?: string;
+  countryCode?: string | null;
+  visaType?: string;
+  category?: string;
+  descriptionAr?: string | null;
+  descriptionEn?: string | null;
+  processingDays?: number;
+  stayDuration?: number | null;
+  validityDays?: number | null;
+  entryType?: string;
+  allowedNationalities?: string[];
+  blockedNationalities?: string[];
+  imageUrl?: string | null;
+  requiresPassportImage?: boolean;
+  requiresPersonalPhoto?: boolean;
+}
+
+export type AgentApplicationCustomFieldResponses = { [key: string]: unknown };
+
+export interface AgentApplication {
+  id: number;
+  trackingNumber: string | null;
+  visaId: number;
+  agencyId?: number | null;
+  submittedByAgentId?: string | null;
+  agentPrice?: string | null;
+  fullName?: string;
+  fullNameEn?: string | null;
+  nationality?: string;
+  gender?: string;
+  dateOfBirth?: string;
+  email?: string;
+  phone?: string;
+  passportNumber?: string;
+  passportIssueDate?: string | null;
+  passportExpiryDate?: string;
+  passportIssuingCountry?: string | null;
+  countryOfResidence?: string | null;
+  passportImageUrl?: string | null;
+  personalPhotoUrl?: string | null;
+  residencyImageUrl?: string | null;
+  residencyBackImageUrl?: string | null;
+  visaImageUrl?: string | null;
+  customFieldResponses?: AgentApplicationCustomFieldResponses;
+  agreedToTerms?: boolean;
+  status: string;
+  adminNotes?: string | null;
+  issuedVisaUrl?: string | null;
+  agencyName?: string | null;
+  agentName?: string | null;
+  visaType?: string | null;
+  countryEn?: string | null;
+  countryAr?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AgentApplicationInputGender = typeof AgentApplicationInputGender[keyof typeof AgentApplicationInputGender];
+
+
+export const AgentApplicationInputGender = {
+  male: 'male',
+  female: 'female',
+} as const;
+
+export type AgentApplicationInputCustomFieldResponses = { [key: string]: unknown };
+
+export interface AgentApplicationInput {
+  visaId: number;
+  applicantNationality: string;
+  fullName: string;
+  fullNameEn?: string;
+  gender: AgentApplicationInputGender;
+  dateOfBirth: string;
+  email: string;
+  phone: string;
+  passportNumber: string;
+  passportIssueDate: string;
+  passportExpiryDate: string;
+  passportIssuingCountry?: string;
+  countryOfResidence?: string;
+  passportImageUrl?: string;
+  personalPhotoUrl?: string;
+  residencyImageUrl?: string;
+  residencyBackImageUrl?: string;
+  visaImageUrl?: string;
+  customFieldResponses?: AgentApplicationInputCustomFieldResponses;
+  agreedToTerms?: boolean;
+}
+
+export type AgentApplicationUpdateStatus = typeof AgentApplicationUpdateStatus[keyof typeof AgentApplicationUpdateStatus];
+
+
+export const AgentApplicationUpdateStatus = {
+  received: 'received',
+  under_review: 'under_review',
+  awaiting_documents: 'awaiting_documents',
+  documents_uploaded: 'documents_uploaded',
+  sent_to_embassy: 'sent_to_embassy',
+  processing: 'processing',
+  issued: 'issued',
+  completed: 'completed',
+  rejected: 'rejected',
+  cancelled: 'cancelled',
+} as const;
+
+export interface AgentApplicationUpdate {
+  status?: AgentApplicationUpdateStatus;
+  adminNotes?: string;
+  issuedVisaUrl?: string;
+}
+
+export type AgentMeAgent = {
+  id?: string;
+  email?: string | null;
+  phone?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+};
+
+export type AgentMeAgencyStatus = typeof AgentMeAgencyStatus[keyof typeof AgentMeAgencyStatus];
+
+
+export const AgentMeAgencyStatus = {
+  active: 'active',
+  suspended: 'suspended',
+  pending: 'pending',
+} as const;
+
+export type AgentMeAgency = {
+  id?: number;
+  name?: string;
+  status?: AgentMeAgencyStatus;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+};
+
+export interface AgentMe {
+  agent: AgentMeAgent;
+  agency: AgentMeAgency;
+}
+
+export type AgentDashboardAgencyStatus = typeof AgentDashboardAgencyStatus[keyof typeof AgentDashboardAgencyStatus];
+
+
+export const AgentDashboardAgencyStatus = {
+  active: 'active',
+  suspended: 'suspended',
+  pending: 'pending',
+} as const;
+
+export type AgentDashboardStatsByStatus = {[key: string]: number};
+
+export type AgentDashboardStats = {
+  total?: number;
+  submitted?: number;
+  approved?: number;
+  rejected?: number;
+  inProgress?: number;
+  byStatus?: AgentDashboardStatsByStatus;
+};
+
+export interface AgentDashboard {
+  agencyName: string;
+  agencyStatus: AgentDashboardAgencyStatus;
+  stats: AgentDashboardStats;
+}
+
 export type ListOffersParams = {
 featured?: boolean;
 limit?: number;
@@ -2138,5 +2424,10 @@ export type ListGuestSupportMessagesParams = {
  */
 token?: string;
 after?: string;
+};
+
+export type ListAgentApplicationsParams = {
+agencyId?: number;
+status?: string;
 };
 

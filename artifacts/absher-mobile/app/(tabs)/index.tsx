@@ -305,7 +305,7 @@ export default function HomeScreen() {
         descKey: 'home.services.umrah.desc',
         icon: 'moon-outline',
         image: require('@/assets/images/umrah-hero.jpg'),
-        route: '/umrah-visa',
+        route: '/(tabs)/umrah',
         distinctive: true,
       },
     ],

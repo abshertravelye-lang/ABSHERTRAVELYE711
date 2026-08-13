@@ -48,6 +48,10 @@ tags:
     description: File upload and object storage
   - name: support-chat
     description: In-app support chat (customer, guest, and staff)
+  - name: agencies
+    description: Admin management of travel agencies, agent accounts, visa services & pricing
+  - name: agent-portal
+    description: B2B agent portal (agent-scoped dashboard, visa services, applications)
 
 paths:
   /healthz:
@@ -2085,6 +2089,413 @@ paths:
         "404":
           description: Conversation not found
 
+  # ── AGENCIES (ADMIN) ─────────────────────────────────────────────────────────
+
+  /agencies:
+    get:
+      operationId: listAgencies
+      tags: [agencies]
+      summary: List all travel agencies (permission - employees)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Agencies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Agency"
+    post:
+      operationId: createAgency
+      tags: [agencies]
+      summary: Create a travel agency (permission - employees)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgencyInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agency"
+
+  /agencies/{id}:
+    get:
+      operationId: getAgency
+      tags: [agencies]
+      summary: Get an agency (permission - employees)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Agency
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agency"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateAgency
+      tags: [agencies]
+      summary: Update agency info / status (permission - employees)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgencyUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agency"
+
+  /agencies/{id}/agents:
+    get:
+      operationId: listAgencyAgents
+      tags: [agencies]
+      summary: List an agency's agent accounts (permission - employees)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Agents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AgentAccount"
+    post:
+      operationId: createAgencyAgent
+      tags: [agencies]
+      summary: Create an agent account for an agency (permission - employees)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentAccountInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentAccount"
+
+  /agents/{agentId}/reset-password:
+    post:
+      operationId: resetAgentPassword
+      tags: [agencies]
+      summary: Reset an agent account password (permission - employees)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordInput"
+      responses:
+        "200":
+          description: Password reset
+
+  /agents/{agentId}:
+    patch:
+      operationId: updateAgentAccount
+      tags: [agencies]
+      summary: Activate / deactivate / edit an agent account (permission - employees)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: agentId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentAccountUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentAccount"
+
+  /agencies/{id}/visa-services:
+    get:
+      operationId: listAgencyVisaServices
+      tags: [agencies]
+      summary: List an agency's configured visa services & prices (permission - employees)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Services
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AgencyVisaService"
+    put:
+      operationId: putAgencyVisaServices
+      tags: [agencies]
+      summary: Upsert an agency's visa services & agent prices (permission - employees)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgencyVisaServicesInput"
+      responses:
+        "200":
+          description: Updated services
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AgencyVisaService"
+
+  /agent-applications:
+    get:
+      operationId: listAgentApplications
+      tags: [agencies]
+      summary: List agent applications across all agencies (permission - visa_applications)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: agencyId
+          in: query
+          schema: { type: integer }
+        - name: status
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Agent applications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AgentApplication"
+
+  /agent-applications/{id}:
+    get:
+      operationId: getAgentApplication
+      tags: [agencies]
+      summary: Get an agent application (permission - visa_applications)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Agent application
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentApplication"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateAgentApplication
+      tags: [agencies]
+      summary: Update an agent application status / notes; notifies the agent (permission - visa_applications)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentApplicationUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentApplication"
+
+  # ── AGENT PORTAL ─────────────────────────────────────────────────────────────
+
+  /agent/me:
+    get:
+      operationId: getAgentMe
+      tags: [agent-portal]
+      summary: Current agent's account + agency info & status
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Agent context
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentMe"
+        "403":
+          description: Not an agent / agency access only
+
+  /agent/dashboard:
+    get:
+      operationId: getAgentDashboard
+      tags: [agent-portal]
+      summary: Agent dashboard statistics (active agency only)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Dashboard
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentDashboard"
+
+  /agent/visa-services:
+    get:
+      operationId: getAgentVisaServices
+      tags: [agent-portal]
+      summary: Visa services enabled for the agent's agency with AGENT price
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Enabled services
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AgentVisaService"
+
+  /agent/applications:
+    get:
+      operationId: listMyAgentApplications
+      tags: [agent-portal]
+      summary: List applications for the agent's own agency
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Applications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AgentApplication"
+    post:
+      operationId: submitAgentApplication
+      tags: [agent-portal]
+      summary: Submit a new visa application (price applied server-side)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentApplicationInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentApplication"
+        "422":
+          description: Validation failed (visa not enabled, nationality ineligible, docs missing)
+
+  /agent/applications/{id}:
+    get:
+      operationId: getMyAgentApplication
+      tags: [agent-portal]
+      summary: Get one application belonging to the agent's agency
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Application
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentApplication"
+        "404":
+          description: Not found
+
 components:
   schemas:
     HealthStatus:
@@ -3511,6 +3922,251 @@ components:
         name: { type: string }
         supportsBooking: { type: boolean }
         isAvailable: { type: boolean }
+
+    # ── Agencies / Agent Portal ──────────────────────────────────────────────
+    Agency:
+      type: object
+      required: [id, name, status, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        contactEmail: { type: string, nullable: true }
+        contactPhone: { type: string, nullable: true }
+        address: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        status: { type: string, enum: [active, suspended, pending] }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+
+    AgencyInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        contactEmail: { type: string }
+        contactPhone: { type: string }
+        address: { type: string }
+        notes: { type: string }
+        status: { type: string, enum: [active, suspended, pending] }
+
+    AgencyUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        contactEmail: { type: string }
+        contactPhone: { type: string }
+        address: { type: string }
+        notes: { type: string }
+        status: { type: string, enum: [active, suspended, pending] }
+
+    AgentAccount:
+      type: object
+      required: [id, role, isActive, createdAt]
+      properties:
+        id: { type: string }
+        email: { type: string, nullable: true }
+        phone: { type: string, nullable: true }
+        firstName: { type: string, nullable: true }
+        lastName: { type: string, nullable: true }
+        role: { type: string }
+        agencyId: { type: integer, nullable: true }
+        isActive: { type: boolean }
+        createdAt: { type: string }
+        lastLoginAt: { type: string, nullable: true }
+
+    AgentAccountInput:
+      type: object
+      required: [password, firstName]
+      properties:
+        email: { type: string }
+        phone: { type: string }
+        password: { type: string, minLength: 8 }
+        firstName: { type: string }
+        lastName: { type: string }
+
+    AgentAccountUpdate:
+      type: object
+      properties:
+        isActive: { type: boolean }
+        firstName: { type: string }
+        lastName: { type: string }
+
+    ResetPasswordInput:
+      type: object
+      required: [password]
+      properties:
+        password: { type: string, minLength: 8 }
+
+    AgencyVisaService:
+      type: object
+      required: [id, agencyId, visaId, enabled, agentPrice, currency, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        agencyId: { type: integer }
+        visaId: { type: integer }
+        enabled: { type: boolean }
+        agentPrice: { type: string }
+        currency: { type: string }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+
+    AgencyVisaServicesInput:
+      type: object
+      required: [services]
+      properties:
+        services:
+          type: array
+          items:
+            type: object
+            required: [visaId, enabled, agentPrice]
+            properties:
+              visaId: { type: integer }
+              enabled: { type: boolean }
+              agentPrice:
+                oneOf:
+                  - { type: number }
+                  - { type: string }
+              currency: { type: string }
+
+    AgentVisaService:
+      type: object
+      required: [visaId, agentPrice]
+      properties:
+        serviceId: { type: integer }
+        visaId: { type: integer }
+        agentPrice: { type: string }
+        currency: { type: string }
+        countryAr: { type: string }
+        countryEn: { type: string }
+        countryCode: { type: string, nullable: true }
+        visaType: { type: string }
+        category: { type: string }
+        descriptionAr: { type: string, nullable: true }
+        descriptionEn: { type: string, nullable: true }
+        processingDays: { type: integer }
+        stayDuration: { type: integer, nullable: true }
+        validityDays: { type: integer, nullable: true }
+        entryType: { type: string }
+        allowedNationalities:
+          type: array
+          items: { type: string }
+        blockedNationalities:
+          type: array
+          items: { type: string }
+        imageUrl: { type: string, nullable: true }
+        requiresPassportImage: { type: boolean }
+        requiresPersonalPhoto: { type: boolean }
+
+    AgentApplication:
+      type: object
+      required: [id, trackingNumber, visaId, status, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        trackingNumber: { type: string, nullable: true }
+        visaId: { type: integer }
+        agencyId: { type: integer, nullable: true }
+        submittedByAgentId: { type: string, nullable: true }
+        agentPrice: { type: string, nullable: true }
+        fullName: { type: string }
+        fullNameEn: { type: string, nullable: true }
+        nationality: { type: string }
+        gender: { type: string }
+        dateOfBirth: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        passportNumber: { type: string }
+        passportIssueDate: { type: string, nullable: true }
+        passportExpiryDate: { type: string }
+        passportIssuingCountry: { type: string, nullable: true }
+        countryOfResidence: { type: string, nullable: true }
+        passportImageUrl: { type: string, nullable: true }
+        personalPhotoUrl: { type: string, nullable: true }
+        residencyImageUrl: { type: string, nullable: true }
+        residencyBackImageUrl: { type: string, nullable: true }
+        visaImageUrl: { type: string, nullable: true }
+        customFieldResponses: { type: object, additionalProperties: true }
+        agreedToTerms: { type: boolean }
+        status: { type: string }
+        adminNotes: { type: string, nullable: true }
+        issuedVisaUrl: { type: string, nullable: true }
+        agencyName: { type: string, nullable: true }
+        agentName: { type: string, nullable: true }
+        visaType: { type: string, nullable: true }
+        countryEn: { type: string, nullable: true }
+        countryAr: { type: string, nullable: true }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+
+    AgentApplicationInput:
+      type: object
+      required: [visaId, applicantNationality, fullName, gender, dateOfBirth, email, phone, passportNumber, passportIssueDate, passportExpiryDate]
+      properties:
+        visaId: { type: integer }
+        applicantNationality: { type: string }
+        fullName: { type: string }
+        fullNameEn: { type: string }
+        gender: { type: string, enum: [male, female] }
+        dateOfBirth: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        passportNumber: { type: string }
+        passportIssueDate: { type: string }
+        passportExpiryDate: { type: string }
+        passportIssuingCountry: { type: string }
+        countryOfResidence: { type: string }
+        passportImageUrl: { type: string }
+        personalPhotoUrl: { type: string }
+        residencyImageUrl: { type: string }
+        residencyBackImageUrl: { type: string }
+        visaImageUrl: { type: string }
+        customFieldResponses: { type: object, additionalProperties: true }
+        agreedToTerms: { type: boolean }
+
+    AgentApplicationUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [received, under_review, awaiting_documents, documents_uploaded, sent_to_embassy, processing, issued, completed, rejected, cancelled]
+        adminNotes: { type: string }
+        issuedVisaUrl: { type: string }
+
+    AgentMe:
+      type: object
+      required: [agent, agency]
+      properties:
+        agent:
+          type: object
+          properties:
+            id: { type: string }
+            email: { type: string, nullable: true }
+            phone: { type: string, nullable: true }
+            firstName: { type: string, nullable: true }
+            lastName: { type: string, nullable: true }
+        agency:
+          type: object
+          properties:
+            id: { type: integer }
+            name: { type: string }
+            status: { type: string, enum: [active, suspended, pending] }
+            contactEmail: { type: string, nullable: true }
+            contactPhone: { type: string, nullable: true }
+
+    AgentDashboard:
+      type: object
+      required: [agencyName, agencyStatus, stats]
+      properties:
+        agencyName: { type: string }
+        agencyStatus: { type: string, enum: [active, suspended, pending] }
+        stats:
+          type: object
+          properties:
+            total: { type: integer }
+            submitted: { type: integer }
+            approved: { type: integer }
+            rejected: { type: integer }
+            inProgress: { type: integer }
+            byStatus: { type: object, additionalProperties: { type: integer } }
 
   securitySchemes:
     bearerAuth:

@@ -55,7 +55,7 @@ export default function OnboardingScreen() {
     await AsyncStorage.setItem('@absher_onboarded', 'true');
     // Authenticated users go straight to the app; everyone else lands on the
     // premium welcome screen to sign in / register / explore.
-    router.replace(user ? '/(tabs)' : '/welcome');
+    router.replace(user ? '/(tabs)' : '/auth/login');
   };
 
   const scrollToNext = () => {

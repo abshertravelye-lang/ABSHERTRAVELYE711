@@ -74,6 +74,8 @@ export default function AuthScreen() {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
+  // Inline error banner — Alert.alert is a no-op on web, so errors must render in the form itself.
+  const [formError, setFormError] = useState<string | null>(null);
 
   // --- Register state ---
   const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '', password: '', confirmPassword: '' });
@@ -87,7 +89,9 @@ export default function AuthScreen() {
   // Handlers
   // -------------------------------------------------------------------------
   const handleLogin = () => {
+    setFormError(null);
     if (!identifier || !password) {
+      setFormError(t('login.missingBody'));
       Alert.alert(t('login.missingTitle'), t('login.missingBody'));
       return;
     }
@@ -102,7 +106,11 @@ export default function AuthScreen() {
           await setAuth(res);
           router.replace("/(tabs)");
         },
-        onError: () => Alert.alert(t('login.errorTitle'), t('login.errorBody')),
+        onError: () => {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          setFormError(t('login.errorBody'));
+          Alert.alert(t('login.errorTitle'), t('login.errorBody'));
+        },
       },
     );
   };
@@ -115,11 +123,12 @@ export default function AuthScreen() {
   };
 
   const handleRegister = () => {
+    setFormError(null);
     const fullPhone = buildFullPhone();
-    if (!form.email && !fullPhone) { Alert.alert(t('register.missingTitle'), t('register.missingContact')); return; }
-    if (!form.password) { Alert.alert(t('register.missingTitle'), t('register.missingPassword')); return; }
-    if (form.password !== form.confirmPassword) { Alert.alert(t('register.errorTitle'), t('register.passwordMismatch')); return; }
-    if (form.password.length < 8) { Alert.alert(t('register.errorTitle'), t('register.passwordShort')); return; }
+    if (!form.email && !fullPhone) { setFormError(t('register.missingContact')); Alert.alert(t('register.missingTitle'), t('register.missingContact')); return; }
+    if (!form.password) { setFormError(t('register.missingPassword')); Alert.alert(t('register.missingTitle'), t('register.missingPassword')); return; }
+    if (form.password !== form.confirmPassword) { setFormError(t('register.passwordMismatch')); Alert.alert(t('register.errorTitle'), t('register.passwordMismatch')); return; }
+    if (form.password.length < 8) { setFormError(t('register.passwordShort')); Alert.alert(t('register.errorTitle'), t('register.passwordShort')); return; }
 
     registerMutation.mutate(
       { data: { email: form.email || undefined, phone: fullPhone, password: form.password, firstName: form.firstName || undefined, lastName: form.lastName || undefined } },
@@ -129,7 +138,12 @@ export default function AuthScreen() {
           await setAuth(res);
           router.replace("/(tabs)");
         },
-        onError: () => Alert.alert(t('register.errorTitle'), t('register.errorBody')),
+        onError: (err: unknown) => {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          const serverMsg = (err as { error?: string })?.error;
+          setFormError(serverMsg || t('register.errorBody'));
+          Alert.alert(t('register.errorTitle'), serverMsg || t('register.errorBody'));
+        },
       },
     );
   };
@@ -141,8 +155,18 @@ export default function AuthScreen() {
 
   const switchTab = (next: Tab) => {
     Haptics.selectionAsync();
+    setFormError(null);
     setTab(next);
   };
+
+  /** Red inline banner shown above the submit button when sign-in/registration fails. */
+  const ErrorBanner = () =>
+    formError ? (
+      <View style={styles.errorBanner}>
+        <Ionicons name="alert-circle" size={18} color="#DC2626" />
+        <Text style={[styles.errorBannerText, { fontFamily: 'Cairo_600SemiBold' }]}>{formError}</Text>
+      </View>
+    ) : null;
 
   // -------------------------------------------------------------------------
   // Reusable field
@@ -305,6 +329,8 @@ export default function AuthScreen() {
                 <Text style={[styles.forgotLink, { color: NAVY, fontFamily: 'Cairo_600SemiBold' }]}>{t('login.forgot')}</Text>
               </Pressable>
 
+              <ErrorBanner />
+
               <Pressable onPress={handleLogin} disabled={loginMutation.isPending} style={({ pressed }) => [styles.primaryBtnWrap, { opacity: pressed || loginMutation.isPending ? 0.9 : 1 }]}>
                 <LinearGradient colors={[NAVY, NAVY_2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.primaryBtn}>
                   <Text style={[styles.primaryBtnText, { fontFamily: 'Cairo_700Bold' }]}>
@@ -361,6 +387,8 @@ export default function AuthScreen() {
 
               <Field label={t('register.password')} icon="lock-closed-outline" value={form.password} onChangeText={(v) => set('password', v)} placeholder={t('register.passwordPlaceholder')} secure showSecure={showRegPass} onToggleSecure={() => setShowRegPass(!showRegPass)} />
               <Field label={t('register.confirmPassword')} icon="lock-closed-outline" value={form.confirmPassword} onChangeText={(v) => set('confirmPassword', v)} placeholder={t('register.confirmPasswordPlaceholder')} secure showSecure={showRegPass} onToggleSecure={() => setShowRegPass(!showRegPass)} />
+
+              <ErrorBanner />
 
               <Pressable onPress={handleRegister} disabled={registerMutation.isPending} style={({ pressed }) => [styles.primaryBtnWrap, { opacity: pressed || registerMutation.isPending ? 0.9 : 1 }]}>
                 <LinearGradient colors={[NAVY, NAVY_2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.primaryBtn}>
@@ -429,6 +457,18 @@ const styles = StyleSheet.create({
   nameRow: { gap: 12 },
 
   forgotWrap: { alignSelf: 'flex-start', marginTop: -6 },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  errorBannerText: { color: '#DC2626', fontSize: 13, flex: 1 },
   forgotLink: { fontSize: 13 },
 
   primaryBtnWrap: { borderRadius: 16, marginTop: 4, shadowColor: NAVY, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 12, elevation: 6 },

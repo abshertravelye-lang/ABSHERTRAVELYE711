@@ -1,0 +1,13 @@
+version: '3.8'
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    volumes:
+      - ./:/app
+    restart: unless-stopped
+
+# If you have a Flutter web build output, you could add an nginx service to serve the `build/web` folder.

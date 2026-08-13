@@ -30,6 +30,8 @@ const SettingsAdmin = lazy(() => import("./settings-admin"));
 const AuditLogsAdmin = lazy(() => import("./audit-logs"));
 const UmrahApplicationsAdmin = lazy(() => import("./umrah-applications-admin"));
 const UmrahSettingsAdmin = lazy(() => import("./umrah-settings-admin"));
+const AgenciesAdmin = lazy(() => import("./agencies-admin"));
+const AgentApplicationsAdmin = lazy(() => import("./agent-applications-admin"));
 const PromotionalOffersAdmin = lazy(() => import("./promotional-offers-admin"));
 
 function LoadingSpinner() {
@@ -107,6 +109,8 @@ export default function AdminLayout() {
     { href: "/admin/reports",            icon: BarChart3,       labelAr: "التقارير",          labelEn: "Reports",            perm: "reports" },
     { href: "/admin/visa-applications",  icon: FileText,        labelAr: "طلبات التأشيرة",    labelEn: "Visa Applications",  perm: "visa_applications" },
     { href: "/admin/umrah-applications", icon: Landmark,        labelAr: "طلبات تأشيرة العمرة",labelEn: "Umrah Applications", perm: "visa_applications" },
+    { href: "/admin/agent-applications", icon: Briefcase,       labelAr: "طلبات الوكالات",    labelEn: "Agent Applications", perm: "visa_applications" },
+    { href: "/admin/agencies",           icon: Building2,       labelAr: "وكالات السفر",      labelEn: "Travel Agencies",    perm: "employees", show: isSuperAdmin || hasPermission("employees") },
     { href: "/admin/visa-countries",     icon: Flag,            labelAr: "دول التأشيرة",      labelEn: "Visa Countries",     perm: "visa_config" },
     { href: "/admin/visas",              icon: Globe,           labelAr: "أنواع التأشيرات",   labelEn: "Visa Types",         perm: "visa_config" },
     { href: "/admin/programs",           icon: Map,             labelAr: "البرامج السياحية",  labelEn: "Programs",           perm: "visa_config" },

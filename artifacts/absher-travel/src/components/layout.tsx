@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useTranslation } from "@/hooks/use-translation";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const { t, language, setLanguage } = useTranslation();
   const { isAuthenticated } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [location] = useLocation();
+
+  // The B2B Agent Portal renders its own full-screen shell — no site chrome.
+  if (location.startsWith("/agent")) {
+    return (
+      <>
+        {children}
+        <SupportChat />
+      </>
+    );
+  }
 
   const toggleLanguage = () => {
     setLanguage(language === "ar" ? "en" : "ar");
@@ -85,7 +96,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <header className="bg-white border-b sticky top-0 z-50">
         <div className="container mx-auto px-4 h-20 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <img src={logo} alt="Absher Travel Logo" className="h-16 w-52 object-contain" />
+            <img src={logo} alt="Absher Travel Logo" className="h-16 w-36 object-contain" />
+            <span className="hidden sm:flex flex-col leading-tight">
+              <span className="text-lg font-extrabold tracking-wide text-primary">ABSHER TRAVEL</span>
+              <span className="text-[10px] text-slate-400 font-medium">{language === "ar" ? "شريكك المتميز في السفر" : "Your premium travel partner"}</span>
+            </span>
           </Link>
 
           {/* Desktop Nav */}

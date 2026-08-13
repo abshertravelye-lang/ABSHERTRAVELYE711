@@ -30,6 +30,7 @@ import Register from "@/pages/register";
 import Account from "@/pages/account";
 import Admin from "@/pages/admin";
 import Umrah from "@/pages/umrah";
+import AgentPortal from "@/pages/agent-portal";
 
 const queryClient = new QueryClient();
 
@@ -51,6 +52,8 @@ function Router() {
       <Route path="/visas/:countryId/:visaId" component={VisaDetail} />
       
       <Route path="/umrah" component={Umrah} />
+      <Route path="/agent" component={AgentPortal} />
+      <Route path="/agent/:rest*" component={AgentPortal} />
 
       <Route path="/about" component={About} />
       <Route path="/contact" component={Contact} />

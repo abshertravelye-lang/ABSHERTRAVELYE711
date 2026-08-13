@@ -1,21 +1,29 @@
+import colorsData from '@/constants/colors';
 import React from 'react';
 import { Image } from 'expo-image';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useLanguage } from '@/context/LanguageContext';
 import { useColors } from '@/hooks/useColors';
 import type { Visa } from '@workspace/api-client-react';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-const CATEGORY_AR: Record<string, string> = {
-  tourist: 'سياحية', business: 'تجارية', medical: 'طبية',
-  visit: 'زيارة', study: 'دراسية', umrah: 'عمرة',
-};
+function getCategoryLabel(t: any, type: string) {
+  const map: Record<string, string> = {
+    tourist: t('visas.category.tourist'), business: t('visas.category.business'), medical: t('visas.category.medical'),
+    visit: t('visas.category.visit'), study: t('visas.category.study'), umrah: t('visas.category.umrah'),
+  };
+  return map[type] || type;
+}
 
-const ENTRY_AR: Record<string, string> = {
-  single: 'دخول واحد', multiple: 'دخول متعدد', transit: 'عبور',
-};
+function getEntryLabel(t: any, type: string) {
+  const map: Record<string, string> = {
+    single: t('visas.entry.single'), multiple: t('visas.entry.multiple'), transit: t('visas.entry.transit'),
+  };
+  return map[type] || type;
+}
 
 const COUNTRY_IMAGES: Record<string, string> = {
   SA: 'https://images.unsplash.com/photo-1586724237569-f3d0c1dee8c6?w=600',
@@ -57,6 +65,7 @@ function countryImg(visa: Visa): string {
 type Props = { visa: Visa; onPress?: () => void; style?: object };
 
 export function VisaCard({ visa, onPress, style }: Props) {
+  const { t } = useLanguage();
   const colors = useColors();
   const img = countryImg(visa);
   const flag = flagEmoji(visa.countryCode || '');
@@ -83,7 +92,7 @@ export function VisaCard({ visa, onPress, style }: Props) {
           <Text style={styles.flagText}>{flag}</Text>
           <View>
             <Text style={styles.countryName}>{visa.countryAr}</Text>
-            <Text style={styles.visaType}>{CATEGORY_AR[visa.category || ''] || visa.visaType}</Text>
+            <Text style={styles.visaType}>{getCategoryLabel(t, visa.category || '') || visa.visaType}</Text>
           </View>
         </View>
         {/* Price */}
@@ -94,7 +103,7 @@ export function VisaCard({ visa, onPress, style }: Props) {
         {/* Entry type badge */}
         {visa.entryType === 'multiple' && (
           <View style={styles.multiEntryBadge}>
-            <Text style={styles.multiEntryText}>دخول متعدد</Text>
+            <Text style={styles.multiEntryText}>{t('visas.entry.multiple')}</Text>
           </View>
         )}
       </View>
@@ -102,33 +111,33 @@ export function VisaCard({ visa, onPress, style }: Props) {
       {/* Stats Row */}
       <View style={[styles.statsRow, { borderBottomColor: colors.border }]}>
         <View style={styles.stat}>
-          <Ionicons name="time-outline" size={14} color="#0A2342" />
-          <Text style={[styles.statVal, { color: '#0A2342', fontFamily: 'Cairo_700Bold' }]}>{visa.processingDays}</Text>
-          <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>يوم</Text>
+          <Ionicons name="time-outline" size={14} color={colors.text} />
+          <Text style={[styles.statVal, { color: colors.text, fontFamily: 'Cairo_700Bold' }]}>{visa.processingDays}</Text>
+          <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{t('visas.duration.day')}</Text>
         </View>
         <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
         <View style={styles.stat}>
-          <Ionicons name="calendar-outline" size={14} color="#0A2342" />
-          <Text style={[styles.statVal, { color: '#0A2342', fontFamily: 'Cairo_700Bold' }]}>{visa.stayDuration || '—'}</Text>
-          <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{visa.stayDuration ? 'يوم إقامة' : ''}</Text>
+          <Ionicons name="calendar-outline" size={14} color={colors.text} />
+          <Text style={[styles.statVal, { color: colors.text, fontFamily: 'Cairo_700Bold' }]}>{visa.stayDuration || '—'}</Text>
+          <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{visa.stayDuration ? t('visas.duration.stayDays') : ''}</Text>
         </View>
         <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
         <View style={styles.stat}>
-          <Ionicons name="airplane-outline" size={14} color="#0A2342" />
-          <Text style={[styles.statVal, { color: '#0A2342', fontFamily: 'Cairo_700Bold', fontSize: 10 }]}>
-            {ENTRY_AR[visa.entryType] || visa.entryType}
+          <Ionicons name="airplane-outline" size={14} color={colors.text} />
+          <Text style={[styles.statVal, { color: colors.text, fontFamily: 'Cairo_700Bold', fontSize: 10 }]}>
+            {getEntryLabel(t, visa.entryType) || visa.entryType}
           </Text>
         </View>
       </View>
 
       {/* Apply Button */}
       <View style={styles.footer}>
-        <View style={[styles.applyBtn, { backgroundColor: '#D4AF37' }]}>
-          <Text style={[styles.applyText, { fontFamily: 'Cairo_700Bold' }]}>تقدم الآن</Text>
-          <Ionicons name="arrow-back" size={14} color="#0A2342" />
+        <View style={[styles.applyBtn, { backgroundColor: colorsData.static.gold }]}>
+          <Text style={[styles.applyText, { fontFamily: 'Cairo_700Bold' }]}>{t('visas.applyNow')}</Text>
+          <Ionicons name="arrow-back" size={14} color={colorsData.static.navy} />
         </View>
-        <View style={[styles.detailBtn, { borderColor: '#0A2342' }]}>
-          <Text style={[styles.detailText, { color: '#0A2342', fontFamily: 'Cairo_600SemiBold' }]}>التفاصيل</Text>
+        <View style={[styles.detailBtn, { borderColor: colors.primary }]}>
+          <Text style={[styles.detailText, { color: colors.primary, fontFamily: 'Cairo_600SemiBold' }]}>{t('common.details')}</Text>
         </View>
       </View>
     </Pressable>
@@ -138,6 +147,7 @@ export function VisaCard({ visa, onPress, style }: Props) {
 // ── Horizontal Compact Card ──────────────────────────────────────────────────
 
 export function VisaCardHorizontal({ visa, onPress, width = 200 }: { visa: Visa; onPress?: () => void; width?: number }) {
+  const { t } = useLanguage();
   const img = countryImg(visa);
   const flag = flagEmoji(visa.countryCode || '');
 
@@ -159,11 +169,11 @@ export function VisaCardHorizontal({ visa, onPress, width = 200 }: { visa: Visa;
       </View>
       <View style={styles.hBody}>
         <Text style={[styles.hType, { fontFamily: 'Cairo_400Regular' }]} numberOfLines={1}>
-          {CATEGORY_AR[visa.category || ''] || visa.visaType}
+          {getCategoryLabel(t, visa.category || '') || visa.visaType}
         </Text>
         <View style={styles.hStats}>
           <Ionicons name="time-outline" size={12} color="#64748B" />
-          <Text style={[styles.hStatText, { fontFamily: 'Cairo_400Regular' }]}>{visa.processingDays} أيام</Text>
+          <Text style={[styles.hStatText, { fontFamily: 'Cairo_400Regular' }]}>{visa.processingDays} {t('visas.duration.days')}</Text>
         </View>
       </View>
     </Pressable>
@@ -178,7 +188,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: 'hidden',
     marginBottom: 14,
-    shadowColor: '#0A2342',
+    shadowColor: colorsData.static.navy,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.10,
     shadowRadius: 10,
@@ -195,18 +205,18 @@ const styles = StyleSheet.create({
   visaType: { color: 'rgba(255,255,255,0.75)', fontSize: 11, fontFamily: 'Cairo_400Regular' },
   priceBadge: {
     position: 'absolute', top: 10, right: 10,
-    backgroundColor: '#D4AF37', borderRadius: 10,
+    backgroundColor: colorsData.static.gold, borderRadius: 10,
     paddingHorizontal: 10, paddingVertical: 4,
     flexDirection: 'row', alignItems: 'center', gap: 3,
   },
-  priceText: { color: '#0A2342', fontFamily: 'Cairo_700Bold', fontSize: 13 },
-  priceCur: { color: '#0A2342', fontFamily: 'Cairo_400Regular', fontSize: 10 },
+  priceText: { color: colorsData.static.navy, fontFamily: 'Cairo_700Bold', fontSize: 13 },
+  priceCur: { color: colorsData.static.navy, fontFamily: 'Cairo_400Regular', fontSize: 10 },
   multiEntryBadge: {
     position: 'absolute', top: 10, left: 10,
     backgroundColor: 'rgba(10,35,66,0.75)', borderRadius: 8,
     paddingHorizontal: 8, paddingVertical: 3,
   },
-  multiEntryText: { color: '#D4AF37', fontSize: 10, fontFamily: 'Cairo_600SemiBold' },
+  multiEntryText: { color: colorsData.static.gold, fontSize: 10, fontFamily: 'Cairo_600SemiBold' },
   statsRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around',
     paddingVertical: 12, paddingHorizontal: 8, borderBottomWidth: 1,
@@ -222,7 +232,7 @@ const styles = StyleSheet.create({
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 6, borderRadius: 12, paddingVertical: 11,
   },
-  applyText: { color: '#0A2342', fontSize: 14 },
+  applyText: { color: colorsData.static.navy, fontSize: 14 },
   detailBtn: {
     borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11,
   },
@@ -232,17 +242,17 @@ const styles = StyleSheet.create({
   hCard: {
     borderRadius: 16, overflow: 'hidden',
     backgroundColor: '#FFFFFF', marginEnd: 12,
-    shadowColor: '#0A2342', shadowOffset: { width: 0, height: 2 },
+    shadowColor: colorsData.static.navy, shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08, shadowRadius: 8, elevation: 3,
   },
   hImgWrap: { height: 120, position: 'relative' },
   hImg: { width: '100%', height: '100%' },
   hPriceBadge: {
     position: 'absolute', top: 8, right: 8,
-    backgroundColor: '#D4AF37', borderRadius: 8,
+    backgroundColor: colorsData.static.gold, borderRadius: 8,
     paddingHorizontal: 8, paddingVertical: 3,
   },
-  hPriceText: { color: '#0A2342', fontFamily: 'Cairo_700Bold', fontSize: 11 },
+  hPriceText: { color: colorsData.static.navy, fontFamily: 'Cairo_700Bold', fontSize: 11 },
   hCountry: {
     position: 'absolute', bottom: 8, left: 8,
     flexDirection: 'row', alignItems: 'center', gap: 5,

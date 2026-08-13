@@ -31,7 +31,7 @@ export function EmptyState({ icon, title, description, actionLabel, onAction, lo
         <Text style={[styles.desc, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{description}</Text>
       )}
       {actionLabel && onAction && (
-        <Pressable style={[styles.btn, { backgroundColor: '#0A2342' }]} onPress={onAction}>
+        <Pressable style={[styles.btn, { backgroundColor: '#052B5B' }]} onPress={onAction}>
           <Text style={[styles.btnText, { fontFamily: 'Cairo_600SemiBold' }]}>{actionLabel}</Text>
         </Pressable>
       )}
@@ -39,10 +39,10 @@ export function EmptyState({ icon, title, description, actionLabel, onAction, lo
   );
 }
 
-export function SkeletonRow({ height = 80 }: { height?: number }) {
+export function SkeletonRow({ height = 80, width, style }: { height?: number, width?: number | string, style?: any }) {
   const colors = useColors();
   return (
-    <View style={[styles.skeleton, { backgroundColor: colors.muted, height, borderRadius: 14 }]} />
+    <View style={[styles.skeleton, { backgroundColor: colors.muted, height, width, borderRadius: 14 }, style]} />
   );
 }
 

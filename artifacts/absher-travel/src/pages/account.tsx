@@ -117,6 +117,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AuthImage, useObjectUrl } from "@/components/auth-image";
+import { ApplicationDocumentsSection } from "@/components/application-documents";
+import { authHeader } from "@/lib/objectMedia";
 import {
   FileText, Bell, User, CheckCheck, Circle, Plane, Building2, MapPin, Shield,
   Camera, Save, Package, AlertCircle, Loader2, Download, Share2, CheckCircle2,
@@ -284,6 +287,9 @@ function ApplicationCard({ app, language }: { app: VisaApplication; language: st
         <div className="px-5 pb-4">
           <StatusStepper status={app.status} language={language} />
         </div>
+
+        {/* Required documents */}
+        <ApplicationDocumentsSection applicationId={app.id} language={language} />
       </CardContent>
     </Card>
   );
@@ -424,20 +430,12 @@ function NotificationRow({ n, language, onRead }: { n: ApiNotification; language
   );
 }
 
-const getDisplayUrl = (url?: string | null) => {
-  if (!url) return "";
-  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
-  // Storage object paths are served by the API at /api/storage/objects/*
-  if (url.startsWith("/objects/")) return `${base}/api/storage${url}`;
-  if (url.startsWith("/api")) return `${base}${url}`;
-  return url;
-};
-
 async function uploadFileDirect(file: File): Promise<{ objectPath: string } | null> {
   const formData = new FormData();
   formData.append("file", file);
   const base = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
-  const res = await fetch(`${base}/api/storage/uploads`, { method: "POST", body: formData });
+  // Authenticated upload — the server records ownership (object_uploads).
+  const res = await fetch(`${base}/api/storage/uploads`, { method: "POST", headers: authHeader(), body: formData });
   if (!res.ok) return null;
   return res.json();
 }
@@ -449,7 +447,7 @@ function ProfileFileUpload({ label, value, onChange }: { label: string; value?: 
       <Label className="text-sm font-semibold">{label}</Label>
       {value ? (
         <div className="flex items-center gap-3 mt-2 bg-slate-50 p-2 rounded-xl border border-slate-100">
-          <img src={getDisplayUrl(value)} className="h-16 w-16 object-cover rounded-lg border bg-white" />
+          <AuthImage src={value} className="h-16 w-16 object-cover rounded-lg border bg-white" />
           <div className="flex-1 min-w-0"><p className="text-xs text-slate-400 truncate" dir="ltr">{value.split('/').pop()}</p></div>
           <Button variant="outline" size="sm" onClick={() => onChange("")}>إزالة</Button>
         </div>
@@ -490,6 +488,7 @@ export default function Account() {
   const [activeSubTab, setActiveSubTab] = useState<RequestTab>("all");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [profile, setProfile] = useState<any>({});
+  const avatarUrl = useObjectUrl(profile.profilePhotoUrl);
 
   const authUser = currentUserData || user;
 
@@ -704,7 +703,7 @@ export default function Account() {
         <div className="flex items-center gap-5 mb-8 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
           <div className="relative">
             <Avatar className="w-20 h-20 border-4 border-white shadow-md">
-              <AvatarImage src={getDisplayUrl(profile.profilePhotoUrl)} />
+              <AvatarImage src={avatarUrl} />
               <AvatarFallback className="bg-[#0d2351]/10 text-[#0d2351] text-2xl font-bold">
                 {(authUser?.firstName?.[0] || authUser?.email?.[0] || "U").toUpperCase()}
               </AvatarFallback>
@@ -840,7 +839,7 @@ export default function Account() {
                 {profile.profilePhotoUrl ? (
                   <div className="flex items-center gap-5">
                     <div className="relative shrink-0">
-                      <img src={getDisplayUrl(profile.profilePhotoUrl)} className="w-24 h-24 rounded-xl object-cover border-2 border-emerald-200 shadow" />
+                      <AuthImage src={profile.profilePhotoUrl} className="w-24 h-24 rounded-xl object-cover border-2 border-emerald-200 shadow" />
                       <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center shadow">
                         <CheckCircle2 className="w-4 h-4 text-white" />
                       </div>
@@ -935,7 +934,7 @@ export default function Account() {
                   </div>
                 ) : profile.passportImageUrl && (
                   <div className="flex items-center gap-4 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <img src={getDisplayUrl(profile.passportImageUrl)} className="h-14 w-20 object-cover rounded-lg border bg-white shrink-0" />
+                    <AuthImage src={profile.passportImageUrl} className="h-14 w-20 object-cover rounded-lg border bg-white shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-slate-500 font-medium">{ar ? "صورة الجواز" : "Passport image"}</p>
                       <p className="text-xs text-slate-400 truncate" dir="ltr">{profile.passportImageUrl.split('/').pop()}</p>

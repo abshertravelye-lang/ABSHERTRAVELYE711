@@ -12,27 +12,30 @@ import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
-import { getImageUrl } from '@/hooks/useImageUrl';
-import { useOcrPassport, useUpdateProfile } from '@workspace/api-client-react';
+import { useLanguage } from '@/context/LanguageContext';
+import { getImageSource } from '@/hooks/useImageUrl';
+import ConfirmDialog from '@/components/ConfirmDialog';
+import { useQueryClient } from '@tanstack/react-query';
+import { useOcrPassport, useUpdateProfile, getGetCurrentUserQueryKey } from '@workspace/api-client-react';
 import type { ProfileUpdate, SafeUser } from '@workspace/api-client-react';
 
-const NAVY = '#0A2342';
+const NAVY = '#052B5B';
 const GOLD = '#D4AF37';
 
 const GCC_COUNTRIES = [
-  { value: 'Saudi Arabia', label: 'السعودية' },
-  { value: 'United Arab Emirates', label: 'الإمارات' },
-  { value: 'Kuwait', label: 'الكويت' },
-  { value: 'Qatar', label: 'قطر' },
-  { value: 'Bahrain', label: 'البحرين' },
-  { value: 'Oman', label: 'عُمان' },
+  { value: 'Saudi Arabia', labelKey: 'profileEdit.country.sa' },
+  { value: 'United Arab Emirates', labelKey: 'profileEdit.country.ae' },
+  { value: 'Kuwait', labelKey: 'profileEdit.country.kw' },
+  { value: 'Qatar', labelKey: 'profileEdit.country.qa' },
+  { value: 'Bahrain', labelKey: 'profileEdit.country.bh' },
+  { value: 'Oman', labelKey: 'profileEdit.country.om' },
 ];
 
 const EURO_DOC_TYPES = [
-  { value: 'schengen_visa', label: 'تأشيرة شنغن' },
-  { value: 'eu_residency', label: 'إقامة أوروبية' },
-  { value: 'uk_visa', label: 'تأشيرة بريطانية' },
-  { value: 'uk_residency', label: 'إقامة بريطانية' },
+  { value: 'schengen_visa', labelKey: 'profileEdit.euroDoc.schengen' },
+  { value: 'eu_residency', labelKey: 'profileEdit.euroDoc.euResidency' },
+  { value: 'uk_visa', labelKey: 'profileEdit.euroDoc.ukVisa' },
+  { value: 'uk_residency', labelKey: 'profileEdit.euroDoc.ukResidency' },
 ];
 
 type ProfileState = ProfileUpdate & { email?: string };
@@ -66,10 +69,12 @@ async function uploadAsset(
   return res.json();
 }
 
-async function pickImage(): Promise<ImagePicker.ImagePickerAsset | null> {
+async function pickImage(
+  t: (key: string, params?: any) => string,
+): Promise<ImagePicker.ImagePickerAsset | null> {
   const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!perm.granted) {
-    Alert.alert('الصلاحية مطلوبة', 'يرجى السماح بالوصول إلى الصور لرفع المستندات');
+    Alert.alert(t('profileEdit.permTitle'), t('profileEdit.permBody'));
     return null;
   }
   const result = await ImagePicker.launchImageLibraryAsync({
@@ -149,13 +154,14 @@ function DateField(props: Omit<Parameters<typeof Field>[0], 'ltr' | 'placeholder
 function YesNo({
   value, onChange, colors,
 }: { value?: boolean; onChange: (v: boolean) => void; colors: ReturnType<typeof useColors> }) {
+  const { t } = useLanguage();
   return (
     <View style={s.yesNoRow}>
-      {[{ v: true, t: 'نعم' }, { v: false, t: 'لا' }].map(({ v, t }) => {
+      {[{ v: true, label: t('common.yes') }, { v: false, label: t('common.no') }].map(({ v, label }) => {
         const active = value === v;
         return (
           <Pressable
-            key={t}
+            key={label}
             onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onChange(v); }}
             style={[
               s.yesNoBtn,
@@ -165,7 +171,7 @@ function YesNo({
               },
             ]}
           >
-            <Text style={[s.yesNoText, { color: active ? '#FFF' : colors.foreground, fontFamily: 'Cairo_700Bold' }]}>{t}</Text>
+            <Text style={[s.yesNoText, { color: active ? '#FFF' : colors.foreground, fontFamily: 'Cairo_700Bold' }]}>{label}</Text>
           </Pressable>
         );
       })}
@@ -176,10 +182,11 @@ function YesNo({
 function ChoiceChips({
   options, value, onChange, colors,
 }: {
-  options: { value: string; label: string }[];
+  options: { value: string; label?: string; labelKey?: string }[];
   value?: string | null; onChange: (v: string) => void;
   colors: ReturnType<typeof useColors>;
 }) {
+  const { t } = useLanguage();
   return (
     <View style={s.chipsWrap}>
       {options.map((opt) => {
@@ -194,7 +201,7 @@ function ChoiceChips({
             ]}
           >
             <Text style={[s.chipText, { color: active ? '#FFF' : colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>
-              {opt.label}
+              {opt.label ?? (opt.labelKey ? t(opt.labelKey as never) : opt.value)}
             </Text>
           </Pressable>
         );
@@ -210,17 +217,18 @@ function DocUpload({
   onPick: () => void; onRemove: () => void;
   colors: ReturnType<typeof useColors>;
 }) {
-  const uri = getImageUrl(value);
+  const { t } = useLanguage();
+  const source = getImageSource(value);
   return (
     <View style={s.field}>
       <Text style={[s.fieldLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>{label}</Text>
-      {uri ? (
+      {source ? (
         <View style={[s.docRow, { backgroundColor: colors.muted, borderColor: colors.border }]}>
           <Pressable onPress={onRemove} hitSlop={8}>
             <Ionicons name="trash-outline" size={20} color={colors.destructive} />
           </Pressable>
           <View style={{ flex: 1 }} />
-          <Image source={{ uri }} style={s.docThumb} contentFit="cover" />
+          <Image source={source} style={s.docThumb} contentFit="cover" />
         </View>
       ) : (
         <Pressable
@@ -233,7 +241,7 @@ function DocUpload({
           ) : (
             <>
               <Ionicons name="camera-outline" size={22} color={colors.mutedForeground} />
-              <Text style={[s.docUploadText, { color: colors.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>اختر صورة</Text>
+              <Text style={[s.docUploadText, { color: colors.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>{t('profileEdit.pickImage')}</Text>
             </>
           )}
         </Pressable>
@@ -246,8 +254,10 @@ function DocUpload({
 
 export default function ProfileEditScreen() {
   const colors = useColors();
+  const { t } = useLanguage();
   const insets = useSafeAreaInsets();
   const { user, accessToken, updateUser } = useAuth();
+  const queryClient = useQueryClient();
 
   const [profile, setProfile] = useState<ProfileState>({});
   const set = (patch: Partial<ProfileState>) => setProfile((p) => ({ ...p, ...patch }));
@@ -256,6 +266,8 @@ export default function ProfileEditScreen() {
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isValidatingPhoto, setIsValidatingPhoto] = useState(false);
   const [photoRejected, setPhotoRejected] = useState(false);
+  // AI validation was unavailable (e.g. 503) — photo is kept, non-blocking notice.
+  const [photoCheckUnavailable, setPhotoCheckUnavailable] = useState(false);
 
   // passport state
   const [isUploadingPassport, setIsUploadingPassport] = useState(false);
@@ -264,6 +276,9 @@ export default function ProfileEditScreen() {
 
   // doc uploads
   const [busyDoc, setBusyDoc] = useState<string | null>(null);
+
+  // success confirmation (branded, replaces native Alert)
+  const [savedVisible, setSavedVisible] = useState(false);
 
   const ocrMutation = useOcrPassport();
   const updateProfileMutation = useUpdateProfile();
@@ -303,21 +318,22 @@ export default function ProfileEditScreen() {
   if (!user) {
     return (
       <View style={[s.container, { backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' }]}>
-        <Text style={{ color: colors.mutedForeground, fontFamily: 'Cairo_600SemiBold' }}>سجّل دخولك أولاً</Text>
+        <Text style={{ color: colors.mutedForeground, fontFamily: 'Cairo_600SemiBold' }}>{t('profileEdit.loginFirst')}</Text>
       </View>
     );
   }
 
   /** Upload personal photo → AI validation → keep or reject */
   const handlePhotoUpload = async () => {
-    const asset = await pickImage();
+    const asset = await pickImage(t);
     if (!asset) return;
     setPhotoRejected(false);
+    setPhotoCheckUnavailable(false);
     setIsUploadingPhoto(true);
     try {
       const r = await uploadAsset(asset, accessToken);
       if (!r) {
-        Alert.alert('فشل رفع الصورة', 'حدث خطأ أثناء رفع الصورة. حاول مرة أخرى.');
+        Alert.alert(t('profileEdit.photoUploadFailTitle'), t('profileEdit.photoUploadFailBody'));
         return;
       }
       set({ profilePhotoUrl: r.objectPath });
@@ -331,13 +347,22 @@ export default function ProfileEditScreen() {
           },
           body: JSON.stringify({ imageUrl: r.objectPath }),
         });
-        const vData = await vRes.json();
-        if (!vData.valid) {
-          set({ profilePhotoUrl: '' });
-          setPhotoRejected(true);
+        if (!vRes.ok) {
+          // Non-2xx (esp. 503) means the AI check is UNAVAILABLE, not that the
+          // photo was rejected. Keep the uploaded photo and show a non-blocking
+          // notice so profile completion is never blocked by an outage.
+          setPhotoCheckUnavailable(true);
+        } else {
+          const vData = await vRes.json();
+          // Only an explicit 2xx { valid: false } rejects the photo.
+          if (vData.valid === false) {
+            set({ profilePhotoUrl: '' });
+            setPhotoRejected(true);
+          }
         }
       } catch {
-        // Validation unavailable — accept the photo (same as web)
+        // Validation unavailable (network/parse error) — accept the photo.
+        setPhotoCheckUnavailable(true);
       } finally {
         setIsValidatingPhoto(false);
       }
@@ -348,14 +373,14 @@ export default function ProfileEditScreen() {
 
   /** Upload passport → OCR → prefill fields */
   const handlePassportUpload = async () => {
-    const asset = await pickImage();
+    const asset = await pickImage(t);
     if (!asset) return;
     setOcrFailed(false);
     setIsUploadingPassport(true);
     try {
       const r = await uploadAsset(asset, accessToken);
       if (!r) {
-        Alert.alert('فشل رفع الجواز', 'حدث خطأ أثناء رفع صورة الجواز. حاول مرة أخرى.');
+        Alert.alert(t('profileEdit.passportUploadFailTitle'), t('profileEdit.passportUploadFailBody'));
         return;
       }
       set({ passportImageUrl: r.objectPath });
@@ -364,17 +389,31 @@ export default function ProfileEditScreen() {
       try {
         const ocr = await ocrMutation.mutateAsync({ data: { imageUrl: r.objectPath } });
         if (ocr.success) {
+          // Prefer the combined given-name chain (given + father + grand) so
+          // Arabic-style multi-part names aren't lost. The DB has no dedicated
+          // middle-name / place-of-birth column, so we map sensibly into the
+          // existing firstName / lastName / passport fields.
+          const givenChain =
+            [ocr.givenName, ocr.fatherName, ocr.grandName].filter(Boolean).join(' ') ||
+            ocr.firstName ||
+            '';
+          const surname = ocr.surname || ocr.lastName || '';
           setProfile((p) => ({
             ...p,
             passportImageUrl: r.objectPath,
-            ...(ocr.firstName && !p.firstName ? { firstName: ocr.firstName } : {}),
-            ...(ocr.lastName && !p.lastName ? { lastName: ocr.lastName } : {}),
+            // OCR is the source of truth for a freshly scanned passport — always
+            // overwrite so every readable field prefills the form.
+            ...(givenChain ? { firstName: givenChain } : {}),
+            ...(surname ? { lastName: surname } : {}),
             ...(ocr.passportNumber ? { passportNumber: ocr.passportNumber } : {}),
             ...(ocr.nationality ? { nationality: ocr.nationality } : {}),
             ...(ocr.dateOfBirth ? { dateOfBirth: ocr.dateOfBirth } : {}),
             ...(ocr.issueDate ? { passportIssueDate: ocr.issueDate } : {}),
             ...(ocr.expiryDate ? { passportExpiryDate: ocr.expiryDate } : {}),
             ...(ocr.issuingCountry ? { passportIssueCountry: ocr.issuingCountry } : {}),
+            // Place of birth has no dedicated column — surface it in the
+            // "place of issue" field so it isn't lost and stays editable.
+            ...(ocr.placeOfBirth && !p.passportIssuePlace ? { passportIssuePlace: ocr.placeOfBirth } : {}),
             ...(ocr.gender
               ? { gender: ocr.gender === 'M' || ocr.gender.toLowerCase() === 'male' ? 'male' : 'female' }
               : {}),
@@ -394,13 +433,13 @@ export default function ProfileEditScreen() {
   };
 
   const handleDocUpload = async (key: 'gccResidenceFrontUrl' | 'gccResidenceBackUrl' | 'europeanDocumentUrl') => {
-    const asset = await pickImage();
+    const asset = await pickImage(t);
     if (!asset) return;
     setBusyDoc(key);
     try {
       const r = await uploadAsset(asset, accessToken);
       if (!r) {
-        Alert.alert('فشل الرفع', 'حدث خطأ أثناء رفع الصورة. حاول مرة أخرى.');
+        Alert.alert(t('profileEdit.uploadFailTitle'), t('profileEdit.photoUploadFailBody'));
         return;
       }
       set({ [key]: r.objectPath } as Partial<ProfileState>);
@@ -417,15 +456,25 @@ export default function ProfileEditScreen() {
         onSuccess: async (updated) => {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           await updateUser(updated as SafeUser);
-          Alert.alert('تم الحفظ', 'تم حفظ بيانات الملف الشخصي بنجاح', [
-            { text: 'حسناً', onPress: () => router.back() },
-          ]);
+          // Keep the React Query current-user cache in sync so screens that read
+          // it (e.g. the umrah-visa profile gate) see the fresh isProfileComplete
+          // immediately instead of stale data.
+          queryClient.setQueryData(getGetCurrentUserQueryKey(), updated);
+          queryClient.invalidateQueries({ queryKey: getGetCurrentUserQueryKey() });
+          setSavedVisible(true);
         },
         onError: () => {
-          Alert.alert('خطأ', 'فشل تحديث الملف الشخصي. حاول مرة أخرى.');
+          Alert.alert(t('profileEdit.errorTitle'), t('profileEdit.saveFailBody'));
         },
       },
     );
+  };
+
+  /** Dismiss the success dialog and leave the profile screen. */
+  const handleSavedDismiss = () => {
+    setSavedVisible(false);
+    if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)/account' as never);
   };
 
   const keyFields: (keyof ProfileState)[] = [
@@ -436,18 +485,18 @@ export default function ProfileEditScreen() {
     (keyFields.filter((k) => !!profile[k]).length / keyFields.length) * 100,
   );
 
-  const photoUri = getImageUrl(profile.profilePhotoUrl);
-  const passportUri = getImageUrl(profile.passportImageUrl);
+  const photoSource = getImageSource(profile.profilePhotoUrl);
+  const passportSource = getImageSource(profile.passportImageUrl);
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={[s.container, { backgroundColor: colors.background }]}>
         {/* Header */}
-        <LinearGradient colors={['#071525', '#0A2342', '#1E3A5F']} style={[s.header, { paddingTop: (Platform.OS === 'web' ? 24 : insets.top) + 12 }]}>
+        <LinearGradient colors={['#071525', '#052B5B', '#1E3A5F']} style={[s.header, { paddingTop: (Platform.OS === 'web' ? 24 : insets.top) + 12 }]}>
           <Pressable onPress={() => router.back()} hitSlop={8} style={s.closeBtn}>
             <Ionicons name="close" size={24} color="rgba(255,255,255,0.9)" />
           </Pressable>
-          <Text style={[s.headerTitle, { fontFamily: 'Cairo_700Bold' }]}>إكمال الملف الشخصي</Text>
+          <Text style={[s.headerTitle, { fontFamily: 'Cairo_700Bold' }]}>{t('profileEdit.header')}</Text>
           <View style={s.progressRow}>
             <Text style={[s.progressText, { fontFamily: 'Cairo_600SemiBold' }]}>{completion}%</Text>
             <View style={s.progressTrack}>
@@ -458,11 +507,18 @@ export default function ProfileEditScreen() {
 
         <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 110 }}>
           {/* 1 — Personal photo */}
-          <SectionCard num={1} title="الصورة الشخصية" subtitle="صورة واضحة للوجه — سيتم التحقق منها تلقائياً" colors={colors}>
+          <SectionCard num={1} title={t('profileEdit.photoTitle')} subtitle={t('profileEdit.photoSubtitle')} colors={colors}>
             {photoRejected && (
               <View style={[s.warnBox, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
                 <Text style={[s.warnText, { color: '#B91C1C', fontFamily: 'Cairo_600SemiBold' }]}>
-                  الصورة غير مقبولة — يرجى رفع صورة شخصية أوضح
+                  {t('profileEdit.photoRejected')}
+                </Text>
+              </View>
+            )}
+            {photoCheckUnavailable && (
+              <View style={[s.warnBox, { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }]}>
+                <Text style={[s.warnText, { color: '#92400E', fontFamily: 'Cairo_600SemiBold' }]}>
+                  {t('profileEdit.photoCheckUnavailable')}
                 </Text>
               </View>
             )}
@@ -476,21 +532,21 @@ export default function ProfileEditScreen() {
                   <>
                     <ActivityIndicator color={NAVY} />
                     <Text style={[s.photoUploadText, { color: colors.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>
-                      {isUploadingPhoto ? 'جاري الرفع...' : 'جاري التحقق من الصورة...'}
+                      {isUploadingPhoto ? t('profileEdit.uploading') : t('profileEdit.validatingPhoto')}
                     </Text>
                   </>
                 ) : (
                   <>
                     <Ionicons name="camera-outline" size={26} color={NAVY} />
                     <Text style={[s.photoUploadText, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>
-                      {photoUri ? 'استبدال الصورة' : 'ارفع الصورة الشخصية'}
+                      {photoSource ? t('profileEdit.replacePhoto') : t('profileEdit.uploadPhoto')}
                     </Text>
                   </>
                 )}
               </Pressable>
-              {photoUri ? (
+              {photoSource ? (
                 <View>
-                  <Image source={{ uri: photoUri }} style={s.photoPreview} contentFit="cover" />
+                  <Image source={photoSource} style={s.photoPreview} contentFit="cover" />
                   <View style={s.photoCheck}>
                     <Ionicons name="checkmark-circle" size={22} color="#10B981" />
                   </View>
@@ -500,74 +556,74 @@ export default function ProfileEditScreen() {
           </SectionCard>
 
           {/* 2 — Passport */}
-          <SectionCard num={2} title="جواز السفر" subtitle="ارفع صفحة المعلومات — سيتم استخراج البيانات تلقائياً" colors={colors}>
+          <SectionCard num={2} title={t('profileEdit.passportTitle')} subtitle={t('profileEdit.passportSubtitle')} colors={colors}>
             {isUploadingPassport || isOcrRunning ? (
               <View style={[s.ocrBox, { borderColor: colors.border, backgroundColor: colors.muted }]}>
                 <ActivityIndicator color={NAVY} size="large" />
                 <Text style={[s.ocrText, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>
-                  {isUploadingPassport ? 'جاري الرفع...' : 'جاري قراءة بيانات الجواز...'}
+                  {isUploadingPassport ? t('profileEdit.uploading') : t('profileEdit.readingPassport')}
                 </Text>
                 {isOcrRunning && (
                   <Text style={[s.ocrHint, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-                    الذكاء الاصطناعي يستخرج البيانات تلقائياً
+                    {t('profileEdit.aiExtracting')}
                   </Text>
                 )}
               </View>
-            ) : passportUri ? (
+            ) : passportSource ? (
               <View style={[s.docRow, { backgroundColor: colors.muted, borderColor: colors.border }]}>
                 <Pressable onPress={handlePassportUpload} style={s.replaceBtn}>
                   <Ionicons name="camera-outline" size={16} color={NAVY} />
-                  <Text style={[s.replaceText, { fontFamily: 'Cairo_600SemiBold' }]}>استبدال</Text>
+                  <Text style={[s.replaceText, { fontFamily: 'Cairo_600SemiBold' }]}>{t('profileEdit.replace')}</Text>
                 </Pressable>
                 <View style={{ flex: 1 }} />
-                <Image source={{ uri: passportUri }} style={s.passportThumb} contentFit="cover" />
+                <Image source={passportSource} style={s.passportThumb} contentFit="cover" />
               </View>
             ) : (
               <Pressable onPress={handlePassportUpload} style={[s.ocrBox, { borderColor: 'rgba(10,35,66,0.25)', backgroundColor: 'rgba(10,35,66,0.04)' }]}>
                 <Ionicons name="document-text-outline" size={32} color={NAVY} />
-                <Text style={[s.ocrText, { color: NAVY, fontFamily: 'Cairo_700Bold' }]}>ارفع صورة جواز السفر</Text>
-                <Text style={[s.ocrHint, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>صفحة المعلومات الشخصية فقط</Text>
+                <Text style={[s.ocrText, { color: NAVY, fontFamily: 'Cairo_700Bold' }]}>{t('profileEdit.uploadPassportImage')}</Text>
+                <Text style={[s.ocrHint, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{t('profileEdit.infoPageOnly')}</Text>
               </Pressable>
             )}
 
             {ocrFailed && (
               <View style={[s.warnBox, { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }]}>
                 <Text style={[s.warnText, { color: '#92400E', fontFamily: 'Cairo_600SemiBold' }]}>
-                  تعذّر قراءة الجواز تلقائياً — يرجى إدخال البيانات يدوياً أدناه
+                  {t('profileEdit.ocrFailed')}
                 </Text>
               </View>
             )}
 
             {!!profile.passportImageUrl && !isOcrRunning && (
               <View style={{ marginTop: 14 }}>
-                <Field label="الاسم الأول *" value={profile.firstName} onChange={(v) => set({ firstName: v })} colors={colors} />
-                <Field label="اسم العائلة *" value={profile.lastName} onChange={(v) => set({ lastName: v })} colors={colors} />
-                <Field label="رقم الجواز *" value={profile.passportNumber} onChange={(v) => set({ passportNumber: v })} colors={colors} ltr />
-                <Field label="الجنسية *" value={profile.nationality} onChange={(v) => set({ nationality: v })} colors={colors} placeholder="مثال: اليمن" />
-                <DateField label="تاريخ الميلاد *" value={profile.dateOfBirth} onChange={(v) => set({ dateOfBirth: v })} colors={colors} />
+                <Field label={t('profileEdit.firstName')} value={profile.firstName} onChange={(v) => set({ firstName: v })} colors={colors} />
+                <Field label={t('profileEdit.lastName')} value={profile.lastName} onChange={(v) => set({ lastName: v })} colors={colors} />
+                <Field label={t('profileEdit.passportNumber')} value={profile.passportNumber} onChange={(v) => set({ passportNumber: v })} colors={colors} ltr />
+                <Field label={t('profileEdit.nationality')} value={profile.nationality} onChange={(v) => set({ nationality: v })} colors={colors} placeholder={t('profileEdit.nationalityPlaceholder')} />
+                <DateField label={t('profileEdit.dateOfBirth')} value={profile.dateOfBirth} onChange={(v) => set({ dateOfBirth: v })} colors={colors} />
                 <View style={s.field}>
-                  <Text style={[s.fieldLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>الجنس</Text>
+                  <Text style={[s.fieldLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>{t('profileEdit.gender')}</Text>
                   <ChoiceChips
-                    options={[{ value: 'male', label: 'ذكر' }, { value: 'female', label: 'أنثى' }]}
+                    options={[{ value: 'male', label: t('profileEdit.male') }, { value: 'female', label: t('profileEdit.female') }]}
                     value={profile.gender}
                     onChange={(v) => set({ gender: v as ProfileState['gender'] })}
                     colors={colors}
                   />
                 </View>
-                <DateField label="تاريخ الإصدار" value={profile.passportIssueDate} onChange={(v) => set({ passportIssueDate: v })} colors={colors} />
-                <DateField label="تاريخ الانتهاء *" value={profile.passportExpiryDate} onChange={(v) => set({ passportExpiryDate: v })} colors={colors} />
-                <Field label="دولة الإصدار" value={profile.passportIssueCountry} onChange={(v) => set({ passportIssueCountry: v })} colors={colors} />
-                <Field label="مكان الإصدار" value={profile.passportIssuePlace} onChange={(v) => set({ passportIssuePlace: v })} colors={colors} />
+                <DateField label={t('profileEdit.passportIssueDate')} value={profile.passportIssueDate} onChange={(v) => set({ passportIssueDate: v })} colors={colors} />
+                <DateField label={t('profileEdit.passportExpiry')} value={profile.passportExpiryDate} onChange={(v) => set({ passportExpiryDate: v })} colors={colors} />
+                <Field label={t('profileEdit.passportIssueCountry')} value={profile.passportIssueCountry} onChange={(v) => set({ passportIssueCountry: v })} colors={colors} />
+                <Field label={t('profileEdit.passportIssuePlace')} value={profile.passportIssuePlace} onChange={(v) => set({ passportIssuePlace: v })} colors={colors} />
               </View>
             )}
           </SectionCard>
 
           {/* 3 — Contact */}
-          <SectionCard num={3} title="معلومات التواصل" colors={colors}>
-            <Field label="رقم الهاتف *" value={profile.phone} onChange={(v) => set({ phone: v })} colors={colors} ltr keyboardType="phone-pad" placeholder="+9661234567" />
-            <Field label="واتساب" value={profile.whatsapp} onChange={(v) => set({ whatsapp: v })} colors={colors} ltr keyboardType="phone-pad" placeholder="+9661234567" />
-            <Field label="العنوان" value={profile.address} onChange={(v) => set({ address: v })} colors={colors} />
-            <Field label="البريد الإلكتروني" value={profile.email} onChange={() => {}} colors={colors} ltr editable={false} />
+          <SectionCard num={3} title={t('profileEdit.contactTitle')} colors={colors}>
+            <Field label={t('profileEdit.phone')} value={profile.phone} onChange={(v) => set({ phone: v })} colors={colors} ltr keyboardType="phone-pad" placeholder="+9661234567" />
+            <Field label={t('profileEdit.whatsapp')} value={profile.whatsapp} onChange={(v) => set({ whatsapp: v })} colors={colors} ltr keyboardType="phone-pad" placeholder="+9661234567" />
+            <Field label={t('profileEdit.address')} value={profile.address} onChange={(v) => set({ address: v })} colors={colors} />
+            <Field label={t('profileEdit.email')} value={profile.email} onChange={() => {}} colors={colors} ltr editable={false} />
           </SectionCard>
 
           {/* 4 — GCC residency */}
@@ -647,6 +703,20 @@ export default function ProfileEditScreen() {
             <Text style={[s.saveBtnText, { fontFamily: 'Cairo_700Bold' }]}>حفظ الملف الشخصي</Text>
           </Pressable>
         </View>
+
+        {/* Branded success confirmation — replaces the native Alert. On
+            dismiss it exits the profile screen back to the account tab. */}
+        <ConfirmDialog
+          visible={savedVisible}
+          icon="checkmark-circle-outline"
+          confirmStyle="brand"
+          title="تم حفظ الملف الشخصي"
+          message="تم حفظ بيانات ملفك الشخصي بنجاح."
+          cancelLabel="حسناً"
+          confirmLabel="العودة للحساب"
+          onCancel={handleSavedDismiss}
+          onConfirm={handleSavedDismiss}
+        />
       </View>
     </KeyboardAvoidingView>
   );

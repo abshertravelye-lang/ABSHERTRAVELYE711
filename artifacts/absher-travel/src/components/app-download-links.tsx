@@ -116,7 +116,7 @@ export function AppDownloadLinks({ variant = "section" }: { variant?: "footer" |
       <div className="container px-4 mx-auto flex flex-col items-center text-center gap-6">
       <div className="space-y-2">
         <h2 className="text-2xl md:text-3xl font-extrabold text-primary tracking-tight">
-          {ar ? "حمّل تطبيق أبشر أعمال" : "Download the Absher Business App"}
+          {ar ? "حمّل تطبيق ABSHER TRAVEL" : "Download the ABSHER TRAVEL App"}
         </h2>
         <p className="text-slate-500 text-base md:text-lg">{caption}</p>
       </div>

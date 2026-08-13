@@ -30,14 +30,28 @@ export interface Offer {
   titleEn: string;
   descriptionAr: string;
   descriptionEn: string;
-  price: number;
-  currency?: string;
-  duration: string;
   imageUrl: string;
+  /** @nullable */
+  discountLabel?: string | null;
+  /** @nullable */
+  linkUrl?: string | null;
+  /** @nullable */
+  startDate?: string | null;
+  /** @nullable */
+  endDate?: string | null;
+  isActive: boolean;
+  sortOrder: number;
+  /** @nullable */
+  price?: number | null;
+  /** @nullable */
+  currency?: string | null;
+  /** @nullable */
+  duration?: string | null;
   /** @nullable */
   destination?: string | null;
   featured: boolean;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface OfferInput {
@@ -45,10 +59,16 @@ export interface OfferInput {
   titleEn: string;
   descriptionAr: string;
   descriptionEn: string;
-  price: number;
-  currency?: string;
-  duration: string;
   imageUrl: string;
+  discountLabel?: string;
+  linkUrl?: string;
+  startDate?: string;
+  endDate?: string;
+  isActive?: boolean;
+  sortOrder?: number;
+  price?: number;
+  currency?: string;
+  duration?: string;
   destination?: string;
   featured?: boolean;
 }
@@ -58,10 +78,16 @@ export interface OfferUpdate {
   titleEn?: string;
   descriptionAr?: string;
   descriptionEn?: string;
+  imageUrl?: string;
+  discountLabel?: string;
+  linkUrl?: string;
+  startDate?: string;
+  endDate?: string;
+  isActive?: boolean;
+  sortOrder?: number;
   price?: number;
   currency?: string;
   duration?: string;
-  imageUrl?: string;
   destination?: string;
   featured?: boolean;
 }
@@ -405,9 +431,19 @@ export interface OcrResult {
   /** @nullable */
   fullNameEn?: string | null;
   /** @nullable */
+  fullNameAr?: string | null;
+  /** @nullable */
   firstName?: string | null;
   /** @nullable */
   lastName?: string | null;
+  /** @nullable */
+  givenName?: string | null;
+  /** @nullable */
+  fatherName?: string | null;
+  /** @nullable */
+  grandName?: string | null;
+  /** @nullable */
+  surname?: string | null;
   /** @nullable */
   passportNumber?: string | null;
   /** @nullable */
@@ -422,6 +458,8 @@ export interface OcrResult {
   expiryDate?: string | null;
   /** @nullable */
   issuingCountry?: string | null;
+  /** @nullable */
+  placeOfBirth?: string | null;
   /** @nullable */
   error?: string | null;
 }
@@ -452,6 +490,8 @@ export interface VisaApplicationTracking {
   fullName: string;
   /** @nullable */
   adminNotes?: string | null;
+  /** @nullable */
+  issuedVisaUrl?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -672,6 +712,190 @@ export interface VisaUpdate {
   ineligibleMessageEn?: string;
 }
 
+export type UmrahConfigFeeForNationality = {
+  amount: number;
+  currency: string;
+};
+
+export interface UmrahConfig {
+  declarationAr: string;
+  declarationEn: string;
+  feeForNationality?: UmrahConfigFeeForNationality;
+}
+
+/**
+ * @nullable
+ */
+export type UmrahApplicationGender = typeof UmrahApplicationGender[keyof typeof UmrahApplicationGender] | null;
+
+
+export const UmrahApplicationGender = {
+  male: 'male',
+  female: 'female',
+} as const;
+
+export type UmrahApplicationPaymentStatus = typeof UmrahApplicationPaymentStatus[keyof typeof UmrahApplicationPaymentStatus];
+
+
+export const UmrahApplicationPaymentStatus = {
+  unpaid: 'unpaid',
+  paid: 'paid',
+  failed: 'failed',
+} as const;
+
+export type UmrahApplicationStatus = typeof UmrahApplicationStatus[keyof typeof UmrahApplicationStatus];
+
+
+export const UmrahApplicationStatus = {
+  awaiting_payment: 'awaiting_payment',
+  submitted: 'submitted',
+  under_review: 'under_review',
+  processing: 'processing',
+  approved: 'approved',
+  rejected: 'rejected',
+  completed: 'completed',
+} as const;
+
+export interface UmrahApplication {
+  id: string;
+  userId: string;
+  trackingNumber: string;
+  sponsorAvailable: boolean;
+  /** @nullable */
+  sponsorResidencyImageUrl?: string | null;
+  /** @nullable */
+  sponsorPhone?: string | null;
+  passportImageUrl: string;
+  personalPhotoUrl: string;
+  /** @nullable */
+  fullName?: string | null;
+  /** @nullable */
+  passportNumber?: string | null;
+  /** @nullable */
+  nationality?: string | null;
+  /** @nullable */
+  dateOfBirth?: string | null;
+  /** @nullable */
+  gender?: UmrahApplicationGender;
+  /** @nullable */
+  passportIssueDate?: string | null;
+  /** @nullable */
+  passportExpiryDate?: string | null;
+  phone: string;
+  /** @nullable */
+  contactEmail?: string | null;
+  emergencyPhone: string;
+  /** @nullable */
+  feeAmount?: number | null;
+  feeCurrency: string;
+  paymentStatus: UmrahApplicationPaymentStatus;
+  /** @nullable */
+  paymentReference?: string | null;
+  /** @nullable */
+  paidAt?: string | null;
+  status: UmrahApplicationStatus;
+  /** @nullable */
+  adminNotes?: string | null;
+  /** @nullable */
+  issuedVisaUrl?: string | null;
+  declarationAccepted: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type UmrahApplicationAdminUser = {
+  /** @nullable */
+  firstName?: string | null;
+  /** @nullable */
+  lastName?: string | null;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  phone?: string | null;
+};
+
+export type UmrahApplicationAdmin = UmrahApplication & {
+  user: UmrahApplicationAdminUser;
+};
+
+export type UmrahApplicationCreateGender = typeof UmrahApplicationCreateGender[keyof typeof UmrahApplicationCreateGender];
+
+
+export const UmrahApplicationCreateGender = {
+  male: 'male',
+  female: 'female',
+} as const;
+
+export interface UmrahApplicationCreate {
+  sponsorAvailable: boolean;
+  sponsorResidencyImageUrl: string;
+  sponsorPhone: string;
+  passportImageUrl: string;
+  personalPhotoUrl: string;
+  fullName?: string;
+  passportNumber?: string;
+  nationality?: string;
+  dateOfBirth?: string;
+  gender?: UmrahApplicationCreateGender;
+  passportIssueDate?: string;
+  passportExpiryDate?: string;
+  phone: string;
+  contactEmail?: string;
+  emergencyPhone: string;
+  declarationAccepted: boolean;
+}
+
+export type UmrahApplicationCreatedPaymentStatus = typeof UmrahApplicationCreatedPaymentStatus[keyof typeof UmrahApplicationCreatedPaymentStatus];
+
+
+export const UmrahApplicationCreatedPaymentStatus = {
+  unpaid: 'unpaid',
+  paid: 'paid',
+  failed: 'failed',
+} as const;
+
+export type UmrahApplicationCreatedStatus = typeof UmrahApplicationCreatedStatus[keyof typeof UmrahApplicationCreatedStatus];
+
+
+export const UmrahApplicationCreatedStatus = {
+  awaiting_payment: 'awaiting_payment',
+  submitted: 'submitted',
+  under_review: 'under_review',
+  processing: 'processing',
+  approved: 'approved',
+  rejected: 'rejected',
+  completed: 'completed',
+} as const;
+
+export interface UmrahApplicationCreated {
+  id: string;
+  trackingNumber: string;
+  /** @nullable */
+  feeAmount?: number | null;
+  feeCurrency: string;
+  paymentStatus: UmrahApplicationCreatedPaymentStatus;
+  status: UmrahApplicationCreatedStatus;
+}
+
+export type UmrahApplicationStatusUpdateStatus = typeof UmrahApplicationStatusUpdateStatus[keyof typeof UmrahApplicationStatusUpdateStatus];
+
+
+export const UmrahApplicationStatusUpdateStatus = {
+  awaiting_payment: 'awaiting_payment',
+  submitted: 'submitted',
+  under_review: 'under_review',
+  processing: 'processing',
+  approved: 'approved',
+  rejected: 'rejected',
+  completed: 'completed',
+} as const;
+
+export interface UmrahApplicationStatusUpdate {
+  status?: UmrahApplicationStatusUpdateStatus;
+  adminNotes?: string;
+  issuedVisaUrl?: string;
+}
+
 export type VisaApplicationEligibilityPath = typeof VisaApplicationEligibilityPath[keyof typeof VisaApplicationEligibilityPath];
 
 
@@ -753,6 +977,8 @@ export interface VisaApplication {
   status: VisaApplicationStatus;
   /** @nullable */
   adminNotes?: string | null;
+  /** @nullable */
+  issuedVisaUrl?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -823,6 +1049,219 @@ export const VisaApplicationStatusUpdateStatus = {
 export interface VisaApplicationStatusUpdate {
   status?: VisaApplicationStatusUpdateStatus;
   adminNotes?: string;
+  issuedVisaUrl?: string;
+}
+
+export type ApplicationDocumentVersionStatus = typeof ApplicationDocumentVersionStatus[keyof typeof ApplicationDocumentVersionStatus];
+
+
+export const ApplicationDocumentVersionStatus = {
+  uploaded: 'uploaded',
+  approved: 'approved',
+  rejected: 'rejected',
+} as const;
+
+export interface ApplicationDocumentVersion {
+  id: number;
+  documentId: number;
+  storagePath: string;
+  /** @nullable */
+  originalFilename?: string | null;
+  /** @nullable */
+  mimeType?: string | null;
+  /** @nullable */
+  size?: number | null;
+  /** @nullable */
+  uploadedBy?: string | null;
+  uploadedAt: string;
+  status: ApplicationDocumentVersionStatus;
+  /** @nullable */
+  rejectionReason?: string | null;
+  versionNumber: number;
+}
+
+export type ApplicationDocumentAllowedFileType = typeof ApplicationDocumentAllowedFileType[keyof typeof ApplicationDocumentAllowedFileType];
+
+
+export const ApplicationDocumentAllowedFileType = {
+  image: 'image',
+  pdf: 'pdf',
+  image_pdf: 'image_pdf',
+} as const;
+
+export type ApplicationDocumentStatus = typeof ApplicationDocumentStatus[keyof typeof ApplicationDocumentStatus];
+
+
+export const ApplicationDocumentStatus = {
+  required: 'required',
+  waiting_customer: 'waiting_customer',
+  uploaded: 'uploaded',
+  under_review: 'under_review',
+  approved: 'approved',
+  rejected: 'rejected',
+  reupload_required: 'reupload_required',
+} as const;
+
+export interface ApplicationDocument {
+  id: number;
+  applicationId: number;
+  /** @nullable */
+  userId?: string | null;
+  /** @nullable */
+  visaId?: number | null;
+  documentKey: string;
+  nameAr: string;
+  nameEn: string;
+  /** @nullable */
+  description?: string | null;
+  required: boolean;
+  allowedFileType: ApplicationDocumentAllowedFileType;
+  /** @nullable */
+  maxFileSizeMb?: number | null;
+  status: ApplicationDocumentStatus;
+  /** @nullable */
+  requestedBy?: string | null;
+  /** @nullable */
+  requestDescription?: string | null;
+  /** @nullable */
+  rejectionReason?: string | null;
+  /** @nullable */
+  currentVersionId?: number | null;
+  /** @nullable */
+  reviewedBy?: string | null;
+  /** @nullable */
+  reviewedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  currentVersion?: ApplicationDocumentVersion | null;
+  versions: ApplicationDocumentVersion[];
+}
+
+export type RequestApplicationDocumentInputFileType = typeof RequestApplicationDocumentInputFileType[keyof typeof RequestApplicationDocumentInputFileType];
+
+
+export const RequestApplicationDocumentInputFileType = {
+  image: 'image',
+  pdf: 'pdf',
+  image_pdf: 'image_pdf',
+} as const;
+
+export interface RequestApplicationDocumentInput {
+  /** Optional stable slug; derived from the name if omitted. */
+  documentKey?: string;
+  nameAr: string;
+  nameEn: string;
+  description?: string;
+  fileType?: RequestApplicationDocumentInputFileType;
+  required?: boolean;
+  maxFileSizeMb?: number;
+}
+
+export interface UploadApplicationDocumentInput {
+  /** Object storage path returned by POST /storage/uploads (must be owned by the caller). */
+  storagePath: string;
+}
+
+export interface RejectApplicationDocumentInput {
+  rejectionReason: string;
+}
+
+export type VisaRequiredDocumentAllowedFileType = typeof VisaRequiredDocumentAllowedFileType[keyof typeof VisaRequiredDocumentAllowedFileType];
+
+
+export const VisaRequiredDocumentAllowedFileType = {
+  image: 'image',
+  pdf: 'pdf',
+  image_pdf: 'image_pdf',
+} as const;
+
+export type VisaRequiredDocumentRequiredAt = typeof VisaRequiredDocumentRequiredAt[keyof typeof VisaRequiredDocumentRequiredAt];
+
+
+export const VisaRequiredDocumentRequiredAt = {
+  application_start: 'application_start',
+  before_submission: 'before_submission',
+  during_processing: 'during_processing',
+  optional: 'optional',
+} as const;
+
+export interface VisaRequiredDocument {
+  id: number;
+  visaId: number;
+  documentKey: string;
+  nameAr: string;
+  nameEn: string;
+  /** @nullable */
+  description?: string | null;
+  required: boolean;
+  allowedFileType: VisaRequiredDocumentAllowedFileType;
+  /** @nullable */
+  maxFileSizeMb?: number | null;
+  requiredAt: VisaRequiredDocumentRequiredAt;
+  sortOrder: number;
+  createdAt: string;
+}
+
+export type VisaRequiredDocumentInputAllowedFileType = typeof VisaRequiredDocumentInputAllowedFileType[keyof typeof VisaRequiredDocumentInputAllowedFileType];
+
+
+export const VisaRequiredDocumentInputAllowedFileType = {
+  image: 'image',
+  pdf: 'pdf',
+  image_pdf: 'image_pdf',
+} as const;
+
+export type VisaRequiredDocumentInputRequiredAt = typeof VisaRequiredDocumentInputRequiredAt[keyof typeof VisaRequiredDocumentInputRequiredAt];
+
+
+export const VisaRequiredDocumentInputRequiredAt = {
+  application_start: 'application_start',
+  before_submission: 'before_submission',
+  during_processing: 'during_processing',
+  optional: 'optional',
+} as const;
+
+export interface VisaRequiredDocumentInput {
+  documentKey?: string;
+  nameAr: string;
+  nameEn: string;
+  description?: string;
+  required?: boolean;
+  allowedFileType?: VisaRequiredDocumentInputAllowedFileType;
+  maxFileSizeMb?: number;
+  requiredAt?: VisaRequiredDocumentInputRequiredAt;
+  sortOrder?: number;
+}
+
+export type VisaRequiredDocumentUpdateAllowedFileType = typeof VisaRequiredDocumentUpdateAllowedFileType[keyof typeof VisaRequiredDocumentUpdateAllowedFileType];
+
+
+export const VisaRequiredDocumentUpdateAllowedFileType = {
+  image: 'image',
+  pdf: 'pdf',
+  image_pdf: 'image_pdf',
+} as const;
+
+export type VisaRequiredDocumentUpdateRequiredAt = typeof VisaRequiredDocumentUpdateRequiredAt[keyof typeof VisaRequiredDocumentUpdateRequiredAt];
+
+
+export const VisaRequiredDocumentUpdateRequiredAt = {
+  application_start: 'application_start',
+  before_submission: 'before_submission',
+  during_processing: 'during_processing',
+  optional: 'optional',
+} as const;
+
+export interface VisaRequiredDocumentUpdate {
+  documentKey?: string;
+  nameAr?: string;
+  nameEn?: string;
+  description?: string;
+  required?: boolean;
+  allowedFileType?: VisaRequiredDocumentUpdateAllowedFileType;
+  maxFileSizeMb?: number;
+  requiredAt?: VisaRequiredDocumentUpdateRequiredAt;
+  sortOrder?: number;
 }
 
 export type BookingType = typeof BookingType[keyof typeof BookingType];
@@ -935,6 +1374,134 @@ export interface ContactMessage {
   createdAt: string;
 }
 
+export type SupportConversationStatus = typeof SupportConversationStatus[keyof typeof SupportConversationStatus];
+
+
+export const SupportConversationStatus = {
+  open: 'open',
+  closed: 'closed',
+} as const;
+
+export interface SupportConversation {
+  id: string;
+  /** @nullable */
+  userId?: string | null;
+  /** @nullable */
+  guestName?: string | null;
+  status: SupportConversationStatus;
+  /** @nullable */
+  lastMessageAt?: string | null;
+  customerUnreadCount: number;
+  staffUnreadCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AdminSupportConversationStatus = typeof AdminSupportConversationStatus[keyof typeof AdminSupportConversationStatus];
+
+
+export const AdminSupportConversationStatus = {
+  open: 'open',
+  closed: 'closed',
+} as const;
+
+export interface AdminSupportConversation {
+  id: string;
+  /** @nullable */
+  userId?: string | null;
+  /** @nullable */
+  guestName?: string | null;
+  status: AdminSupportConversationStatus;
+  /** @nullable */
+  lastMessageAt?: string | null;
+  customerUnreadCount: number;
+  staffUnreadCount: number;
+  createdAt: string;
+  updatedAt: string;
+  customerName: string;
+  /** @nullable */
+  userEmail?: string | null;
+  /** @nullable */
+  userPhone?: string | null;
+  isGuest: boolean;
+  /** @nullable */
+  lastMessagePreview?: string | null;
+  /** @nullable */
+  lastMessageSenderAt?: string | null;
+}
+
+export type SupportMessageSender = typeof SupportMessageSender[keyof typeof SupportMessageSender];
+
+
+export const SupportMessageSender = {
+  customer: 'customer',
+  staff: 'staff',
+} as const;
+
+export interface SupportMessage {
+  id: string;
+  conversationId: string;
+  sender: SupportMessageSender;
+  /** @nullable */
+  senderUserId?: string | null;
+  body: string;
+  createdAt: string;
+}
+
+export interface SupportMessageInput {
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  body: string;
+}
+
+export interface GuestConversationInput {
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  name: string;
+}
+
+export interface GuestConversationResponse {
+  conversationId: string;
+  guestToken: string;
+}
+
+export interface GuestMessageInput {
+  /**
+     * Deprecated — send the token via the x-guest-token header instead.
+     * @deprecated
+     */
+  token?: string;
+  /**
+     * @minLength 1
+     * @maxLength 2000
+     */
+  body: string;
+}
+
+export interface ClaimGuestConversationInput {
+  /**
+     * Deprecated — send the token via the x-guest-token header instead.
+     * @deprecated
+     */
+  token?: string;
+}
+
+export type SupportConversationStatusInputStatus = typeof SupportConversationStatusInputStatus[keyof typeof SupportConversationStatusInputStatus];
+
+
+export const SupportConversationStatusInputStatus = {
+  open: 'open',
+  closed: 'closed',
+} as const;
+
+export interface SupportConversationStatusInput {
+  status: SupportConversationStatusInputStatus;
+}
+
 export type DashboardStatsBookingsByTypeItem = {
   type: string;
   count: number;
@@ -1000,8 +1567,62 @@ export interface Notification {
   relatedEntityType?: string | null;
   /** @nullable */
   relatedEntityId?: string | null;
+  /** @nullable */
+  url?: string | null;
   isRead: boolean;
+  /** @nullable */
+  sentBy?: string | null;
   createdAt: string;
+}
+
+export type PushTokenRegisterPlatform = typeof PushTokenRegisterPlatform[keyof typeof PushTokenRegisterPlatform];
+
+
+export const PushTokenRegisterPlatform = {
+  ios: 'ios',
+  android: 'android',
+  web: 'web',
+} as const;
+
+export interface PushTokenRegister {
+  token: string;
+  platform?: PushTokenRegisterPlatform;
+  deviceName?: string;
+}
+
+export interface PushToken {
+  id: string;
+  token: string;
+  /** @nullable */
+  platform?: string | null;
+  /** @nullable */
+  deviceName?: string | null;
+}
+
+export interface PushTokenDelete {
+  token: string;
+}
+
+export type NotificationSendRequestAudience = typeof NotificationSendRequestAudience[keyof typeof NotificationSendRequestAudience];
+
+
+export const NotificationSendRequestAudience = {
+  all: 'all',
+  users: 'users',
+} as const;
+
+export interface NotificationSendRequest {
+  titleAr: string;
+  titleEn: string;
+  messageAr: string;
+  messageEn: string;
+  audience: NotificationSendRequestAudience;
+  userIds?: string[];
+  url?: string;
+}
+
+export interface NotificationSendResponse {
+  sentCount: number;
 }
 
 export type EmployeeRole = typeof EmployeeRole[keyof typeof EmployeeRole];
@@ -1100,6 +1721,14 @@ export const ProfileUpdateGender = {
   other: 'other',
 } as const;
 
+export type ProfileUpdatePreferredLanguage = typeof ProfileUpdatePreferredLanguage[keyof typeof ProfileUpdatePreferredLanguage];
+
+
+export const ProfileUpdatePreferredLanguage = {
+  ar: 'ar',
+  en: 'en',
+} as const;
+
 export interface ProfileUpdate {
   firstName?: string;
   lastName?: string;
@@ -1110,6 +1739,7 @@ export interface ProfileUpdate {
   gender?: ProfileUpdateGender;
   dateOfBirth?: string;
   profilePhotoUrl?: string;
+  preferredLanguage?: ProfileUpdatePreferredLanguage;
   passportNumber?: string;
   passportIssueCountry?: string;
   passportIssuePlace?: string;
@@ -1138,6 +1768,14 @@ export const SafeUserRole = {
   super_admin: 'super_admin',
 } as const;
 
+export type SafeUserPreferredLanguage = typeof SafeUserPreferredLanguage[keyof typeof SafeUserPreferredLanguage];
+
+
+export const SafeUserPreferredLanguage = {
+  ar: 'ar',
+  en: 'en',
+} as const;
+
 export interface SafeUser {
   id: string;
   /** @nullable */
@@ -1155,6 +1793,7 @@ export interface SafeUser {
   /** @nullable */
   dateOfBirth?: string | null;
   role: SafeUserRole;
+  preferredLanguage?: SafeUserPreferredLanguage;
   isActive: boolean;
   /** @nullable */
   emailVerifiedAt?: string | null;
@@ -1182,7 +1821,7 @@ export interface SafeUser {
   passportExpiryDate?: string | null;
   /** @nullable */
   passportImageUrl?: string | null;
-  isGccResident?: boolean;
+  isGccResident: boolean;
   /** @nullable */
   gccResidenceCountry?: string | null;
   /** @nullable */
@@ -1193,7 +1832,7 @@ export interface SafeUser {
   gccResidenceFrontUrl?: string | null;
   /** @nullable */
   gccResidenceBackUrl?: string | null;
-  isEuropeanResident?: boolean;
+  isEuropeanResident: boolean;
   /** @nullable */
   europeanDocumentType?: string | null;
   /** @nullable */
@@ -1273,6 +1912,292 @@ export interface ProviderStatus {
   isAvailable: boolean;
 }
 
+export type AgencyStatus = typeof AgencyStatus[keyof typeof AgencyStatus];
+
+
+export const AgencyStatus = {
+  active: 'active',
+  suspended: 'suspended',
+  pending: 'pending',
+} as const;
+
+export interface Agency {
+  id: number;
+  name: string;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  address?: string | null;
+  notes?: string | null;
+  status: AgencyStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AgencyInputStatus = typeof AgencyInputStatus[keyof typeof AgencyInputStatus];
+
+
+export const AgencyInputStatus = {
+  active: 'active',
+  suspended: 'suspended',
+  pending: 'pending',
+} as const;
+
+export interface AgencyInput {
+  name: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  address?: string;
+  notes?: string;
+  status?: AgencyInputStatus;
+}
+
+export type AgencyUpdateStatus = typeof AgencyUpdateStatus[keyof typeof AgencyUpdateStatus];
+
+
+export const AgencyUpdateStatus = {
+  active: 'active',
+  suspended: 'suspended',
+  pending: 'pending',
+} as const;
+
+export interface AgencyUpdate {
+  name?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  address?: string;
+  notes?: string;
+  status?: AgencyUpdateStatus;
+}
+
+export interface AgentAccount {
+  id: string;
+  email?: string | null;
+  phone?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  role: string;
+  agencyId?: number | null;
+  isActive: boolean;
+  createdAt: string;
+  lastLoginAt?: string | null;
+}
+
+export interface AgentAccountInput {
+  email?: string;
+  phone?: string;
+  /** @minLength 8 */
+  password: string;
+  firstName: string;
+  lastName?: string;
+}
+
+export interface AgentAccountUpdate {
+  isActive?: boolean;
+  firstName?: string;
+  lastName?: string;
+}
+
+export interface ResetPasswordInput {
+  /** @minLength 8 */
+  password: string;
+}
+
+export interface AgencyVisaService {
+  id: number;
+  agencyId: number;
+  visaId: number;
+  enabled: boolean;
+  agentPrice: string;
+  currency: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AgencyVisaServicesInputServicesItem = {
+  visaId: number;
+  enabled: boolean;
+  agentPrice: number | string;
+  currency?: string;
+};
+
+export interface AgencyVisaServicesInput {
+  services: AgencyVisaServicesInputServicesItem[];
+}
+
+export interface AgentVisaService {
+  serviceId?: number;
+  visaId: number;
+  agentPrice: string;
+  currency?: string;
+  countryAr?: string;
+  countryEn?: string;
+  countryCode?: string | null;
+  visaType?: string;
+  category?: string;
+  descriptionAr?: string | null;
+  descriptionEn?: string | null;
+  processingDays?: number;
+  stayDuration?: number | null;
+  validityDays?: number | null;
+  entryType?: string;
+  allowedNationalities?: string[];
+  blockedNationalities?: string[];
+  imageUrl?: string | null;
+  requiresPassportImage?: boolean;
+  requiresPersonalPhoto?: boolean;
+}
+
+export type AgentApplicationCustomFieldResponses = { [key: string]: unknown };
+
+export interface AgentApplication {
+  id: number;
+  trackingNumber: string | null;
+  visaId: number;
+  agencyId?: number | null;
+  submittedByAgentId?: string | null;
+  agentPrice?: string | null;
+  fullName?: string;
+  fullNameEn?: string | null;
+  nationality?: string;
+  gender?: string;
+  dateOfBirth?: string;
+  email?: string;
+  phone?: string;
+  passportNumber?: string;
+  passportIssueDate?: string | null;
+  passportExpiryDate?: string;
+  passportIssuingCountry?: string | null;
+  countryOfResidence?: string | null;
+  passportImageUrl?: string | null;
+  personalPhotoUrl?: string | null;
+  residencyImageUrl?: string | null;
+  residencyBackImageUrl?: string | null;
+  visaImageUrl?: string | null;
+  customFieldResponses?: AgentApplicationCustomFieldResponses;
+  agreedToTerms?: boolean;
+  status: string;
+  adminNotes?: string | null;
+  issuedVisaUrl?: string | null;
+  agencyName?: string | null;
+  agentName?: string | null;
+  visaType?: string | null;
+  countryEn?: string | null;
+  countryAr?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type AgentApplicationInputGender = typeof AgentApplicationInputGender[keyof typeof AgentApplicationInputGender];
+
+
+export const AgentApplicationInputGender = {
+  male: 'male',
+  female: 'female',
+} as const;
+
+export type AgentApplicationInputCustomFieldResponses = { [key: string]: unknown };
+
+export interface AgentApplicationInput {
+  visaId: number;
+  applicantNationality: string;
+  fullName: string;
+  fullNameEn?: string;
+  gender: AgentApplicationInputGender;
+  dateOfBirth: string;
+  email: string;
+  phone: string;
+  passportNumber: string;
+  passportIssueDate: string;
+  passportExpiryDate: string;
+  passportIssuingCountry?: string;
+  countryOfResidence?: string;
+  passportImageUrl?: string;
+  personalPhotoUrl?: string;
+  residencyImageUrl?: string;
+  residencyBackImageUrl?: string;
+  visaImageUrl?: string;
+  customFieldResponses?: AgentApplicationInputCustomFieldResponses;
+  agreedToTerms?: boolean;
+}
+
+export type AgentApplicationUpdateStatus = typeof AgentApplicationUpdateStatus[keyof typeof AgentApplicationUpdateStatus];
+
+
+export const AgentApplicationUpdateStatus = {
+  received: 'received',
+  under_review: 'under_review',
+  awaiting_documents: 'awaiting_documents',
+  documents_uploaded: 'documents_uploaded',
+  sent_to_embassy: 'sent_to_embassy',
+  processing: 'processing',
+  issued: 'issued',
+  completed: 'completed',
+  rejected: 'rejected',
+  cancelled: 'cancelled',
+} as const;
+
+export interface AgentApplicationUpdate {
+  status?: AgentApplicationUpdateStatus;
+  adminNotes?: string;
+  issuedVisaUrl?: string;
+}
+
+export type AgentMeAgent = {
+  id?: string;
+  email?: string | null;
+  phone?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+};
+
+export type AgentMeAgencyStatus = typeof AgentMeAgencyStatus[keyof typeof AgentMeAgencyStatus];
+
+
+export const AgentMeAgencyStatus = {
+  active: 'active',
+  suspended: 'suspended',
+  pending: 'pending',
+} as const;
+
+export type AgentMeAgency = {
+  id?: number;
+  name?: string;
+  status?: AgentMeAgencyStatus;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+};
+
+export interface AgentMe {
+  agent: AgentMeAgent;
+  agency: AgentMeAgency;
+}
+
+export type AgentDashboardAgencyStatus = typeof AgentDashboardAgencyStatus[keyof typeof AgentDashboardAgencyStatus];
+
+
+export const AgentDashboardAgencyStatus = {
+  active: 'active',
+  suspended: 'suspended',
+  pending: 'pending',
+} as const;
+
+export type AgentDashboardStatsByStatus = {[key: string]: number};
+
+export type AgentDashboardStats = {
+  total?: number;
+  submitted?: number;
+  approved?: number;
+  rejected?: number;
+  inProgress?: number;
+  byStatus?: AgentDashboardStatsByStatus;
+};
+
+export interface AgentDashboard {
+  agencyName: string;
+  agencyStatus: AgentDashboardAgencyStatus;
+  stats: AgentDashboardStats;
+}
+
 export type ListOffersParams = {
 featured?: boolean;
 limit?: number;
@@ -1340,6 +2265,10 @@ export const ListVisaApplicationsStatus = {
   completed: 'completed',
   rejected: 'rejected',
 } as const;
+
+export type GetUmrahConfigParams = {
+nationality?: string;
+};
 
 export type ListMyBookingsParams = {
 type?: ListMyBookingsType;
@@ -1476,5 +2405,29 @@ unreadOnly?: boolean;
 
 export type MarkAllNotificationsRead200 = {
   updated: number;
+};
+
+export type DeletePushToken200 = {
+  deleted: number;
+};
+
+export type ListSupportMessagesParams = {
+/**
+ * ISO timestamp or message id; returns messages created after it
+ */
+after?: string;
+};
+
+export type ListGuestSupportMessagesParams = {
+/**
+ * Deprecated — use the x-guest-token header instead.
+ */
+token?: string;
+after?: string;
+};
+
+export type ListAgentApplicationsParams = {
+agencyId?: number;
+status?: string;
 };
 

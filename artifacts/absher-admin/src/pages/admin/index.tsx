@@ -4,10 +4,13 @@ import { useAdminAuth } from "@/hooks/use-admin-auth";
 import {
   LayoutDashboard, Ticket, Map, MessageSquare, Briefcase, FileText,
   Users, Globe, Wrench, Building2, Languages, Flag,
-  UserCog, CreditCard, BarChart3, Bell, Settings, ScrollText, LogOut, ShieldAlert
+  UserCog, CreditCard, BarChart3, Bell, Settings, ScrollText, LogOut, ShieldAlert,
+  Megaphone, Landmark, Sliders, Headset
 } from "lucide-react";
-import { lazy, Suspense, type ComponentType } from "react";
+import { lazy, Suspense, useState, useMemo, type ComponentType } from "react";
+import { useListAdminSupportConversations, getListAdminSupportConversationsQueryKey } from "@workspace/api-client-react";
 import DashboardOverview from "./dashboard-overview";
+import { LogoutConfirmDialog } from "@/components/logout-confirm-dialog";
 
 const ProgramsAdmin = lazy(() => import("./programs-admin"));
 const VisasAdmin = lazy(() => import("./visas-admin"));
@@ -17,6 +20,7 @@ const OffersAdmin = lazy(() => import("./offers-admin"));
 const DestinationsAdmin = lazy(() => import("./destinations-admin"));
 const CustomersAdmin = lazy(() => import("./customers-admin"));
 const MessagesAdmin = lazy(() => import("./messages-admin"));
+const SupportChatAdmin = lazy(() => import("./support-chat-admin"));
 const VisaApplicationsAdmin = lazy(() => import("./visa-applications-admin"));
 const EmployeesAdmin = lazy(() => import("./employees-admin"));
 const PaymentsAdmin = lazy(() => import("./payments-admin"));
@@ -24,6 +28,11 @@ const ReportsAdmin = lazy(() => import("./reports-admin"));
 const NotificationsAdmin = lazy(() => import("./notifications-admin"));
 const SettingsAdmin = lazy(() => import("./settings-admin"));
 const AuditLogsAdmin = lazy(() => import("./audit-logs"));
+const UmrahApplicationsAdmin = lazy(() => import("./umrah-applications-admin"));
+const UmrahSettingsAdmin = lazy(() => import("./umrah-settings-admin"));
+const AgenciesAdmin = lazy(() => import("./agencies-admin"));
+const AgentApplicationsAdmin = lazy(() => import("./agent-applications-admin"));
+const PromotionalOffersAdmin = lazy(() => import("./promotional-offers-admin"));
 
 function LoadingSpinner() {
   return (
@@ -59,6 +68,7 @@ export default function AdminLayout() {
   const { user, logout, hasPermission } = useAdminAuth();
   const [rawLocation] = useLocation();
   const ar = language === "ar";
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
 
   /* wouter gives us the path relative to the WouterRouter base, so strip
      the BASE_URL prefix that was already stripped by the router, but the
@@ -66,6 +76,21 @@ export default function AdminLayout() {
   const location = rawLocation;
 
   const isSuperAdmin = user?.role === "super_admin";
+
+  /* Total unread support messages — powers the sidebar badge. Only polls when
+     the current user can access the support section. */
+  const canSeeSupport = hasPermission("messages");
+  const { data: supportConversations } = useListAdminSupportConversations({
+    query: {
+      queryKey: getListAdminSupportConversationsQueryKey(),
+      enabled: canSeeSupport,
+      refetchInterval: 5000,
+    },
+  });
+  const supportUnread = useMemo(
+    () => (supportConversations ?? []).reduce((sum, c) => sum + (c.staffUnreadCount ?? 0), 0),
+    [supportConversations]
+  );
 
   /* Each nav item maps to a backend permission key. `perm: null` means the
      item is always visible to authenticated staff (no specific permission). */
@@ -76,21 +101,28 @@ export default function AdminLayout() {
     labelEn: string;
     perm: string | null;
     show?: boolean;
+    badge?: number;
   }> = [
     { href: "/",                         icon: LayoutDashboard, labelAr: "نظرة عامة",        labelEn: "Overview",           perm: "overview" },
     { href: "/admin/bookings",           icon: Ticket,          labelAr: "الحجوزات",          labelEn: "Bookings",           perm: "bookings" },
     { href: "/admin/payments",           icon: CreditCard,      labelAr: "المدفوعات",         labelEn: "Payments",           perm: "payments" },
     { href: "/admin/reports",            icon: BarChart3,       labelAr: "التقارير",          labelEn: "Reports",            perm: "reports" },
     { href: "/admin/visa-applications",  icon: FileText,        labelAr: "طلبات التأشيرة",    labelEn: "Visa Applications",  perm: "visa_applications" },
+    { href: "/admin/umrah-applications", icon: Landmark,        labelAr: "طلبات تأشيرة العمرة",labelEn: "Umrah Applications", perm: "visa_applications" },
+    { href: "/admin/agent-applications", icon: Briefcase,       labelAr: "طلبات الوكالات",    labelEn: "Agent Applications", perm: "visa_applications" },
+    { href: "/admin/agencies",           icon: Building2,       labelAr: "وكالات السفر",      labelEn: "Travel Agencies",    perm: "employees", show: isSuperAdmin || hasPermission("employees") },
     { href: "/admin/visa-countries",     icon: Flag,            labelAr: "دول التأشيرة",      labelEn: "Visa Countries",     perm: "visa_config" },
     { href: "/admin/visas",              icon: Globe,           labelAr: "أنواع التأشيرات",   labelEn: "Visa Types",         perm: "visa_config" },
     { href: "/admin/programs",           icon: Map,             labelAr: "البرامج السياحية",  labelEn: "Programs",           perm: "visa_config" },
     { href: "/admin/offers",             icon: Briefcase,       labelAr: "العروض",            labelEn: "Offers",             perm: "visa_config" },
+    { href: "/admin/promotional-offers", icon: Megaphone,       labelAr: "العروض الترويجية",  labelEn: "Promotional Offers", perm: "visa_config" },
     { href: "/admin/destinations",       icon: Building2,       labelAr: "الوجهات",           labelEn: "Destinations",       perm: "visa_config" },
     { href: "/admin/customers",          icon: Users,           labelAr: "العملاء",           labelEn: "Customers",          perm: "customers" },
     { href: "/admin/employees",          icon: UserCog,         labelAr: "الموظفون",         labelEn: "Employees",          perm: "employees", show: isSuperAdmin || hasPermission("employees") },
     { href: "/admin/messages",           icon: MessageSquare,   labelAr: "الرسائل",           labelEn: "Messages",           perm: "messages" },
+    { href: "/admin/support-chat",       icon: Headset,         labelAr: "الدعم الفني",       labelEn: "Support Chat",       perm: "messages", badge: supportUnread },
     { href: "/admin/notifications",      icon: Bell,            labelAr: "الإشعارات",         labelEn: "Notifications",      perm: "notifications" },
+    { href: "/admin/umrah-settings",      icon: Sliders,         labelAr: "إعدادات العمرة",    labelEn: "Umrah Settings",     perm: "settings" },
     { href: "/admin/settings",           icon: Settings,        labelAr: "الإعدادات",         labelEn: "Settings",           perm: "settings" },
     { href: "/admin/audit-logs",         icon: ScrollText,      labelAr: "سجل النشاط",        labelEn: "Audit Log",          perm: "audit_logs" },
   ];
@@ -156,7 +188,12 @@ export default function AdminLayout() {
                     }`}
                 >
                   <Icon className="w-5 h-5 shrink-0" />
-                  <span>{ar ? item.labelAr : item.labelEn}</span>
+                  <span className="flex-1">{ar ? item.labelAr : item.labelEn}</span>
+                  {item.badge ? (
+                    <span className="bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center shrink-0">
+                      {item.badge > 99 ? "99+" : item.badge}
+                    </span>
+                  ) : null}
                 </span>
               </Link>
             );
@@ -191,7 +228,7 @@ export default function AdminLayout() {
               {initial}
             </div>
             <button
-              onClick={logout}
+              onClick={() => setLogoutConfirmOpen(true)}
               title={ar ? "تسجيل الخروج" : "Logout"}
               className="w-10 h-10 rounded-xl flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
             >
@@ -199,6 +236,13 @@ export default function AdminLayout() {
             </button>
           </div>
         </header>
+
+        <LogoutConfirmDialog
+          open={logoutConfirmOpen}
+          onOpenChange={setLogoutConfirmOpen}
+          onConfirm={logout}
+          ar={ar}
+        />
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-8">
@@ -212,15 +256,19 @@ export default function AdminLayout() {
               <Route path="/admin/payments" component={guard("payments", PaymentsAdmin)} />
               <Route path="/admin/reports" component={guard("reports", ReportsAdmin)} />
               <Route path="/admin/visa-applications" component={guard("visa_applications", VisaApplicationsAdmin)} />
+              <Route path="/admin/umrah-applications" component={guard("visa_applications", UmrahApplicationsAdmin)} />
               <Route path="/admin/visa-countries" component={guard("visa_config", VisaCountriesAdmin)} />
               <Route path="/admin/visas" component={guard("visa_config", VisasAdmin)} />
               <Route path="/admin/programs" component={guard("visa_config", ProgramsAdmin)} />
               <Route path="/admin/offers" component={guard("visa_config", OffersAdmin)} />
+              <Route path="/admin/promotional-offers" component={guard("visa_config", PromotionalOffersAdmin)} />
               <Route path="/admin/destinations" component={guard("visa_config", DestinationsAdmin)} />
               <Route path="/admin/customers" component={guard("customers", CustomersAdmin)} />
               <Route path="/admin/employees" component={guard("employees", EmployeesAdmin)} />
               <Route path="/admin/messages" component={guard("messages", MessagesAdmin)} />
+              <Route path="/admin/support-chat" component={guard("messages", SupportChatAdmin)} />
               <Route path="/admin/notifications" component={guard("notifications", NotificationsAdmin)} />
+              <Route path="/admin/umrah-settings" component={guard("settings", UmrahSettingsAdmin)} />
               <Route path="/admin/settings" component={guard("settings", SettingsAdmin)} />
               <Route path="/admin/audit-logs" component={guard("audit_logs", AuditLogsAdmin)} />
               <Route path="/admin/:rest*">

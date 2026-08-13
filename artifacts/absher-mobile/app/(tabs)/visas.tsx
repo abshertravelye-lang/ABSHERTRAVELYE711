@@ -1,55 +1,54 @@
-import React, { useMemo, useState, useRef } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
-  Animated, FlatList, Platform, Pressable, ScrollView,
+  FlatList, Platform, Pressable, RefreshControl, ScrollView,
   StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useLanguage } from '@/context/LanguageContext';
 import { useColors } from '@/hooks/useColors';
 import { useListVisas } from '@workspace/api-client-react';
 import { VisaCard, VisaCardHorizontal } from '@/components/VisaCard';
-import { EmptyState } from '@/components/EmptyState';
+import { EmptyState, SkeletonRow } from '@/components/EmptyState';
+import { VisaCategories, VisaCategory } from '@/components/visas/VisaCategories';
 
 // ── filter data ──────────────────────────────────────────────────────────────
 
-const CATEGORIES = [
-  { value: '', label: 'الكل', icon: 'globe-outline' },
-  { value: 'tourist', label: 'سياحية', icon: 'sunny-outline' },
-  { value: 'business', label: 'تجارية', icon: 'briefcase-outline' },
-  { value: 'umrah', label: 'عمرة', icon: 'moon-outline' },
-  { value: 'medical', label: 'طبية', icon: 'medkit-outline' },
-  { value: 'study', label: 'دراسية', icon: 'school-outline' },
-  { value: 'visit', label: 'زيارة', icon: 'home-outline' },
-] as const;
+function getEntryFilters(t: any) {
+  return [
 
-const ENTRY_FILTERS = [
-  { value: '', label: 'أي دخول' },
-  { value: 'single', label: 'دخول واحد' },
-  { value: 'multiple', label: 'دخول متعدد' },
-] as const;
+  { value: '', label: t('visas.filter.anyEntry') },
+  { value: 'single', label: t('visas.filter.singleEntry') },
+  { value: 'multiple', label: t('visas.filter.multipleEntry') },
+  ] as const;
+}
 
-const PROC_FILTERS = [
-  { value: '', label: 'أي مدة' },
-  { value: 'express', label: '1-3 أيام' },
-  { value: 'standard', label: '4-7 أيام' },
-  { value: 'long', label: '+7 أيام' },
-] as const;
+function getProcFilters(t: any) {
+  return [
+
+  { value: '', label: t('visas.filter.anyDuration') },
+  { value: 'express', label: t('visas.speed.fast') },
+  { value: 'standard', label: t('visas.speed.standard') },
+  { value: 'long', label: t('visas.speed.slow') },
+  ] as const;
+}
 
 // ── Section header ────────────────────────────────────────────────────────────
 
 function SectionHeader({
-  icon, title, subtitle, color = '#D4AF37',
-}: { icon: string; title: string; subtitle?: string; color?: string }) {
+  icon, title, subtitle, color,
+}: { icon: string; title: string; subtitle?: string; color: string }) {
+  const colors = useColors();
   return (
     <View style={styles.sectionHeader}>
       <View style={[styles.sectionIconWrap, { backgroundColor: color + '18' }]}>
         <Ionicons name={icon as any} size={20} color={color} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={[styles.sectionTitle, { fontFamily: 'Cairo_700Bold' }]}>{title}</Text>
-        {subtitle && <Text style={[styles.sectionSub, { fontFamily: 'Cairo_400Regular' }]}>{subtitle}</Text>}
+        <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>{title}</Text>
+        {subtitle && <Text style={[styles.sectionSub, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{subtitle}</Text>}
       </View>
     </View>
   );
@@ -60,16 +59,17 @@ function SectionHeader({
 export default function VisasScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const bottomInset = Platform.OS === 'web' ? 34 : 0;
 
   const [search, setSearch] = useState('');
-  const [category, setCategory] = useState('');
+  const [category, setCategory] = useState<VisaCategory>('');
   const [entryType, setEntryType] = useState('');
   const [processing, setProcessing] = useState('');
   const [showFilters, setShowFilters] = useState(false);
 
-  const { data: visas, isLoading, error, refetch } = useListVisas();
+  const { data: visas, isLoading, error, refetch, isRefetching } = useListVisas();
 
   const active = useMemo(() => (visas || []).filter(v => v.isActive && v.status === 'available'), [visas]);
 
@@ -103,31 +103,31 @@ export default function VisasScreen() {
 
       {/* ── Header ── */}
       <LinearGradient
-        colors={['#071525', '#0A2342', '#1A3460']}
+        colors={['#071525', colors.navy, '#1A3460']}
         style={[styles.header, { paddingTop: topInset + 12 }]}
       >
         <View style={styles.headerTop}>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.headerTitle, { fontFamily: 'Cairo_700Bold' }]}>مركز التأشيرات</Text>
+            <Text style={[styles.headerTitle, { fontFamily: 'Cairo_700Bold' }]}>{t('visas.hub.title')}</Text>
             <Text style={[styles.headerSub, { fontFamily: 'Cairo_400Regular' }]}>
-              {active.length > 0 ? `${active.length}+ تأشيرة متاحة` : 'جميع الوجهات العالمية'}
+              {active.length > 0 ? `${active.length}+ ${t('visas.hub.availableVisas')}` : t('visas.hub.allDestinations')}
             </Text>
           </View>
           <Pressable
             onPress={() => setShowFilters(!showFilters)}
-            style={[styles.filterBtn, { backgroundColor: showFilters ? '#D4AF37' : 'rgba(255,255,255,0.15)' }]}
+            style={[styles.filterBtn, { backgroundColor: showFilters ? colors.gold : 'rgba(255,255,255,0.15)' }]}
           >
-            <Ionicons name="options-outline" size={20} color={showFilters ? '#0A2342' : '#FFFFFF'} />
+            <Ionicons name="options-outline" size={20} color={showFilters ? colors.navy : '#FFFFFF'} />
           </Pressable>
         </View>
 
         {/* Search */}
         <View style={[styles.searchBar, { backgroundColor: 'rgba(255,255,255,0.12)', borderColor: 'rgba(212,175,55,0.35)' }]}>
-          <Ionicons name="search" size={18} color="#D4AF37" />
+          <Ionicons name="search" size={18} color={colors.gold} />
           <TextInput
             value={search}
             onChangeText={setSearch}
-            placeholder="ابحث عن دولة أو نوع تأشيرة..."
+            placeholder={t('visas.hub.searchPlaceholder') as string}
             placeholderTextColor="rgba(255,255,255,0.45)"
             style={[styles.searchInput, { color: '#FFFFFF', fontFamily: 'Cairo_400Regular' }]}
           />
@@ -141,12 +141,12 @@ export default function VisasScreen() {
         {/* Stats Row */}
         <View style={styles.statsRow}>
           {[
-            { n: `${active.length}+`, l: 'تأشيرة' },
-            { n: `${fastApproval.length}+`, l: 'موافقة سريعة' },
-            { n: `${multipleEntry.length}+`, l: 'دخول متعدد' },
+            { n: `${active.length}+`, l: t('visas.hub.visaCount') },
+            { n: `${fastApproval.length}+`, l: t('visas.hub.fastApproval') },
+            { n: `${multipleEntry.length}+`, l: t('visas.hub.multipleEntry') },
           ].map((s, i) => (
             <View key={i} style={styles.statItem}>
-              <Text style={[styles.statNum, { fontFamily: 'Cairo_700Bold' }]}>{s.n}</Text>
+              <Text style={[styles.statNum, { color: colors.gold, fontFamily: 'Cairo_700Bold' }]}>{s.n}</Text>
               <Text style={[styles.statLabel, { fontFamily: 'Cairo_400Regular' }]}>{s.l}</Text>
             </View>
           ))}
@@ -157,17 +157,17 @@ export default function VisasScreen() {
       {showFilters && (
         <View style={[styles.filtersPanel, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
           <Text style={[styles.filterGroupLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>
-            نوع الدخول
+            {t('visas.filter.entryType')}
           </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
             <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16 }}>
-              {ENTRY_FILTERS.map(f => (
+              {getEntryFilters(t).map(f => (
                 <Pressable
                   key={f.value}
                   onPress={() => setEntryType(f.value)}
                   style={[styles.filterChip, {
-                    backgroundColor: entryType === f.value ? '#0A2342' : colors.muted,
-                    borderColor: entryType === f.value ? '#0A2342' : colors.border,
+                    backgroundColor: entryType === f.value ? colors.navy : colors.muted,
+                    borderColor: entryType === f.value ? colors.navy : colors.border,
                   }]}
                 >
                   <Text style={[styles.filterChipText, {
@@ -180,21 +180,21 @@ export default function VisasScreen() {
           </ScrollView>
 
           <Text style={[styles.filterGroupLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>
-            مدة المعالجة
+            {t('visas.filter.processingTime')}
           </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16 }}>
-              {PROC_FILTERS.map(f => (
+              {getProcFilters(t).map(f => (
                 <Pressable
                   key={f.value}
                   onPress={() => setProcessing(f.value)}
                   style={[styles.filterChip, {
-                    backgroundColor: processing === f.value ? '#D4AF37' : colors.muted,
-                    borderColor: processing === f.value ? '#D4AF37' : colors.border,
+                    backgroundColor: processing === f.value ? colors.gold : colors.muted,
+                    borderColor: processing === f.value ? colors.gold : colors.border,
                   }]}
                 >
                   <Text style={[styles.filterChipText, {
-                    color: processing === f.value ? '#0A2342' : colors.mutedForeground,
+                    color: processing === f.value ? colors.navy : colors.mutedForeground,
                     fontFamily: 'Cairo_600SemiBold',
                   }]}>{f.label}</Text>
                 </Pressable>
@@ -204,43 +204,18 @@ export default function VisasScreen() {
         </View>
       )}
 
-      {/* ── Category chips ── */}
-      <FlatList
-        horizontal
-        inverted
-        data={CATEGORIES}
-        keyExtractor={c => c.value}
-        renderItem={({ item }) => (
-          <Pressable
-            style={[styles.chip, {
-              backgroundColor: category === item.value ? '#D4AF37' : colors.muted,
-              borderColor: category === item.value ? '#D4AF37' : colors.border,
-            }]}
-            onPress={() => setCategory(item.value)}
-          >
-            <Ionicons
-              name={item.icon as any}
-              size={14}
-              color={category === item.value ? '#0A2342' : colors.mutedForeground}
-            />
-            <Text style={[styles.chipText, {
-              color: category === item.value ? '#0A2342' : colors.mutedForeground,
-              fontFamily: 'Cairo_600SemiBold',
-            }]}>
-              {item.label}
-            </Text>
-          </Pressable>
-        )}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12, gap: 8 }}
-        showsHorizontalScrollIndicator={false}
-        style={[styles.chips, { borderBottomColor: colors.border, backgroundColor: colors.background }]}
-      />
+      {/* ── Premium Category chips ── */}
+      <VisaCategories selected={category} onSelect={setCategory} />
 
       {/* ── Content ── */}
       {error ? (
-        <EmptyState icon="wifi-outline" title="خطأ في التحميل" description="تعذر تحميل التأشيرات" actionLabel="إعادة المحاولة" onAction={() => refetch()} />
+        <EmptyState icon="wifi-outline" title={t('common.loadingError')} description={t('visas.error.loading')} actionLabel={t('common.retry')} onAction={() => refetch()} />
       ) : isLoading ? (
-        <EmptyState loading title="" />
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 14 }}>
+          <SkeletonRow height={200} />
+          <SkeletonRow height={200} />
+          <SkeletonRow height={200} />
+        </ScrollView>
       ) : isSearching ? (
         /* Search / filter results */
         <FlatList
@@ -251,13 +226,14 @@ export default function VisasScreen() {
           )}
           contentContainerStyle={{ padding: 16, paddingBottom: bottomInset + 100 }}
           showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} tintColor={colors.gold} colors={[colors.gold]} />}
           ListHeaderComponent={
             <Text style={[styles.resultsCount, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-              {filtered.length} نتيجة
+              {filtered.length} {t('common.result')}
             </Text>
           }
           ListEmptyComponent={
-            <EmptyState icon="document-text-outline" title="لا توجد تأشيرات" description="لا توجد نتائج مطابقة لبحثك" />
+            <EmptyState icon="document-text-outline" title={t('visas.empty.title')} description={t('visas.empty.noMatch')} />
           }
         />
       ) : (
@@ -265,6 +241,7 @@ export default function VisasScreen() {
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: bottomInset + 100 }}
+          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} tintColor={colors.gold} colors={[colors.gold]} />}
         >
           {/* Umrah special banner */}
           <Pressable
@@ -272,28 +249,28 @@ export default function VisasScreen() {
             onPress={() => router.push('/umrah-visa' as any)}
           >
             <LinearGradient
-              colors={['#0A2342', '#1E3A5F']}
+              colors={[colors.navy, '#1E3A5F']}
               style={styles.umrahGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             >
               <View style={styles.umrahLeft}>
                 <View style={styles.umrahIconWrap}>
-                  <Ionicons name="moon" size={26} color="#D4AF37" />
+                  <Ionicons name="moon" size={26} color={colors.gold} />
                 </View>
               </View>
               <View style={styles.umrahText}>
-                <Text style={[styles.umrahTitle, { fontFamily: 'Cairo_700Bold' }]}>تأشيرة العمرة</Text>
-                <Text style={[styles.umrahSub, { fontFamily: 'Cairo_400Regular' }]}>تقديم فوري مع مسح الجواز تلقائياً</Text>
+                <Text style={[styles.umrahTitle, { color: colors.gold, fontFamily: 'Cairo_700Bold' }]}>{t('umrah.title')}</Text>
+                <Text style={[styles.umrahSub, { fontFamily: 'Cairo_400Regular' }]}>{t('umrah.instantApply')}</Text>
               </View>
-              <Ionicons name="arrow-back" size={20} color="#D4AF37" />
+              <Ionicons name="arrow-back" size={20} color={colors.gold} />
             </LinearGradient>
           </Pressable>
 
           {/* Fast Approval */}
           {fastApproval.length > 0 && (
             <View style={styles.section}>
-              <SectionHeader icon="flash" title="موافقة سريعة" subtitle={`${fastApproval.length} تأشيرة خلال 1-3 أيام`} color="#D4AF37" />
+              <SectionHeader icon="flash" title={t('visas.hub.fastApproval')} subtitle={`${fastApproval.length} ${t('visas.section.fastApprovalSub')}`} color={colors.gold} />
               <FlatList
                 horizontal
                 inverted
@@ -311,7 +288,7 @@ export default function VisasScreen() {
           {/* Most Affordable */}
           {affordable.length > 0 && (
             <View style={styles.section}>
-              <SectionHeader icon="pricetag" title="الأقل سعراً" subtitle="ابدأ رحلتك بتكلفة معقولة" color="#16A34A" />
+              <SectionHeader icon="pricetag" title={t('visas.section.lowestPrice')} subtitle={t('visas.section.lowestPriceSub')} color={colors.success} />
               <FlatList
                 horizontal
                 inverted
@@ -329,7 +306,7 @@ export default function VisasScreen() {
           {/* Multiple Entry */}
           {multipleEntry.length > 0 && (
             <View style={styles.section}>
-              <SectionHeader icon="airplane" title="دخول متعدد" subtitle="استمتع بالدخول أكثر من مرة" color="#3B82F6" />
+              <SectionHeader icon="airplane" title={t('visas.hub.multipleEntry')} subtitle={t('visas.section.multipleEntrySub')} color={colors.primaryActive} />
               <FlatList
                 horizontal
                 inverted
@@ -347,7 +324,7 @@ export default function VisasScreen() {
           {/* Recently Added */}
           {recentlyAdded.length > 0 && (
             <View style={styles.section}>
-              <SectionHeader icon="sparkles" title="أحدث التأشيرات" subtitle="تمت إضافتها مؤخراً" color="#8B5CF6" />
+              <SectionHeader icon="sparkles" title={t('visas.section.newest')} subtitle={t('visas.section.newestSub')} color="#8B5CF6" />
               <FlatList
                 horizontal
                 inverted
@@ -365,7 +342,7 @@ export default function VisasScreen() {
           {/* All Visas vertical list */}
           {active.length > 0 && (
             <View style={styles.section}>
-              <SectionHeader icon="globe" title="جميع التأشيرات" subtitle={`${active.length} وجهة متاحة`} color="#0A2342" />
+              <SectionHeader icon="globe" title={t('visas.category.all')} subtitle={`${active.length} ${t('visas.section.destinationsAvailable')}`} color={colors.navy} />
               <View style={{ paddingHorizontal: 16 }}>
                 {active.slice(0, 20).map(item => (
                   <VisaCard key={item.id} visa={item} onPress={() => navToVisa(item.id)} />
@@ -375,7 +352,7 @@ export default function VisasScreen() {
           )}
 
           {active.length === 0 && !isLoading && (
-            <EmptyState icon="document-text-outline" title="لا توجد تأشيرات" description="لم يتم إضافة أي تأشيرات بعد" />
+            <EmptyState icon="document-text-outline" title={t('visas.empty.title')} description={t('visas.empty.noVisas')} />
           )}
         </ScrollView>
       )}
@@ -388,7 +365,7 @@ export default function VisasScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   // Header
-  header: { paddingHorizontal: 16, paddingBottom: 16 },
+  header: { paddingHorizontal: 16, paddingBottom: 16, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
   headerTop: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 14 },
   headerTitle: { fontSize: 22, color: '#D4AF37', textAlign: 'right' },
   headerSub: { fontSize: 12, color: 'rgba(255,255,255,0.65)', textAlign: 'right' },
@@ -407,7 +384,7 @@ const styles = StyleSheet.create({
   // Stats
   statsRow: { flexDirection: 'row', justifyContent: 'space-around' },
   statItem: { alignItems: 'center' },
-  statNum: { fontSize: 18, color: '#D4AF37' },
+  statNum: { fontSize: 18 },
   statLabel: { fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 1 },
   // Filters panel
   filtersPanel: {
@@ -419,10 +396,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 8,
   },
   filterChipText: { fontSize: 13 },
-  // Category chips
-  chips: { borderBottomWidth: 1, maxHeight: 56 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 22, paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1 },
-  chipText: { fontSize: 13 },
   // Sections
   section: { marginTop: 22 },
   sectionHeader: {
@@ -433,15 +406,15 @@ const styles = StyleSheet.create({
     width: 38, height: 38, borderRadius: 12,
     alignItems: 'center', justifyContent: 'center',
   },
-  sectionTitle: { fontSize: 16, color: '#0A2342' },
-  sectionSub: { fontSize: 11, color: '#64748B', marginTop: 1 },
+  sectionTitle: { fontSize: 16 },
+  sectionSub: { fontSize: 11, marginTop: 1 },
   // Results
   resultsCount: { fontSize: 13, textAlign: 'right', marginBottom: 12 },
   // Umrah banner
   umrahBanner: {
     marginHorizontal: 16, marginTop: 16, borderRadius: 18,
     overflow: 'hidden', elevation: 4,
-    shadowColor: '#0A2342', shadowOffset: { width: 0, height: 3 },
+    shadowColor: '#052B5B', shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.15, shadowRadius: 8,
   },
   umrahGradient: {
@@ -455,6 +428,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(212,175,55,0.4)', alignItems: 'center', justifyContent: 'center',
   },
   umrahText: { flex: 1, alignItems: 'flex-end' },
-  umrahTitle: { fontSize: 16, color: '#D4AF37' },
+  umrahTitle: { fontSize: 16 },
   umrahSub: { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
 });

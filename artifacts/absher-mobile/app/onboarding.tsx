@@ -8,32 +8,32 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
+import { useAuth } from '@/context/AuthContext';
+import { useLanguage } from '@/context/LanguageContext';
+import { LanguageToggle } from '@/components/LanguageToggle';
+import type { TranslationKey } from '@/constants/i18n';
 
 const { width, height } = Dimensions.get('window');
 
-const SLIDES = [
-  {
-    id: '1',
-    title: 'أبشر ترافل',
-    subtitle: 'رحلاتك تبدأ هنا - خدمات سفر متكاملة بلمسة واحدة',
-    icon: null,
-  },
-  {
-    id: '2',
-    title: 'تأشيرات ووثائق',
-    subtitle: 'نسهل عليك استخراج التأشيرات لأكثر من 150 وجهة حول العالم',
-    icon: 'document-text' as const,
-  },
-  {
-    id: '3',
-    title: 'رحلات فاخرة',
-    subtitle: 'برامج سياحية حصرية وعروض استثنائية تناسب تطلعاتك',
-    icon: 'airplane' as const,
-  },
+type Slide = {
+  id: string;
+  titleKey: TranslationKey;
+  subtitleKey: TranslationKey;
+  /** Slide 1 shows the logo instead of an icon. */
+  icon: 'document-text' | 'airplane' | null;
+  isLogo?: boolean;
+};
+
+const SLIDES: Slide[] = [
+  { id: '1', titleKey: 'onboarding.slide1.title', subtitleKey: 'onboarding.slide1.subtitle', icon: null, isLogo: true },
+  { id: '2', titleKey: 'onboarding.slide2.title', subtitleKey: 'onboarding.slide2.subtitle', icon: 'document-text' },
+  { id: '3', titleKey: 'onboarding.slide3.title', subtitleKey: 'onboarding.slide3.subtitle', icon: 'airplane' },
 ];
 
 export default function OnboardingScreen() {
   const colors = useColors();
+  const { user } = useAuth();
+  const { t, writingDirection } = useLanguage();
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const bottomInset = Platform.OS === 'web' ? 34 : Math.max(insets.bottom, 20);
@@ -53,7 +53,9 @@ export default function OnboardingScreen() {
   const handleComplete = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     await AsyncStorage.setItem('@absher_onboarded', 'true');
-    router.replace('/(tabs)/');
+    // Authenticated users go straight to the app; everyone else lands on the
+    // premium welcome screen to sign in / register / explore.
+    router.replace(user ? '/(tabs)' : '/auth/login');
   };
 
   const scrollToNext = () => {
@@ -74,13 +76,18 @@ export default function OnboardingScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Language toggle */}
+      <View style={[styles.langToggle, { top: topInset + 6 }]} pointerEvents="box-none">
+        <LanguageToggle variant="light" />
+      </View>
+
       {/* Skip Button */}
       <Pressable
         style={[styles.skipButton, { top: topInset + 10 }]}
         onPress={handleComplete}
       >
         <Text style={[styles.skipText, { color: colors.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>
-          تخطي
+          {t('onboarding.skip')}
         </Text>
       </Pressable>
 
@@ -100,30 +107,29 @@ export default function OnboardingScreen() {
         renderItem={({ item, index }) => (
           <View style={[styles.slide, { width }]}>
             <LinearGradient
-              colors={['#071525', '#0A2342', '#1E3A5F']}
+              colors={['#071525', '#052B5B', '#1E3A5F']}
               style={styles.illustrationArea}
             >
-              {index === 0 ? (
+              {item.isLogo ? (
                 <View style={styles.logoWrap}>
                   <Image
                     source={require('@/assets/images/absher-logo-transparent.png')}
                     style={styles.logo}
-                    contentFit="cover"
+                    contentFit="contain"
                   />
-                  <Text style={[styles.logoTitle, { fontFamily: 'Cairo_700Bold' }]}>ABSHER TRAVEL</Text>
                 </View>
               ) : (
                 <View style={[styles.iconCircle, { backgroundColor: 'rgba(212, 175, 55, 0.15)', borderColor: '#D4AF37' }]}>
-                  <Ionicons name={item.icon as any} size={80} color="#D4AF37" />
+                  <Ionicons name={item.icon ?? 'airplane'} size={80} color="#D4AF37" />
                 </View>
               )}
             </LinearGradient>
             <View style={styles.contentArea}>
-              <Text style={[styles.title, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>
-                {item.title}
+              <Text style={[styles.title, { color: colors.foreground, fontFamily: 'Cairo_700Bold', writingDirection }]}>
+                {t(item.titleKey)}
               </Text>
-              <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-                {item.subtitle}
+              <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular', writingDirection }]}>
+                {t(item.subtitleKey)}
               </Text>
             </View>
           </View>
@@ -176,9 +182,9 @@ export default function OnboardingScreen() {
             onPress={scrollToNext}
           >
             {currentIndex === SLIDES.length - 1 ? (
-              <Text style={[styles.primaryBtnText, { fontFamily: 'Cairo_700Bold' }]}>ابدأ رحلتك</Text>
+              <Text style={[styles.primaryBtnText, { fontFamily: 'Cairo_700Bold' }]}>{t('onboarding.start')}</Text>
             ) : (
-              <Ionicons name="arrow-forward" size={24} color="#0A2342" />
+              <Ionicons name="arrow-forward" size={24} color="#052B5B" />
             )}
           </Pressable>
         </View>
@@ -189,6 +195,7 @@ export default function OnboardingScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  langToggle: { position: 'absolute', left: 20, zIndex: 10 },
   skipButton: { position: 'absolute', right: 20, zIndex: 10, padding: 8 },
   skipText: { fontSize: 16 },
   slide: { flex: 1, alignItems: 'center' },
@@ -201,7 +208,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   logoWrap: { alignItems: 'center', gap: 16 },
-  logo: { width: 200, height: 80, borderRadius: 0 },
+  logo: { width: 150, height: 60, borderRadius: 0 },
   logoTitle: { fontSize: 24, color: '#D4AF37', letterSpacing: 1 },
   logoSubtitle: { fontSize: 18, color: 'rgba(255,255,255,0.85)' },
   iconCircle: {
@@ -233,5 +240,5 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   primaryBtnExpanded: { width: '100%', borderRadius: 20 },
-  primaryBtnText: { color: '#0A2342', fontSize: 18 },
+  primaryBtnText: { color: '#052B5B', fontSize: 18 },
 });

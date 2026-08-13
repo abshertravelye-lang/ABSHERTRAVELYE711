@@ -5,6 +5,8 @@ export const PERMISSIONS = [
   "payments",
   "reports",
   "visa_applications",  // review/process applications + applicant docs
+  "documents_request",  // request additional documents from customers
+  "documents_review",   // review / approve / reject uploaded documents
   "visa_config",        // visa countries, types, eligibility, requirements
   "customers",
   "employees",          // employee management (super_admin only in practice)

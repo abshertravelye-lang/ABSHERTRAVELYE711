@@ -1,11 +1,29 @@
 /**
- * Umrah Visa Application — Multi-step flow
- * Steps: Host → Documents → Passport OCR → Personal Info → Photo → Review → Payment → Success
+ * Umrah Visa — a fully SEPARATE application service (NOT part of the normal
+ * visa form). Dedicated single-page wizard driven by the Umrah backend:
+ *   GET  /umrah/config?nationality=<x>   → declaration text + fee per nationality
+ *   POST /umrah-applications              → creates the application
+ *   POST /umrah-applications/:id/pay      → confirms payment (verified server-side)
+ *
+ * Spec (attached_assets/Pasted-IMPORTANT-UMRAH-VISA...):
+ *   1) Host question (نعم/لا). "لا" → professional block modal → home only.
+ *   2) نعم → upload host residency image → host phone (+966 prefix, 9 digits, 5x).
+ *   3) Applicant (المعتمر): passport image → OCR autofill (name/passport/
+ *      nationality/dob/gender/issue/expiry), personal photo, phone, contact
+ *      email (optional), emergency phone. NO profile display/reuse.
+ *   4) Declaration: fetch config by nationality → show declaration + required
+ *      checkbox.
+ *   5) Payment: show fee → POST create → payment screen → "ادفع الآن" → pay.
+ *   6) Success: tracking, name, type, payment status, order status, date. ONLY
+ *      "العودة للرئيسية"; all back navigation blocked after submission.
  */
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  BackHandler,
+  Easing,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -18,101 +36,126 @@ import {
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
+import { router, useNavigation, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
-import { useOcrPassport, useRequestUploadUrl, useCreateVisaApplication } from '@workspace/api-client-react';
+import colors from '@/constants/colors';
+import { useAuth } from '@/context/AuthContext';
+import { useLanguage } from '@/context/LanguageContext';
+import { getImageSource } from '@/hooks/useImageUrl';
+import WizardStepper from '@/components/wizard/WizardStepper';
+import {
+  ApiError,
+  useOcrPassport,
+  useGetUmrahConfig,
+  getGetUmrahConfigQueryKey,
+  useCreateUmrahApplication,
+  usePayUmrahApplication,
+} from '@workspace/api-client-react';
+import type {
+  UmrahConfig,
+  UmrahApplicationCreated,
+  UmrahApplicationCreateGender,
+} from '@workspace/api-client-react';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-type HasHost = 'yes' | 'no' | null;
+// ─── Constants ────────────────────────────────────────────────────────────────
+const API_BASE = `https://${process.env.EXPO_PUBLIC_DOMAIN}`;
 
-interface PassportInfo {
-  fullName: string;
-  passportNumber: string;
-  nationality: string;
-  gender: string;
-  dateOfBirth: string;
-  issueDate: string;
-  expiryDate: string;
+type Lang = 'ar' | 'en';
+const tr = (lang: Lang, ar: string, en: string) => (lang === 'en' ? en : ar);
+
+interface DocPicked {
+  uri: string;
+  name: string;
+  mimeType: string;
+  isPdf: boolean;
 }
 
-// ─── Step indicator ───────────────────────────────────────────────────────────
-const STEPS = ['المستضيف', 'الجواز', 'البيانات', 'الصورة', 'المراجعة', 'الدفع'];
-
-function StepBar({ current }: { current: number }) {
-  return (
-    <View style={sb.row}>
-      {STEPS.map((label, i) => (
-        <React.Fragment key={i}>
-          <View style={sb.item}>
-            <View style={[sb.circle, i < current && sb.done, i === current && sb.active]}>
-              {i < current
-                ? <Ionicons name="checkmark" size={12} color="#0A2342" />
-                : <Text style={[sb.num, i === current && sb.numActive]}>{i + 1}</Text>
-              }
-            </View>
-            <Text style={[sb.label, i === current && sb.labelActive]} numberOfLines={1}>{label}</Text>
-          </View>
-          {i < STEPS.length - 1 && (
-            <View style={[sb.line, i < current && sb.lineDone]} />
-          )}
-        </React.Fragment>
-      ))}
-    </View>
-  );
-}
-
-const sb = StyleSheet.create({
-  row: { flexDirection: 'row-reverse', alignItems: 'flex-start', paddingHorizontal: 12, paddingVertical: 16, gap: 0 },
-  item: { alignItems: 'center', width: 44 },
-  circle: { width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  done: { backgroundColor: '#D4AF37', borderColor: '#D4AF37' },
-  active: { backgroundColor: 'transparent', borderColor: '#D4AF37' },
-  num: { fontSize: 11, color: 'rgba(255,255,255,0.6)', fontFamily: 'Cairo_600SemiBold' },
-  numActive: { color: '#D4AF37' },
-  label: { fontSize: 9, color: 'rgba(255,255,255,0.5)', textAlign: 'center', fontFamily: 'Cairo_400Regular' },
-  labelActive: { color: '#D4AF37' },
-  line: { flex: 1, height: 1.5, backgroundColor: 'rgba(255,255,255,0.2)', marginTop: 13 },
-  lineDone: { backgroundColor: '#D4AF37' },
-});
-
-// ─── Upload helper ────────────────────────────────────────────────────────────
-async function uploadFile(
-  requestUploadUrl: (args: { data: { name: string; size: number; contentType: string } }) => Promise<{ uploadURL: string; objectPath: string }>,
+// ─── Upload helper (multipart POST, authenticated) ─────────────────────────────
+async function uploadToStorage(
   uri: string,
+  token: string | null,
   name: string,
+  mimeType: string,
 ): Promise<string | null> {
   try {
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    const contentType = blob.type || 'image/jpeg';
-    const { uploadURL, objectPath } = await requestUploadUrl({ data: { name, size: blob.size, contentType } });
-    await fetch(uploadURL, { method: 'PUT', body: blob, headers: { 'Content-Type': contentType } });
-    return objectPath;
+    const formData = new FormData();
+    if (Platform.OS === 'web') {
+      const blob = await (await fetch(uri)).blob();
+      formData.append('file', new File([blob], name, { type: blob.type || mimeType }));
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      formData.append('file', { uri, name, type: mimeType } as any);
+    }
+    const res = await fetch(`${API_BASE}/api/storage/uploads`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: formData,
+    });
+    if (!res.ok) return null;
+    const { objectPath } = await res.json();
+    return objectPath as string;
   } catch {
     return null;
   }
 }
 
-// ─── Reusable field ───────────────────────────────────────────────────────────
-function Field({ label, value, onChangeText, placeholder, keyboardType }: {
+async function pickImageAsset(lang: Lang): Promise<DocPicked | null> {
+  const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!perm.granted) {
+    Alert.alert(tr(lang, 'الصلاحية مطلوبة', 'Permission required'), tr(lang, 'يرجى السماح بالوصول إلى الصور', 'Please allow access to photos'));
+    return null;
+  }
+  const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85 });
+  if (result.canceled || !result.assets?.[0]) return null;
+  const a = result.assets[0];
+  return { uri: a.uri, name: a.fileName ?? `photo_${Date.now()}.jpg`, mimeType: a.mimeType ?? 'image/jpeg', isPdf: false };
+}
+
+async function captureImageAsset(lang: Lang): Promise<DocPicked | null> {
+  const perm = await ImagePicker.requestCameraPermissionsAsync();
+  if (!perm.granted) {
+    Alert.alert(tr(lang, 'الصلاحية مطلوبة', 'Permission required'), tr(lang, 'يرجى السماح بالوصول إلى الكاميرا', 'Please allow camera access'));
+    return null;
+  }
+  const result = await ImagePicker.launchCameraAsync({ quality: 0.85 });
+  if (result.canceled || !result.assets?.[0]) return null;
+  const a = result.assets[0];
+  return { uri: a.uri, name: a.fileName ?? `photo_${Date.now()}.jpg`, mimeType: a.mimeType ?? 'image/jpeg', isPdf: false };
+}
+
+async function pickPdfAsset(): Promise<DocPicked | null> {
+  const result = await DocumentPicker.getDocumentAsync({ type: 'application/pdf', copyToCacheDirectory: true });
+  if (result.canceled || !result.assets?.[0]) return null;
+  const a = result.assets[0];
+  return { uri: a.uri, name: a.name ?? `document_${Date.now()}.pdf`, mimeType: a.mimeType ?? 'application/pdf', isPdf: true };
+}
+
+// ─── Reusable field ─────────────────────────────────────────────────────────
+function Field({
+  label, value, onChangeText, placeholder, keyboardType, required, ltr, autoCapitalize,
+}: {
   label: string; value: string; onChangeText: (v: string) => void;
-  placeholder?: string; keyboardType?: 'default' | 'phone-pad';
+  placeholder?: string; keyboardType?: 'default' | 'phone-pad' | 'email-address' | 'number-pad';
+  required?: boolean; ltr?: boolean; autoCapitalize?: 'none' | 'characters' | 'sentences';
 }) {
-  const colors = useColors();
+  const c = useColors();
   return (
     <View style={f.wrap}>
-      <Text style={[f.label, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{label}</Text>
+      <Text style={[f.label, { color: c.foreground, fontFamily: 'Cairo_600SemiBold' }]}>
+        {label}{required && <Text style={{ color: c.destructive }}> *</Text>}
+      </Text>
       <TextInput
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder ?? label}
-        placeholderTextColor={colors.mutedForeground}
+        placeholderTextColor={c.mutedForeground}
         keyboardType={keyboardType ?? 'default'}
-        style={[f.input, { backgroundColor: colors.muted, borderColor: colors.border, color: colors.foreground, fontFamily: 'Cairo_400Regular' }]}
-        textAlign="right"
+        autoCapitalize={autoCapitalize ?? 'sentences'}
+        style={[f.input, { backgroundColor: c.muted, borderColor: c.border, color: c.foreground, fontFamily: 'Cairo_400Regular', textAlign: ltr ? 'left' : 'right' }]}
       />
     </View>
   );
@@ -123,789 +166,925 @@ const f = StyleSheet.create({
   input: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15 },
 });
 
-// ─── Main screen ──────────────────────────────────────────────────────────────
-export default function UmrahVisaScreen() {
-  const colors = useColors();
+// ─── Document tile ─────────────────────────────────────────────────────────
+function DocField({
+  label, hint, icon, required, value, busy, onPick, onRemove, allowPdf = true, lang,
+}: {
+  label: string; hint?: string; icon: keyof typeof Ionicons.glyphMap;
+  required?: boolean; value?: string | null; busy?: boolean;
+  onPick: (a: DocPicked) => void; onRemove: () => void; allowPdf?: boolean; lang: Lang;
+}) {
+  const c = useColors();
+  const imageSource = getImageSource(value);
+  const isPdf = !!value && /\.pdf(\?|$)/i.test(value);
+
+  const choose = async () => {
+    if (busy) return;
+    const handle = async (source: 'camera' | 'gallery' | 'pdf') => {
+      const a = source === 'camera' ? await captureImageAsset(lang)
+        : source === 'gallery' ? await pickImageAsset(lang)
+        : await pickPdfAsset();
+      if (a) onPick(a);
+    };
+    const buttons: { text: string; onPress?: () => void; style?: 'cancel' }[] = [];
+    if (Platform.OS !== 'web') buttons.push({ text: tr(lang, 'الكاميرا', 'Camera'), onPress: () => handle('camera') });
+    buttons.push({ text: tr(lang, 'المعرض', 'Gallery'), onPress: () => handle('gallery') });
+    if (allowPdf) buttons.push({ text: tr(lang, 'ملف PDF', 'PDF file'), onPress: () => handle('pdf') });
+    buttons.push({ text: tr(lang, 'إلغاء', 'Cancel'), style: 'cancel' });
+    Alert.alert(label, tr(lang, 'اختر مصدر الملف', 'Choose source'), buttons);
+  };
+
+  return (
+    <View style={{ gap: 8 }}>
+      <View style={docS.labelRow}>
+        <View style={{ flex: 1, alignItems: 'flex-end' }}>
+          <Text style={[docS.label, { color: c.foreground, fontFamily: 'Cairo_600SemiBold' }]}>
+            {label}{required && <Text style={{ color: c.destructive }}> *</Text>}
+          </Text>
+          {hint ? <Text style={[docS.hint, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{hint}</Text> : null}
+        </View>
+        {!!value && (
+          <View style={[docS.badge, { backgroundColor: c.success + '18', borderColor: c.success }]}>
+            <Ionicons name="checkmark-circle" size={13} color={c.success} />
+            <Text style={[docS.badgeText, { color: c.success, fontFamily: 'Cairo_600SemiBold' }]}>{tr(lang, 'تم الرفع', 'Uploaded')}</Text>
+          </View>
+        )}
+      </View>
+
+      {busy ? (
+        <View style={[docS.area, { backgroundColor: c.muted, borderColor: c.border }]}>
+          <ActivityIndicator color={colors.gold} />
+          <Text style={[docS.uploadHint, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{tr(lang, 'جارٍ الرفع...', 'Uploading...')}</Text>
+        </View>
+      ) : value && isPdf ? (
+        <View style={[docS.pdfCard, { backgroundColor: c.goldTint, borderColor: colors.gold }]}>
+          <View style={[docS.pdfIcon, { backgroundColor: colors.gold }]}>
+            <Ionicons name="document-text" size={22} color={colors.umrahGreen} />
+          </View>
+          <View style={{ flex: 1, alignItems: 'flex-end' }}>
+            <Text style={[docS.pdfName, { color: c.foreground, fontFamily: 'Cairo_600SemiBold' }]} numberOfLines={1}>
+              {decodeURIComponent(value.split('/').pop() ?? 'document.pdf')}
+            </Text>
+            <Text style={[docS.hint, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>PDF</Text>
+          </View>
+          <Pressable onPress={choose} hitSlop={8} style={[docS.pdfBtn, { backgroundColor: colors.umrahGreen }]}>
+            <Ionicons name="swap-horizontal" size={16} color="#FFFFFF" />
+          </Pressable>
+          <Pressable onPress={onRemove} hitSlop={8} style={[docS.pdfBtn, { backgroundColor: c.destructive }]}>
+            <Ionicons name="trash" size={15} color="#FFFFFF" />
+          </Pressable>
+        </View>
+      ) : imageSource ? (
+        <View style={[docS.imgRow, { backgroundColor: c.muted, borderColor: c.border }]}>
+          <Pressable onPress={onRemove} hitSlop={8}><Ionicons name="trash-outline" size={20} color={c.destructive} /></Pressable>
+          <Pressable onPress={choose} style={docS.replaceBtn}>
+            <Ionicons name="camera-outline" size={16} color={colors.umrahGreen} />
+            <Text style={[docS.replaceText, { fontFamily: 'Cairo_600SemiBold' }]}>{tr(lang, 'تغيير', 'Change')}</Text>
+          </Pressable>
+          <View style={{ flex: 1 }} />
+          <Image source={imageSource} style={docS.thumb} contentFit="cover" />
+        </View>
+      ) : (
+        <Pressable onPress={choose} style={({ pressed }) => [docS.area, { backgroundColor: c.muted, borderColor: required ? c.destructive + '55' : c.border, opacity: pressed ? 0.85 : 1 }]}>
+          <View style={[docS.iconCircle, { backgroundColor: c.goldTint }]}><Ionicons name={icon} size={24} color={colors.gold} /></View>
+          <Text style={[docS.uploadTitle, { color: c.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{tr(lang, 'اضغط لرفع الملف', 'Tap to upload')}</Text>
+          <Text style={[docS.uploadHint, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{allowPdf ? tr(lang, 'كاميرا · معرض · PDF', 'Camera · Gallery · PDF') : tr(lang, 'كاميرا · معرض', 'Camera · Gallery')}</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+const docS = StyleSheet.create({
+  labelRow: { flexDirection: 'row-reverse', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
+  label: { fontSize: 14, textAlign: 'right' },
+  hint: { fontSize: 11.5, textAlign: 'right', marginTop: 1 },
+  badge: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
+  badgeText: { fontSize: 11 },
+  area: { borderRadius: 16, borderWidth: 1.5, borderStyle: 'dashed', minHeight: 130, alignItems: 'center', justifyContent: 'center', gap: 8 },
+  iconCircle: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
+  uploadTitle: { fontSize: 14 },
+  uploadHint: { fontSize: 12 },
+  pdfCard: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, borderWidth: 1.5, borderRadius: 16, padding: 14 },
+  pdfIcon: { width: 46, height: 46, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  pdfName: { fontSize: 14, textAlign: 'right' },
+  pdfBtn: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  imgRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12, borderWidth: 1, borderRadius: 16, padding: 12 },
+  replaceBtn: { flexDirection: 'row-reverse', alignItems: 'center', gap: 4 },
+  replaceText: { fontSize: 13, color: colors.umrahGreen },
+  thumb: { width: 60, height: 60, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(212,175,55,0.15)' },
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  Main screen
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Wizard steps (single-page with a step progress header).
+//   0) المستضيف   host question + residency + phone
+//   1) المعتمر     applicant documents + contact
+//   2) الإقرار     declaration
+//   3) الدفع       payment
+type Gender = UmrahApplicationCreateGender;
+
+export default function UmrahVisaWizard() {
+  const c = useColors();
+  const { lang } = useLanguage();
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
+  const bottomInset = Platform.OS === 'web' ? 34 : Math.max(insets.bottom, 16);
   const scroll = useRef<ScrollView>(null);
 
-  const [step, setStep] = useState(0);
-  const [hasHost, setHasHost] = useState<HasHost>(null);
-
-  // Host docs
-  const [residenceUri, setResidenceUri] = useState<string | null>(null);
-  const [residencePath, setResidencePath] = useState<string | null>(null);
-  const [absherNumber, setAbsherNumber] = useState('');
-
-  // Passport
-  const [passportUri, setPassportUri] = useState<string | null>(null);
-  const [passportPath, setPassportPath] = useState<string | null>(null);
-  const [ocrDone, setOcrDone] = useState(false);
-
-  // Extracted info
-  const [info, setInfo] = useState<PassportInfo>({
-    fullName: '', passportNumber: '', nationality: '',
-    gender: '', dateOfBirth: '', issueDate: '', expiryDate: '',
-  });
-
-  // Personal photo
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
-  const [photoPart, setPhotoPart] = useState<string | null>(null);
-
-  // Payment
-  const [payMethod, setPayMethod] = useState<'visa' | 'mastercard' | 'paypal' | 'wallet' | null>(null);
-
-  // Success
-  const [refNumber, setRefNumber] = useState('');
+  const { user: authUser, accessToken } = useAuth();
+  const navigation = useNavigation();
 
   const ocrMutation = useOcrPassport();
-  const uploadUrlMutation = useRequestUploadUrl();
-  const createAppMutation = useCreateVisaApplication();
+  const createMutation = useCreateUmrahApplication();
+  const payMutation = usePayUmrahApplication();
 
-  const next = () => {
+  // ── Auth gate ─────────────────────────────────────────────────────────────
+  const authCheckedRef = useRef(false);
+  useEffect(() => {
+    if (authCheckedRef.current) return;
+    authCheckedRef.current = true;
+    if (!authUser) {
+      Alert.alert(
+        tr(lang, 'تسجيل الدخول مطلوب', 'Login required'),
+        tr(lang, 'يجب تسجيل الدخول للتقديم على تأشيرة العمرة', 'You must log in to apply for an Umrah visa'),
+        [
+          { text: tr(lang, 'إلغاء', 'Cancel'), style: 'cancel', onPress: () => router.replace('/(tabs)' as never) },
+          { text: tr(lang, 'تسجيل الدخول', 'Log in'), onPress: () => router.replace('/auth/login' as never) },
+        ],
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authUser]);
+
+  // Reordered wizard per updated spec:
+  //  0) host residency  1) host phone  2) declaration  3) passport + OCR
+  //  4) personal photo  5) contact info (prefilled)  6) fee  7) payment
+  const STEP_LABELS = [
+    tr(lang, 'الإقامة', 'Residency'),
+    tr(lang, 'الجوال', 'Phone'),
+    tr(lang, 'الإقرار', 'Declaration'),
+    tr(lang, 'الجواز', 'Passport'),
+    tr(lang, 'الصورة', 'Photo'),
+    tr(lang, 'التواصل', 'Contact'),
+    tr(lang, 'الرسوم', 'Fee'),
+    tr(lang, 'الدفع', 'Payment'),
+  ];
+  const LAST_STEP = STEP_LABELS.length - 1;
+
+  const [step, setStep] = useState(0);
+
+  // ── Step 0: host ────────────────────────────────────────────────────────
+  const [hasHost, setHasHost] = useState<boolean | null>(null);
+  const [noHostModal, setNoHostModal] = useState(false);
+  const [sponsorResidencyImageUrl, setSponsorResidencyImageUrl] = useState('');
+  const [hostPhoneDigits, setHostPhoneDigits] = useState(''); // 9 digits after +966
+
+  // ── Step 1: applicant ─────────────────────────────────────────────────────
+  const [passportImageUrl, setPassportImageUrl] = useState('');
+  const [personalPhotoUrl, setPersonalPhotoUrl] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [passportNumber, setPassportNumber] = useState('');
+  const [nationality, setNationality] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
+  const [gender, setGender] = useState<Gender>('male');
+  const [passportIssueDate, setPassportIssueDate] = useState('');
+  const [passportExpiryDate, setPassportExpiryDate] = useState('');
+  const [phone, setPhone] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [emergencyPhone, setEmergencyPhone] = useState('');
+
+  const [busyDoc, setBusyDoc] = useState<string | null>(null);
+  const [ocrRunning, setOcrRunning] = useState(false);
+  const [ocrDone, setOcrDone] = useState(false);
+
+  // Silently prefill contact info from the signed-in account so the pilgrim
+  // never has to re-enter data we already have. Runs once, only fills empties.
+  const prefilledRef = useRef(false);
+  useEffect(() => {
+    if (prefilledRef.current || !authUser) return;
+    prefilledRef.current = true;
+    if (authUser.phone) setPhone((p) => p || authUser.phone!.replace(/^\+966/, ''));
+    if (authUser.email) setContactEmail((e) => e || authUser.email!);
+    if (authUser.nationality) setNationality((n) => n || authUser.nationality!);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authUser]);
+
+  // ── Step 2: declaration ────────────────────────────────────────────────────
+  const [declared, setDeclared] = useState(false);
+
+  // ── Step 3: payment / create ────────────────────────────────────────────────
+  const [created, setCreated] = useState<UmrahApplicationCreated | null>(null);
+  const [result, setResult] = useState<UmrahApplicationCreated | null>(null);
+
+  // Umrah config keyed by extracted nationality (declaration + fee per nationality).
+  const { data: umrahConfig, isLoading: configLoading } = useGetUmrahConfig(
+    nationality ? { nationality } : undefined,
+    { query: { enabled: !!authUser, queryKey: getGetUmrahConfigQueryKey(nationality ? { nationality } : undefined) } },
+  );
+
+  // ── Back-blocking after submission ──────────────────────────────────────────
+  const resultRef = useRef(false);
+  useEffect(() => { if (result) resultRef.current = true; }, [result]);
+
+  const leaveToHome = useCallback(() => {
+    resultRef.current = false; // allow the navigation to proceed
+    router.replace('/(tabs)' as never);
+  }, []);
+
+  const goToStep = (s: number) => {
     scroll.current?.scrollTo({ y: 0, animated: false });
-    setStep((s) => s + 1);
+    setStep(s);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
+
+  // Header back / hardware back.
   const back = () => {
-    if (step === 0) { router.back(); return; }
-    setStep((s) => s - 1);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (resultRef.current) return; // fully blocked on success
+    if (step > 0) { goToStep(step - 1); return; }
+    if (router.canGoBack()) router.back();
+    else router.replace('/(tabs)' as never);
   };
 
-  // ── Pick image ──────────────────────────────────────────────────────────────
-  const pickImage = async (onPick: (uri: string) => void) => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('صلاحية مطلوبة', 'يرجى السماح للتطبيق بالوصول إلى المعرض');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.85,
-      allowsEditing: false,
+  // Block OS-level back on the success screen (swipe/browser).
+  useEffect(() => {
+    const unsub = navigation.addListener('beforeRemove', (e: { preventDefault: () => void }) => {
+      if (resultRef.current) e.preventDefault();
     });
-    if (!result.canceled && result.assets[0]) {
-      onPick(result.assets[0].uri);
-    }
-  };
+    return unsub;
+  }, [navigation]);
 
-  const takePhoto = async (onPick: (uri: string) => void) => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('صلاحية مطلوبة', 'يرجى السماح للتطبيق بالوصول إلى الكاميرا');
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS === 'web') return;
+      const onBackPress = () => {
+        if (resultRef.current) return true; // block on success
+        if (step > 0) { goToStep(step - 1); return true; }
+        return false;
+      };
+      const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+      return () => sub.remove();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [step]),
+  );
+
+  // Web browser-back trap on success.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !result) return;
+    if (typeof window === 'undefined' || !window.history) return;
+    const onPopState = () => {
+      if (resultRef.current) window.history.pushState(null, '', window.location.href);
+    };
+    window.history.pushState(null, '', window.location.href);
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [result]);
+
+  // Success animation.
+  const successScale = useRef(new Animated.Value(0)).current;
+  const successOpacity = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (result) {
+      Animated.parallel([
+        Animated.spring(successScale, { toValue: 1, friction: 5, tension: 60, useNativeDriver: true }),
+        Animated.timing(successOpacity, { toValue: 1, duration: 400, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+      ]).start();
+    }
+  }, [result, successScale, successOpacity]);
+
+  // ── OCR passport scan ─────────────────────────────────────────────────────
+  const handlePassportScan = async (a: DocPicked) => {
+    setBusyDoc('passport');
+    setOcrDone(false);
+    const objectPath = await uploadToStorage(a.uri, accessToken, a.name, a.mimeType);
+    setBusyDoc(null);
+    if (!objectPath) {
+      Alert.alert(tr(lang, 'خطأ في الرفع', 'Upload error'), tr(lang, 'تعذّر رفع صورة الجواز.', 'Could not upload the passport image.'));
       return;
     }
-    const result = await ImagePicker.launchCameraAsync({ quality: 0.85, allowsEditing: false });
-    if (!result.canceled && result.assets[0]) {
-      onPick(result.assets[0].uri);
-    }
-  };
-
-  const showImageOptions = (onPick: (uri: string) => void) => {
-    Alert.alert('إضافة صورة', 'اختر طريقة الإضافة', [
-      { text: 'الكاميرا', onPress: () => takePhoto(onPick) },
-      { text: 'المعرض', onPress: () => pickImage(onPick) },
-      { text: 'إلغاء', style: 'cancel' },
-    ]);
-  };
-
-  // ── OCR passport ────────────────────────────────────────────────────────────
-  const scanPassport = async (uri: string) => {
+    setPassportImageUrl(objectPath);
+    if (a.isPdf) return;
+    setOcrRunning(true);
     try {
-      // The OCR endpoint accepts only internal storage paths — upload first.
-      const objectPath = await uploadFile(
-        (args) => uploadUrlMutation.mutateAsync(args),
-        uri,
-        `passport_scan_${Date.now()}.jpg`,
-      );
-      if (!objectPath) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        return;
+      const ocr = await ocrMutation.mutateAsync({ data: { imageUrl: objectPath } });
+      if (ocr.success) {
+        const name = (ocr.fullName || [ocr.firstName, ocr.lastName].filter(Boolean).join(' ')).trim();
+        if (name) setFullName(name);
+        if (ocr.passportNumber) setPassportNumber(ocr.passportNumber);
+        if (ocr.nationality) setNationality(ocr.nationality);
+        if (ocr.dateOfBirth) setDateOfBirth(ocr.dateOfBirth);
+        if (ocr.issueDate) setPassportIssueDate(ocr.issueDate);
+        if (ocr.expiryDate) setPassportExpiryDate(ocr.expiryDate);
+        if (ocr.gender) setGender(ocr.gender === 'M' || ocr.gender.toLowerCase() === 'male' ? 'male' : 'female');
+        setOcrDone(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        setOcrDone(true);
+        Alert.alert(tr(lang, 'تنبيه', 'Notice'), tr(lang, 'لم نتمكن من قراءة الجواز بالكامل. يرجى مراجعة البيانات وإكمالها يدوياً.', 'Could not fully read the passport. Please review and complete the fields.'));
       }
-      ocrMutation.mutate(
-        { data: { imageUrl: objectPath } },
-        {
-          onSuccess: (res) => {
-            if (res.success) {
-              setInfo({
-                fullName: res.fullName ?? '',
-                passportNumber: res.passportNumber ?? '',
-                nationality: res.nationality ?? '',
-                gender: res.gender ?? '',
-                dateOfBirth: res.dateOfBirth ?? '',
-                issueDate: res.issueDate ?? '',
-                expiryDate: res.expiryDate ?? '',
-              });
-              setOcrDone(true);
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            } else {
-              Alert.alert('تنبيه', 'لم نتمكن من قراءة الجواز بشكل كامل. يرجى مراجعة البيانات.');
-              setOcrDone(true);
-            }
-          },
-          onError: () => {
-            Alert.alert('خطأ', 'فشل مسح جواز السفر. يرجى إدخال البيانات يدوياً.');
-            setOcrDone(true);
-          },
-        }
-      );
     } catch {
-      Alert.alert('خطأ', 'فشل تحليل الصورة');
       setOcrDone(true);
+      Alert.alert(tr(lang, 'تعذر المسح', 'Scan failed'), tr(lang, 'يمكنك إدخال بيانات الجواز يدوياً.', 'You can enter the passport data manually.'));
+    } finally {
+      setOcrRunning(false);
     }
   };
 
-  // ── Submit application ──────────────────────────────────────────────────────
-  const submitApplication = async () => {
-    if (!payMethod) { Alert.alert('', 'يرجى اختيار طريقة الدفع'); return; }
+  const uploadDoc = async (setter: (v: string) => void, key: string, a: DocPicked) => {
+    setBusyDoc(key);
+    const objectPath = await uploadToStorage(a.uri, accessToken, a.name, a.mimeType);
+    setBusyDoc(null);
+    if (!objectPath) { Alert.alert(tr(lang, 'خطأ في الرفع', 'Upload error'), tr(lang, 'تعذّر رفع الملف.', 'Could not upload the file.')); return; }
+    setter(objectPath);
+  };
+
+  // ── Validation + step advance ─────────────────────────────────────────────
+  const validate = (s: number): boolean => {
+    // 0) host residency (gated by the host question)
+    if (s === 0) {
+      if (hasHost !== true) { setNoHostModal(true); return false; }
+      if (!sponsorResidencyImageUrl) { Alert.alert(tr(lang, 'مستند مطلوب', 'Document required'), tr(lang, 'يرجى إرفاق صورة إقامة المستضيف.', 'Please upload the host residency image.')); return false; }
+      return true;
+    }
+    // 1) host phone
+    if (s === 1) {
+      if (!/^5\d{8}$/.test(hostPhoneDigits)) { Alert.alert(tr(lang, 'رقم غير صحيح', 'Invalid number'), tr(lang, 'أدخل رقم جوال المستضيف: 9 أرقام تبدأ بـ 5.', 'Enter the host phone: 9 digits starting with 5.')); return false; }
+      return true;
+    }
+    // 2) declaration
+    if (s === 2) {
+      if (!declared) { Alert.alert(tr(lang, 'الإقرار مطلوب', 'Declaration required'), tr(lang, 'يرجى قراءة الإقرار والموافقة عليه قبل المتابعة.', 'Please read and accept the declaration to continue.')); return false; }
+      return true;
+    }
+    // 3) passport image + OCR-extracted fields
+    if (s === 3) {
+      if (!passportImageUrl) { Alert.alert(tr(lang, 'مستند مطلوب', 'Document required'), tr(lang, 'يرجى إرفاق صورة الجواز.', 'Please upload the passport image.')); return false; }
+      if (!fullName.trim()) { Alert.alert(tr(lang, 'بيانات ناقصة', 'Missing data'), tr(lang, 'يرجى إدخال اسم المعتمر.', 'Please enter the pilgrim name.')); return false; }
+      if (!nationality.trim()) { Alert.alert(tr(lang, 'بيانات ناقصة', 'Missing data'), tr(lang, 'يرجى إدخال الجنسية.', 'Please enter the nationality.')); return false; }
+      return true;
+    }
+    // 4) personal photo
+    if (s === 4) {
+      if (!personalPhotoUrl) { Alert.alert(tr(lang, 'مستند مطلوب', 'Document required'), tr(lang, 'يرجى إرفاق الصورة الشخصية.', 'Please upload the personal photo.')); return false; }
+      return true;
+    }
+    // 5) contact info
+    if (s === 5) {
+      if (!/^5\d{8}$/.test(phone) && phone.trim().length < 7) { Alert.alert(tr(lang, 'رقم غير صحيح', 'Invalid number'), tr(lang, 'يرجى إدخال رقم جوال المعتمر.', 'Please enter the pilgrim phone.')); return false; }
+      if (!emergencyPhone.trim() || emergencyPhone.trim().length < 7) { Alert.alert(tr(lang, 'رقم غير صحيح', 'Invalid number'), tr(lang, 'يرجى إدخال رقم قريب أو صديق للطوارئ.', 'Please enter an emergency contact phone.')); return false; }
+      return true;
+    }
+    // 6) fee display — nothing to validate before payment
+    return true;
+  };
+
+  const handleNext = () => {
+    if (!validate(step)) return;
+    goToStep(step + 1);
+  };
+
+  // ── Create the application (spec §5) ──────────────────────────────────────
+  const submitCreate = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    // Upload remaining files
-    let pPath = passportPath;
-    let rPath = residencePath;
-    let phPath = photoPart;
-
-    try {
-      if (passportUri && !pPath) {
-        pPath = await uploadFile((args) => uploadUrlMutation.mutateAsync(args), passportUri, `passport_${Date.now()}.jpg`);
-      }
-      if (residenceUri && !rPath && hasHost === 'yes') {
-        rPath = await uploadFile((args) => uploadUrlMutation.mutateAsync(args), residenceUri, `residence_${Date.now()}.jpg`);
-      }
-      if (photoUri && !phPath) {
-        phPath = await uploadFile((args) => uploadUrlMutation.mutateAsync(args), photoUri, `photo_${Date.now()}.jpg`);
-      }
-    } catch { /* continue even if upload fails */ }
-
-    createAppMutation.mutate(
+    createMutation.mutate(
       {
         data: {
-          visaId: 0, // Umrah visa type — backend maps 0 to umrah
-          applicantName: info.fullName,
-          passportNumber: info.passportNumber,
-          nationality: info.nationality,
-          dateOfBirth: info.dateOfBirth,
-          passportExpiry: info.expiryDate,
-          notes: JSON.stringify({
-            type: 'umrah',
-            hasHost,
-            absherNumber: hasHost === 'yes' ? absherNumber : null,
-            gender: info.gender,
-            passportIssueDate: info.issueDate,
-            paymentMethod: payMethod,
-            passportDocPath: pPath,
-            residenceDocPath: rPath,
-            photoPath: phPath,
-          }),
-        } as any,
+          sponsorAvailable: true,
+          sponsorResidencyImageUrl,
+          sponsorPhone: `+966${hostPhoneDigits}`,
+          passportImageUrl,
+          personalPhotoUrl,
+          fullName: fullName.trim() || undefined,
+          passportNumber: passportNumber.trim() || undefined,
+          nationality: nationality.trim() || undefined,
+          dateOfBirth: dateOfBirth || undefined,
+          gender,
+          passportIssueDate: passportIssueDate || undefined,
+          passportExpiryDate: passportExpiryDate || undefined,
+          phone: phone.trim(),
+          contactEmail: contactEmail.trim() || undefined,
+          emergencyPhone: emergencyPhone.trim(),
+          declarationAccepted: declared,
+        },
       },
       {
         onSuccess: (res) => {
-          const ref = res?.trackingNumber ?? `UM${Date.now().toString().slice(-8)}`;
-          setRefNumber(ref);
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          setStep(7);
+          setCreated(res);
         },
-        onError: () => {
-          // Still show success in demo mode
-          setRefNumber(`UM${Date.now().toString().slice(-8)}`);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          setStep(7);
+        onError: (err) => {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          let message = tr(lang, 'تعذّر تقديم الطلب. يرجى المحاولة لاحقاً.', 'Could not submit the application. Please try again later.');
+          if (err instanceof ApiError) {
+            const data = err.data as { error?: string } | null;
+            if (data?.error) message = data.error; // bilingual error surfaced by server
+          }
+          Alert.alert(tr(lang, 'تعذّر التقديم', 'Submission failed'), message);
         },
-      }
+      },
     );
   };
 
-  // ────────────────────────────────────────────────────────────────────────────
-  const renderStep = () => {
-    switch (step) {
-      // ── Step 0: Host question ───────────────────────────────────────────────
-      case 0:
-        return (
-          <View style={styles.stepWrap}>
-            <View style={[styles.iconCircle, { backgroundColor: 'rgba(212,175,55,0.15)', borderColor: '#D4AF37' }]}>
-              <Ionicons name="home-outline" size={48} color="#D4AF37" />
-            </View>
-            <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>
-              هل لديك مستضيف في المملكة العربية السعودية؟
-            </Text>
-            <Text style={[styles.stepSub, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-              المستضيف هو شخص مقيم في المملكة يتكفل باستضافتك خلال رحلة العمرة
-            </Text>
-            <View style={styles.hostBtns}>
-              <Pressable
-                style={({ pressed }) => [styles.hostBtn, hasHost === 'yes' && styles.hostBtnActive, { opacity: pressed ? 0.85 : 1 }]}
-                onPress={() => { setHasHost('yes'); Haptics.selectionAsync(); }}
-              >
-                <Ionicons name="checkmark-circle" size={28} color={hasHost === 'yes' ? '#0A2342' : '#D4AF37'} />
-                <Text style={[styles.hostBtnText, { color: hasHost === 'yes' ? '#0A2342' : colors.foreground, fontFamily: 'Cairo_700Bold' }]}>نعم</Text>
-                <Text style={[styles.hostBtnSub, { color: hasHost === 'yes' ? '#0A2342' : colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-                  لدي مستضيف مقيم
-                </Text>
-              </Pressable>
-              <Pressable
-                style={({ pressed }) => [styles.hostBtn, hasHost === 'no' && styles.hostBtnActive, { opacity: pressed ? 0.85 : 1 }]}
-                onPress={() => { setHasHost('no'); Haptics.selectionAsync(); }}
-              >
-                <Ionicons name="close-circle" size={28} color={hasHost === 'no' ? '#0A2342' : colors.mutedForeground} />
-                <Text style={[styles.hostBtnText, { color: hasHost === 'no' ? '#0A2342' : colors.foreground, fontFamily: 'Cairo_700Bold' }]}>لا</Text>
-                <Text style={[styles.hostBtnSub, { color: hasHost === 'no' ? '#0A2342' : colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-                  بدون مستضيف
-                </Text>
-              </Pressable>
-            </View>
-            <Pressable
-              style={[styles.nextBtn, !hasHost && styles.nextBtnDisabled]}
-              disabled={!hasHost}
-              onPress={next}
-            >
-              <Text style={[styles.nextBtnText, { fontFamily: 'Cairo_700Bold' }]}>التالي</Text>
-              <Ionicons name="arrow-back" size={20} color="#0A2342" />
-            </Pressable>
-          </View>
-        );
-
-      // ── Step 1: Host documents (if hasHost === 'yes') ───────────────────────
-      case 1:
-        if (hasHost === 'yes') {
-          return (
-            <View style={styles.stepWrap}>
-              <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>
-                وثائق المستضيف
-              </Text>
-              <Text style={[styles.stepSub, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-                يرجى رفع تصريح إقامة المستضيف وإدخال رقم أبشر الخاص به
-              </Text>
-
-              {/* Upload residence permit */}
-              <View style={styles.uploadSection}>
-                <Text style={[styles.uploadLabel, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>
-                  تصريح إقامة المستضيف
-                </Text>
-                <Pressable
-                  style={[styles.uploadBox, { borderColor: residenceUri ? '#D4AF37' : colors.border, backgroundColor: residenceUri ? 'rgba(212,175,55,0.08)' : colors.muted }]}
-                  onPress={() => showImageOptions((uri) => { setResidenceUri(uri); setResidencePath(null); })}
-                >
-                  {residenceUri ? (
-                    <Image source={{ uri: residenceUri }} style={styles.uploadPreview} contentFit="cover" />
-                  ) : (
-                    <View style={styles.uploadPlaceholder}>
-                      <Ionicons name="cloud-upload-outline" size={36} color="#D4AF37" />
-                      <Text style={[styles.uploadHint, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-                        اضغط لرفع الوثيقة
-                      </Text>
-                      <Text style={[styles.uploadFormats, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-                        JPG، PNG، PDF
-                      </Text>
-                    </View>
-                  )}
-                </Pressable>
-                {residenceUri && (
-                  <Pressable onPress={() => setResidenceUri(null)} style={styles.reupload}>
-                    <Ionicons name="refresh-outline" size={16} color="#D4AF37" />
-                    <Text style={[styles.reuploadText, { fontFamily: 'Cairo_400Regular' }]}>تغيير الوثيقة</Text>
-                  </Pressable>
-                )}
-              </View>
-
-              {/* Absher number */}
-              <Field
-                label="رقم أبشر للمستضيف"
-                value={absherNumber}
-                onChangeText={setAbsherNumber}
-                placeholder="05XXXXXXXX"
-                keyboardType="phone-pad"
-              />
-
-              <Pressable
-                style={[styles.nextBtn, (!residenceUri || !absherNumber) && styles.nextBtnDisabled]}
-                disabled={!residenceUri || !absherNumber}
-                onPress={next}
-              >
-                <Text style={[styles.nextBtnText, { fontFamily: 'Cairo_700Bold' }]}>التالي</Text>
-                <Ionicons name="arrow-back" size={20} color="#0A2342" />
-              </Pressable>
-            </View>
-          );
-        }
-        // If no host, go straight to passport step
-        return renderPassportStep();
-
-      // ── Step 2: Passport scan ───────────────────────────────────────────────
-      case 2:
-        return renderPassportStep();
-
-      // ── Step 3: Personal info (editable) ────────────────────────────────────
-      case 3:
-        return (
-          <View style={styles.stepWrap}>
-            <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>
-              بيانات المتقدم
-            </Text>
-            <Text style={[styles.stepSub, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-              تم استخراج البيانات تلقائياً. يمكنك تعديلها إذا لزم الأمر.
-            </Text>
-            {ocrDone && (
-              <View style={[styles.ocrBadge, { backgroundColor: 'rgba(34,197,94,0.12)', borderColor: 'rgba(34,197,94,0.3)' }]}>
-                <Ionicons name="scan-circle" size={18} color="#22C55E" />
-                <Text style={[styles.ocrBadgeText, { color: '#22C55E', fontFamily: 'Cairo_600SemiBold' }]}>
-                  تم مسح الجواز بنجاح
-                </Text>
-              </View>
-            )}
-            <View style={styles.fields}>
-              <Field label="الاسم الكامل" value={info.fullName} onChangeText={(v) => setInfo({ ...info, fullName: v })} />
-              <Field label="رقم الجواز" value={info.passportNumber} onChangeText={(v) => setInfo({ ...info, passportNumber: v })} />
-              <Field label="الجنسية" value={info.nationality} onChangeText={(v) => setInfo({ ...info, nationality: v })} />
-              <Field label="الجنس" value={info.gender} onChangeText={(v) => setInfo({ ...info, gender: v })} placeholder="ذكر / أنثى" />
-              <Field label="تاريخ الميلاد" value={info.dateOfBirth} onChangeText={(v) => setInfo({ ...info, dateOfBirth: v })} placeholder="YYYY-MM-DD" />
-              <Field label="تاريخ إصدار الجواز" value={info.issueDate} onChangeText={(v) => setInfo({ ...info, issueDate: v })} placeholder="YYYY-MM-DD" />
-              <Field label="تاريخ انتهاء الجواز" value={info.expiryDate} onChangeText={(v) => setInfo({ ...info, expiryDate: v })} placeholder="YYYY-MM-DD" />
-            </View>
-            <Pressable
-              style={[styles.nextBtn, !info.fullName && styles.nextBtnDisabled]}
-              disabled={!info.fullName}
-              onPress={next}
-            >
-              <Text style={[styles.nextBtnText, { fontFamily: 'Cairo_700Bold' }]}>التالي</Text>
-              <Ionicons name="arrow-back" size={20} color="#0A2342" />
-            </Pressable>
-          </View>
-        );
-
-      // ── Step 4: Personal photo ───────────────────────────────────────────────
-      case 4:
-        return (
-          <View style={styles.stepWrap}>
-            <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>
-              الصورة الشخصية
-            </Text>
-            <Text style={[styles.stepSub, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-              صورة شخصية للمتقدم (اختياري). يجب أن تكون على خلفية بيضاء.
-            </Text>
-            <Pressable
-              style={[styles.photoBox, { borderColor: photoUri ? '#D4AF37' : colors.border, backgroundColor: colors.muted }]}
-              onPress={() => showImageOptions((uri) => { setPhotoUri(uri); setPhotoPart(null); })}
-            >
-              {photoUri ? (
-                <Image source={{ uri: photoUri }} style={styles.photoPreview} contentFit="cover" />
-              ) : (
-                <View style={styles.uploadPlaceholder}>
-                  <View style={[styles.avatarPlaceholder, { backgroundColor: 'rgba(212,175,55,0.15)', borderColor: '#D4AF37' }]}>
-                    <Ionicons name="person-outline" size={48} color="#D4AF37" />
-                  </View>
-                  <Text style={[styles.uploadHint, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-                    إضافة صورة شخصية
-                  </Text>
-                </View>
-              )}
-            </Pressable>
-            {photoUri && (
-              <Pressable onPress={() => setPhotoUri(null)} style={[styles.reupload, { alignSelf: 'center' }]}>
-                <Ionicons name="refresh-outline" size={16} color="#D4AF37" />
-                <Text style={[styles.reuploadText, { fontFamily: 'Cairo_400Regular' }]}>تغيير الصورة</Text>
-              </Pressable>
-            )}
-            <Pressable style={styles.nextBtn} onPress={next}>
-              <Text style={[styles.nextBtnText, { fontFamily: 'Cairo_700Bold' }]}>
-                {photoUri ? 'التالي' : 'تخطي'}
-              </Text>
-              <Ionicons name="arrow-back" size={20} color="#0A2342" />
-            </Pressable>
-          </View>
-        );
-
-      // ── Step 5: Review ───────────────────────────────────────────────────────
-      case 5:
-        return (
-          <View style={styles.stepWrap}>
-            <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>
-              مراجعة الطلب
-            </Text>
-            <Text style={[styles.stepSub, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-              تأكد من صحة جميع المعلومات قبل الإرسال
-            </Text>
-
-            {/* Applicant card */}
-            <View style={[styles.reviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={styles.reviewHeader}>
-                <Ionicons name="person-circle-outline" size={22} color="#D4AF37" />
-                <Text style={[styles.reviewCardTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>بيانات المتقدم</Text>
-              </View>
-              {([
-                ['الاسم الكامل', info.fullName],
-                ['رقم الجواز', info.passportNumber],
-                ['الجنسية', info.nationality],
-                ['الجنس', info.gender],
-                ['تاريخ الميلاد', info.dateOfBirth],
-                ['انتهاء الجواز', info.expiryDate],
-              ] as [string, string][]).map(([k, v]) => v ? (
-                <View key={k} style={styles.reviewRow}>
-                  <Text style={[styles.reviewVal, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{v}</Text>
-                  <Text style={[styles.reviewKey, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{k}</Text>
-                </View>
-              ) : null)}
-            </View>
-
-            {/* Host card */}
-            {hasHost === 'yes' && (
-              <View style={[styles.reviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <View style={styles.reviewHeader}>
-                  <Ionicons name="home-outline" size={22} color="#D4AF37" />
-                  <Text style={[styles.reviewCardTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>بيانات المستضيف</Text>
-                </View>
-                <View style={styles.reviewRow}>
-                  <Text style={[styles.reviewVal, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{absherNumber}</Text>
-                  <Text style={[styles.reviewKey, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>رقم أبشر</Text>
-                </View>
-                <View style={styles.reviewRow}>
-                  <Text style={[styles.reviewVal, { color: '#22C55E', fontFamily: 'Cairo_600SemiBold' }]}>تم الرفع</Text>
-                  <Text style={[styles.reviewKey, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>تصريح الإقامة</Text>
-                </View>
-              </View>
-            )}
-
-            {/* Documents card */}
-            <View style={[styles.reviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={styles.reviewHeader}>
-                <Ionicons name="documents-outline" size={22} color="#D4AF37" />
-                <Text style={[styles.reviewCardTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>الوثائق المرفقة</Text>
-              </View>
-              <View style={styles.reviewRow}>
-                <Text style={[styles.reviewVal, { color: passportUri ? '#22C55E' : '#EF4444', fontFamily: 'Cairo_600SemiBold' }]}>
-                  {passportUri ? 'تم الرفع' : 'غير مرفق'}
-                </Text>
-                <Text style={[styles.reviewKey, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>صورة جواز السفر</Text>
-              </View>
-              <View style={styles.reviewRow}>
-                <Text style={[styles.reviewVal, { color: photoUri ? '#22C55E' : colors.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>
-                  {photoUri ? 'تم الرفع' : 'غير مرفقة'}
-                </Text>
-                <Text style={[styles.reviewKey, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>الصورة الشخصية</Text>
-              </View>
-            </View>
-
-            <Pressable style={styles.nextBtn} onPress={next}>
-              <Text style={[styles.nextBtnText, { fontFamily: 'Cairo_700Bold' }]}>المتابعة للدفع</Text>
-              <Ionicons name="arrow-back" size={20} color="#0A2342" />
-            </Pressable>
-          </View>
-        );
-
-      // ── Step 6: Payment ──────────────────────────────────────────────────────
-      case 6:
-        return (
-          <View style={styles.stepWrap}>
-            <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>
-              الدفع
-            </Text>
-            <Text style={[styles.stepSub, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-              اختر طريقة الدفع المناسبة
-            </Text>
-
-            {/* Price summary */}
-            <View style={[styles.priceCard, { backgroundColor: 'rgba(212,175,55,0.1)', borderColor: 'rgba(212,175,55,0.3)' }]}>
-              <Text style={[styles.priceLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>رسوم تأشيرة العمرة</Text>
-              <Text style={[styles.priceValue, { color: '#D4AF37', fontFamily: 'Cairo_700Bold' }]}>150 USD</Text>
-              <View style={[styles.divider, { backgroundColor: 'rgba(212,175,55,0.2)' }]} />
-              <Text style={[styles.demoNote, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-                وضع تجريبي — لن يتم خصم أي مبلغ حقيقي
-              </Text>
-            </View>
-
-            {/* Payment methods */}
-            {([
-              { id: 'visa', icon: 'card', label: 'Visa', sub: 'بطاقة فيزا' },
-              { id: 'mastercard', icon: 'card-outline', label: 'Mastercard', sub: 'بطاقة ماستركارد' },
-              { id: 'paypal', icon: 'logo-paypal', label: 'PayPal', sub: 'محفظة باي بال' },
-              { id: 'wallet', icon: 'wallet-outline', label: 'محفظة أبشر', sub: 'رصيد: 0.00 USD' },
-            ] as { id: 'visa' | 'mastercard' | 'paypal' | 'wallet'; icon: any; label: string; sub: string }[]).map((m) => (
-              <Pressable
-                key={m.id}
-                style={[styles.payMethod, { backgroundColor: colors.card, borderColor: payMethod === m.id ? '#D4AF37' : colors.border }]}
-                onPress={() => { setPayMethod(m.id); Haptics.selectionAsync(); }}
-              >
-                <View style={[styles.payRadio, { borderColor: payMethod === m.id ? '#D4AF37' : colors.border }]}>
-                  {payMethod === m.id && <View style={styles.payRadioFill} />}
-                </View>
-                <View style={styles.payInfo}>
-                  <Text style={[styles.payLabel, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>{m.label}</Text>
-                  <Text style={[styles.paySub, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{m.sub}</Text>
-                </View>
-                <View style={[styles.payIconWrap, { backgroundColor: payMethod === m.id ? 'rgba(212,175,55,0.15)' : colors.muted }]}>
-                  <Ionicons name={m.icon} size={22} color={payMethod === m.id ? '#D4AF37' : colors.mutedForeground} />
-                </View>
-              </Pressable>
-            ))}
-
-            <Pressable
-              style={[styles.submitBtn, (!payMethod || createAppMutation.isPending) && styles.nextBtnDisabled]}
-              disabled={!payMethod || createAppMutation.isPending}
-              onPress={submitApplication}
-            >
-              {createAppMutation.isPending ? (
-                <ActivityIndicator color="#0A2342" />
-              ) : (
-                <>
-                  <Text style={[styles.nextBtnText, { fontFamily: 'Cairo_700Bold' }]}>تأكيد وإرسال الطلب</Text>
-                  <Ionicons name="send" size={18} color="#0A2342" />
-                </>
-              )}
-            </Pressable>
-          </View>
-        );
-
-      // ── Step 7: Success ──────────────────────────────────────────────────────
-      case 7:
-        return (
-          <View style={styles.successWrap}>
-            <View style={[styles.successIcon, { backgroundColor: 'rgba(34,197,94,0.15)', borderColor: 'rgba(34,197,94,0.4)' }]}>
-              <Ionicons name="checkmark-circle" size={72} color="#22C55E" />
-            </View>
-            <Text style={[styles.successTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>
-              تم تقديم طلب العمرة بنجاح
-            </Text>
-            <Text style={[styles.successSub, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-              سيتم مراجعة طلبك خلال 3-5 أيام عمل. ستتلقى إشعاراً فور اتخاذ أي إجراء.
-            </Text>
-
-            <View style={[styles.refCard, { backgroundColor: colors.card, borderColor: 'rgba(212,175,55,0.4)' }]}>
-              <Text style={[styles.refLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>رقم المرجع</Text>
-              <Text style={[styles.refValue, { color: '#D4AF37', fontFamily: 'Cairo_700Bold' }]}>{refNumber}</Text>
-              <View style={[styles.divider, { backgroundColor: colors.border }]} />
-              <View style={styles.refRow}>
-                <Text style={[styles.refRowVal, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{info.fullName || 'المتقدم'}</Text>
-                <Text style={[styles.refRowKey, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>اسم المتقدم</Text>
-              </View>
-              <View style={styles.refRow}>
-                <View style={[styles.statusBadge, { backgroundColor: 'rgba(234,179,8,0.15)' }]}>
-                  <Text style={[styles.statusText, { color: '#EAB308', fontFamily: 'Cairo_700Bold' }]}>قيد المراجعة</Text>
-                </View>
-                <Text style={[styles.refRowKey, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>حالة الطلب</Text>
-              </View>
-              <View style={styles.refRow}>
-                <Text style={[styles.refRowVal, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>
-                  {new Date().toLocaleDateString('ar-SA')}
-                </Text>
-                <Text style={[styles.refRowKey, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>تاريخ التقديم</Text>
-              </View>
-            </View>
-
-            <Pressable
-              style={styles.homeBtn}
-              onPress={() => {
-                router.replace('/(tabs)/');
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              }}
-            >
-              <Ionicons name="home-outline" size={20} color="#0A2342" />
-              <Text style={[styles.nextBtnText, { fontFamily: 'Cairo_700Bold' }]}>العودة للرئيسية</Text>
-            </Pressable>
-          </View>
-        );
-
-      default:
-        return null;
-    }
+  // ── Pay (spec §5 → §8) ────────────────────────────────────────────────────
+  const submitPay = () => {
+    if (!created) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    payMutation.mutate(
+      { id: created.id },
+      {
+        onSuccess: () => {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          resultRef.current = true;
+          setResult(created);
+        },
+        onError: (err) => {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          let message = tr(lang, 'تعذّر إتمام الدفع. يرجى المحاولة مجدداً.', 'Payment could not be completed. Please try again.');
+          if (err instanceof ApiError) {
+            const data = err.data as { error?: string } | null;
+            if (data?.error) message = data.error;
+          }
+          Alert.alert(tr(lang, 'فشل الدفع', 'Payment failed'), message);
+        },
+      },
+    );
   };
 
-  const renderPassportStep = () => (
-    <View style={styles.stepWrap}>
-      <Text style={[styles.stepTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>
-        مسح جواز السفر
-      </Text>
-      <Text style={[styles.stepSub, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-        ارفع صورة جواز السفر وسيقوم النظام باستخراج بياناتك تلقائياً
-      </Text>
-
-      <Pressable
-        style={[styles.passportBox, { borderColor: passportUri ? '#D4AF37' : colors.border, backgroundColor: colors.muted }]}
-        onPress={() => showImageOptions((uri) => {
-          setPassportUri(uri);
-          setPassportPath(null);
-          setOcrDone(false);
-          scanPassport(uri);
-        })}
-      >
-        {passportUri ? (
-          <Image source={{ uri: passportUri }} style={styles.passportPreview} contentFit="cover" />
-        ) : (
-          <View style={styles.uploadPlaceholder}>
-            <View style={[styles.scanAnimation, { borderColor: '#D4AF37' }]}>
-              <Ionicons name="document-text-outline" size={48} color="#D4AF37" />
-            </View>
-            <Text style={[styles.uploadHint, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>
-              ارفع صورة جواز السفر
-            </Text>
-            <Text style={[styles.uploadFormats, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-              يدعم JPG و PNG بجودة عالية
-            </Text>
-          </View>
-        )}
-      </Pressable>
-
-      {/* OCR status */}
-      {passportUri && !ocrDone && (
-        <View style={[styles.ocrProgress, { backgroundColor: 'rgba(56,189,248,0.1)', borderColor: 'rgba(56,189,248,0.3)' }]}>
-          <ActivityIndicator color="#38BDF8" size="small" />
-          <Text style={[styles.ocrProgressText, { color: '#38BDF8', fontFamily: 'Cairo_600SemiBold' }]}>
-            جاري مسح وتحليل جواز السفر...
-          </Text>
-        </View>
+  // ── Shared small components ─────────────────────────────────────────────────
+  const NextButton = ({ label, onPress, loading }: { label: string; onPress: () => void; loading?: boolean }) => (
+    <Pressable style={({ pressed }) => [styles.nextBtn, { opacity: pressed || loading ? 0.85 : 1 }]} onPress={onPress} disabled={loading}>
+      {loading ? <ActivityIndicator color={colors.umrahGreen} /> : (
+        <>
+          <Text style={[styles.nextBtnText, { fontFamily: 'Cairo_700Bold' }]}>{label}</Text>
+          <Ionicons name="arrow-back" size={20} color={colors.umrahGreen} />
+        </>
       )}
-      {passportUri && ocrDone && (
-        <View style={[styles.ocrBadge, { backgroundColor: 'rgba(34,197,94,0.1)', borderColor: 'rgba(34,197,94,0.3)' }]}>
-          <Ionicons name="scan-circle" size={18} color="#22C55E" />
-          <Text style={[styles.ocrBadgeText, { color: '#22C55E', fontFamily: 'Cairo_600SemiBold' }]}>
-            تم استخراج البيانات بنجاح
-          </Text>
-        </View>
-      )}
+    </Pressable>
+  );
 
-      {passportUri && (
-        <Pressable onPress={() => { setPassportUri(null); setOcrDone(false); }} style={styles.reupload}>
-          <Ionicons name="refresh-outline" size={16} color="#D4AF37" />
-          <Text style={[styles.reuploadText, { fontFamily: 'Cairo_400Regular' }]}>تغيير الجواز</Text>
-        </Pressable>
-      )}
-
-      <Pressable
-        style={[styles.nextBtn, (!passportUri || !ocrDone) && styles.nextBtnDisabled]}
-        disabled={!passportUri || !ocrDone}
-        onPress={next}
-      >
-        <Text style={[styles.nextBtnText, { fontFamily: 'Cairo_700Bold' }]}>التالي</Text>
-        <Ionicons name="arrow-back" size={20} color="#0A2342" />
-      </Pressable>
+  const StepHead = ({ icon, title, sub }: { icon: keyof typeof Ionicons.glyphMap; title: string; sub: string }) => (
+    <View style={styles.stepHead}>
+      <View style={[styles.stepHeadIcon, { backgroundColor: c.goldTint }]}><Ionicons name={icon} size={22} color={colors.gold} /></View>
+      <View style={{ flex: 1, alignItems: 'flex-end' }}>
+        <Text style={[styles.stepTitle, { color: c.foreground, fontFamily: 'Cairo_700Bold' }]}>{title}</Text>
+        <Text style={[styles.stepSub, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{sub}</Text>
+      </View>
     </View>
   );
 
-  const isSuccess = step === 7;
+  // ═══ SUCCESS SCREEN (spec §6, §9) ══════════════════════════════════════════
+  if (result) {
+    const rows: [string, string][] = [
+      [tr(lang, 'رقم الطلب', 'Tracking number'), result.trackingNumber],
+      [tr(lang, 'اسم المعتمر', 'Pilgrim name'), fullName.trim() || '—'],
+      [tr(lang, 'نوع الطلب', 'Application type'), tr(lang, 'تأشيرة العمرة', 'Umrah visa')],
+      [tr(lang, 'حالة الدفع', 'Payment status'), tr(lang, 'مدفوع', 'Paid')],
+      [tr(lang, 'حالة الطلب', 'Application status'), tr(lang, 'تم التقديم', 'Submitted')],
+      [tr(lang, 'تاريخ التقديم', 'Submission date'), new Date().toLocaleDateString(lang === 'en' ? 'en-GB' : 'ar-SA')],
+    ];
+    return (
+      <View style={[styles.container, { backgroundColor: c.background }]}>
+        <LinearGradient colors={[colors.umrahGreen, '#0A3D28']} style={[styles.header, { paddingTop: topInset + 12 }]}>
+          <Text style={[styles.headerTitle, { fontFamily: 'Cairo_700Bold' }]}>{tr(lang, 'تأشيرة العمرة', 'Umrah Visa')}</Text>
+        </LinearGradient>
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: bottomInset + 40 }} showsVerticalScrollIndicator={false}>
+          <Animated.View style={{ alignItems: 'center', transform: [{ scale: successScale }], opacity: successOpacity }}>
+            <View style={[styles.successIcon, { backgroundColor: c.success + '18', borderColor: c.success }]}>
+              <Ionicons name="checkmark-circle" size={64} color={c.success} />
+            </View>
+            <Text style={[styles.successTitle, { color: c.foreground, fontFamily: 'Cairo_700Bold' }]}>
+              {tr(lang, 'تم تقديم طلب تأشيرة العمرة بنجاح', 'Your Umrah visa application was submitted successfully')}
+            </Text>
+          </Animated.View>
+
+          <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border, marginTop: 20 }]}>
+            {rows.map(([k, v], i) => (
+              <View key={k} style={[styles.reviewRow, { borderBottomColor: c.border, borderBottomWidth: i === rows.length - 1 ? 0 : StyleSheet.hairlineWidth }]}>
+                <Text style={[styles.reviewVal, { color: c.foreground, fontFamily: 'Cairo_700Bold' }]}>{v}</Text>
+                <Text style={[styles.reviewKey, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{k}</Text>
+              </View>
+            ))}
+          </View>
+
+          <Pressable style={({ pressed }) => [styles.primaryBtn, { backgroundColor: colors.umrahGreen, opacity: pressed ? 0.9 : 1, marginTop: 24 }]} onPress={leaveToHome}>
+            <Ionicons name="home-outline" size={20} color="#FFFFFF" />
+            <Text style={[styles.primaryBtnText, { fontFamily: 'Cairo_700Bold' }]}>{tr(lang, 'العودة للرئيسية', 'Back to Home')}</Text>
+          </Pressable>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // ═══ WIZARD ════════════════════════════════════════════════════════════════
+  const fee = umrahConfig?.feeForNationality ?? (created ? { amount: created.feeAmount ?? 0, currency: created.feeCurrency } : undefined);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <LinearGradient colors={['#071525', '#0A2342']} style={[styles.header, { paddingTop: topInset + 8 }]}>
-        <View style={styles.headerTop}>
-          <Pressable style={styles.backBtn} onPress={back}>
-            <Ionicons name="arrow-forward" size={24} color="rgba(255,255,255,0.8)" />
+    <View style={[styles.container, { backgroundColor: c.background }]}>
+      <LinearGradient colors={[colors.umrahGreen, '#0A3D28']} style={[styles.header, { paddingTop: topInset + 12 }]}>
+        <View style={styles.headerRow}>
+          <Pressable onPress={back} hitSlop={10} style={styles.backBtn}>
+            <Ionicons name="arrow-forward" size={22} color="#FFFFFF" />
           </Pressable>
-          <View style={styles.headerCenter}>
-            <Ionicons name="moon-outline" size={20} color="#D4AF37" />
-            <Text style={[styles.headerTitle, { fontFamily: 'Cairo_700Bold' }]}>تأشيرة العمرة</Text>
-          </View>
+          <Text style={[styles.headerTitle, { fontFamily: 'Cairo_700Bold' }]}>{tr(lang, 'تأشيرة العمرة', 'Umrah Visa')}</Text>
           <View style={{ width: 40 }} />
         </View>
-        {!isSuccess && <StepBar current={step > 5 ? 5 : step} />}
+        <WizardStepper steps={STEP_LABELS} current={step} />
       </LinearGradient>
 
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView
           ref={scroll}
-          contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+          contentContainerStyle={{ padding: 18, paddingBottom: bottomInset + 40, gap: 4 }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {renderStep()}
+          {/* ── STEP 0: HOST QUESTION + RESIDENCY ────────────────────────── */}
+          {step === 0 && (
+            <View style={styles.stepWrap}>
+              <StepHead icon="business-outline" title={tr(lang, 'المستضيف والإقامة', 'Host & residency')} sub={tr(lang, 'تأشيرة العمرة تتطلب مستضيفاً في المملكة العربية السعودية', 'Umrah visa requires a host in Saudi Arabia')} />
+
+              <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
+                <Text style={[styles.questionText, { color: c.foreground, fontFamily: 'Cairo_700Bold' }]}>
+                  {tr(lang, 'هل لديك مستضيف في المملكة العربية السعودية؟', 'Do you have a host in Saudi Arabia?')}
+                </Text>
+                <View style={styles.choiceRow}>
+                  <Pressable
+                    onPress={() => { setHasHost(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}
+                    style={[styles.choiceBtn, { borderColor: hasHost === true ? colors.umrahGreen : c.border, backgroundColor: hasHost === true ? colors.umrahGreen + '12' : c.card }]}
+                  >
+                    <Ionicons name="checkmark-circle" size={20} color={hasHost === true ? colors.umrahGreen : c.mutedForeground} />
+                    <Text style={[styles.choiceText, { color: hasHost === true ? colors.umrahGreen : c.foreground, fontFamily: 'Cairo_700Bold' }]}>{tr(lang, 'نعم', 'Yes')}</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => { setHasHost(false); setNoHostModal(true); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); }}
+                    style={[styles.choiceBtn, { borderColor: hasHost === false ? c.destructive : c.border, backgroundColor: hasHost === false ? c.destructive + '12' : c.card }]}
+                  >
+                    <Ionicons name="close-circle" size={20} color={hasHost === false ? c.destructive : c.mutedForeground} />
+                    <Text style={[styles.choiceText, { color: hasHost === false ? c.destructive : c.foreground, fontFamily: 'Cairo_700Bold' }]}>{tr(lang, 'لا', 'No')}</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              {hasHost === true && (
+                <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border, gap: 16 }]}>
+                  <DocField
+                    lang={lang}
+                    label={tr(lang, 'صورة إقامة المستضيف', 'Host residency image')}
+                    hint={tr(lang, 'صورة أو ملف PDF واضح للإقامة', 'Clear image or PDF of the residency')}
+                    icon="id-card-outline"
+                    required
+                    value={sponsorResidencyImageUrl}
+                    busy={busyDoc === 'sponsorResidency'}
+                    onPick={(a) => uploadDoc(setSponsorResidencyImageUrl, 'sponsorResidency', a)}
+                    onRemove={() => setSponsorResidencyImageUrl('')}
+                  />
+                </View>
+              )}
+
+              <NextButton label={tr(lang, 'التالي', 'Next')} onPress={handleNext} />
+            </View>
+          )}
+
+          {/* ── STEP 1: HOST PHONE ───────────────────────────────────────── */}
+          {step === 1 && (
+            <View style={styles.stepWrap}>
+              <StepHead icon="call-outline" title={tr(lang, 'رقم جوال المستضيف', 'Host phone number')} sub={tr(lang, 'رقم الجوال المسجل في أبشر لدى المستضيف', 'The host phone registered in Absher')} />
+
+              <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
+                <View style={f.wrap}>
+                  <Text style={[f.label, { color: c.foreground, fontFamily: 'Cairo_600SemiBold' }]}>
+                    {tr(lang, 'رقم جوال المستضيف المسجل في أبشر', 'Host phone registered in Absher')}<Text style={{ color: c.destructive }}> *</Text>
+                  </Text>
+                  <View style={[styles.phoneRow, { backgroundColor: c.muted, borderColor: c.border }]}>
+                    <TextInput
+                      value={hostPhoneDigits}
+                      onChangeText={(v) => setHostPhoneDigits(v.replace(/[^0-9]/g, '').slice(0, 9))}
+                      placeholder="5XXXXXXXX"
+                      placeholderTextColor={c.mutedForeground}
+                      keyboardType="number-pad"
+                      maxLength={9}
+                      style={[styles.phoneInput, { color: c.foreground, fontFamily: 'Cairo_400Regular' }]}
+                    />
+                    <View style={[styles.phonePrefix, { borderColor: c.border }]}>
+                      <Text style={[styles.phonePrefixText, { color: c.foreground, fontFamily: 'Cairo_700Bold' }]}>+966</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+
+              <NextButton label={tr(lang, 'التالي', 'Next')} onPress={handleNext} />
+            </View>
+          )}
+
+          {/* ── STEP 2: DECLARATION ─────────────────────────────────────── */}
+          {step === 2 && (
+            <View style={styles.stepWrap}>
+              <StepHead icon="document-text-outline" title={tr(lang, 'الإقرار والتعهد', 'Declaration & Undertaking')} sub={tr(lang, 'يرجى قراءة الإقرار بعناية قبل الموافقة', 'Please read the declaration carefully before accepting')} />
+
+              <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
+                {configLoading ? (
+                  <ActivityIndicator color={colors.gold} style={{ marginVertical: 20 }} />
+                ) : (
+                  <ScrollView style={styles.declarationBox} nestedScrollEnabled showsVerticalScrollIndicator>
+                    <Text style={[styles.declarationText, { color: c.foreground, fontFamily: 'Cairo_400Regular' }]}>
+                      {(lang === 'en' ? umrahConfig?.declarationEn : umrahConfig?.declarationAr) ||
+                        umrahConfig?.declarationAr ||
+                        tr(lang, 'يقر المعتمر والمستضيف بالالتزام بأنظمة وتعليمات العمرة والأنظمة المعمول بها في المملكة العربية السعودية.', 'The pilgrim and host acknowledge compliance with Umrah regulations and applicable laws in Saudi Arabia.')}
+                    </Text>
+                  </ScrollView>
+                )}
+              </View>
+
+              <Pressable
+                onPress={() => setDeclared((v) => !v)}
+                style={[styles.checkRow, { backgroundColor: c.card, borderColor: declared ? colors.umrahGreen : c.border }]}
+              >
+                <Ionicons name={declared ? 'checkbox' : 'square-outline'} size={24} color={declared ? colors.umrahGreen : c.mutedForeground} />
+                <Text style={[styles.checkText, { color: c.foreground, fontFamily: 'Cairo_600SemiBold' }]}>
+                  {tr(lang, 'أقر بأنني قرأت ووافقت على إقرار وتعهد تأشيرة العمرة.', 'I acknowledge that I have read and agreed to the Umrah visa declaration and undertaking.')}
+                </Text>
+              </Pressable>
+
+              <NextButton label={tr(lang, 'التالي', 'Next')} onPress={handleNext} />
+            </View>
+          )}
+
+          {/* ── STEP 3: PASSPORT + OCR ──────────────────────────────────── */}
+          {step === 3 && (
+            <View style={styles.stepWrap}>
+              <StepHead icon="card-outline" title={tr(lang, 'صورة الجواز', 'Passport image')} sub={tr(lang, 'أرفق صورة الجواز لاستخراج البيانات تلقائياً', 'Upload the passport to auto-extract data')} />
+
+              <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border, gap: 16 }]}>
+                <DocField
+                  lang={lang}
+                  label={tr(lang, 'صورة الجواز', 'Passport image')}
+                  hint={tr(lang, 'الصفحة الأولى مع البيانات', 'The main data page')}
+                  icon="card-outline"
+                  required
+                  value={passportImageUrl}
+                  busy={busyDoc === 'passport'}
+                  onPick={handlePassportScan}
+                  onRemove={() => { setPassportImageUrl(''); setOcrDone(false); }}
+                />
+                {ocrRunning && (
+                  <View style={styles.ocrRow}>
+                    <ActivityIndicator color={colors.gold} />
+                    <Text style={[styles.ocrText, { color: c.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>{tr(lang, 'جارٍ استخراج بيانات الجواز...', 'Extracting passport data...')}</Text>
+                  </View>
+                )}
+                {ocrDone && !ocrRunning && (
+                  <View style={styles.ocrRow}>
+                    <Ionicons name="sparkles" size={16} color={c.success} />
+                    <Text style={[styles.ocrText, { color: c.success, fontFamily: 'Cairo_600SemiBold' }]}>{tr(lang, 'تم استخراج البيانات — راجعها وعدّلها إن لزم', 'Data extracted — review and edit if needed')}</Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border, gap: 14 }]}>
+                <Field label={tr(lang, 'الاسم الكامل', 'Full name')} value={fullName} onChangeText={setFullName} required />
+                <Field label={tr(lang, 'رقم الجواز', 'Passport number')} value={passportNumber} onChangeText={setPassportNumber} ltr autoCapitalize="characters" />
+                <Field label={tr(lang, 'الجنسية', 'Nationality')} value={nationality} onChangeText={setNationality} required />
+                <View style={{ flexDirection: 'row-reverse', gap: 12 }}>
+                  <View style={{ flex: 1 }}><Field label={tr(lang, 'تاريخ الميلاد', 'Date of birth')} value={dateOfBirth} onChangeText={setDateOfBirth} placeholder="YYYY-MM-DD" ltr /></View>
+                </View>
+                <View style={{ flexDirection: 'row-reverse', gap: 12 }}>
+                  <View style={{ flex: 1 }}><Field label={tr(lang, 'تاريخ الإصدار', 'Issue date')} value={passportIssueDate} onChangeText={setPassportIssueDate} placeholder="YYYY-MM-DD" ltr /></View>
+                  <View style={{ flex: 1 }}><Field label={tr(lang, 'تاريخ الانتهاء', 'Expiry date')} value={passportExpiryDate} onChangeText={setPassportExpiryDate} placeholder="YYYY-MM-DD" ltr /></View>
+                </View>
+                <View style={f.wrap}>
+                  <Text style={[f.label, { color: c.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{tr(lang, 'الجنس', 'Gender')}</Text>
+                  <View style={{ flexDirection: 'row-reverse', gap: 10 }}>
+                    {(['male', 'female'] as Gender[]).map((g) => (
+                      <Pressable key={g} onPress={() => setGender(g)} style={[styles.genderBtn, { backgroundColor: gender === g ? colors.umrahGreen : c.muted, borderColor: c.border }]}>
+                        <Text style={[styles.genderText, { color: gender === g ? '#FFFFFF' : c.foreground, fontFamily: 'Cairo_600SemiBold' }]}>
+                          {g === 'male' ? tr(lang, 'ذكر', 'Male') : tr(lang, 'أنثى', 'Female')}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              </View>
+
+              <NextButton label={tr(lang, 'التالي', 'Next')} onPress={handleNext} />
+            </View>
+          )}
+
+          {/* ── STEP 4: PERSONAL PHOTO ──────────────────────────────────── */}
+          {step === 4 && (
+            <View style={styles.stepWrap}>
+              <StepHead icon="person-circle-outline" title={tr(lang, 'الصورة الشخصية', 'Personal photo')} sub={tr(lang, 'صورة حديثة واضحة بخلفية بيضاء', 'A recent, clear photo with a white background')} />
+
+              <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border, gap: 16 }]}>
+                <DocField
+                  lang={lang}
+                  label={tr(lang, 'الصورة الشخصية', 'Personal photo')}
+                  hint={tr(lang, 'صورة حديثة بخلفية بيضاء', 'Recent photo, white background')}
+                  icon="person-circle-outline"
+                  required
+                  allowPdf={false}
+                  value={personalPhotoUrl}
+                  busy={busyDoc === 'personalPhoto'}
+                  onPick={(a) => uploadDoc(setPersonalPhotoUrl, 'personalPhoto', a)}
+                  onRemove={() => setPersonalPhotoUrl('')}
+                />
+              </View>
+
+              <NextButton label={tr(lang, 'التالي', 'Next')} onPress={handleNext} />
+            </View>
+          )}
+
+          {/* ── STEP 5: CONTACT INFO (prefilled) ────────────────────────── */}
+          {step === 5 && (
+            <View style={styles.stepWrap}>
+              <StepHead icon="chatbubbles-outline" title={tr(lang, 'بيانات التواصل', 'Contact details')} sub={tr(lang, 'تم تعبئة بياناتك تلقائياً — عدّلها إن لزم', 'Your details were prefilled — edit if needed')} />
+
+              <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border, gap: 14 }]}>
+                <Field label={tr(lang, 'رقم جوال المعتمر', 'Pilgrim phone')} value={phone} onChangeText={setPhone} keyboardType="phone-pad" ltr required placeholder="+966 5X XXX XXXX" />
+                <Field label={tr(lang, 'بريد التواصل (اختياري)', 'Contact email (optional)')} value={contactEmail} onChangeText={setContactEmail} keyboardType="email-address" ltr autoCapitalize="none" placeholder="example@email.com" />
+                <Field label={tr(lang, 'رقم جوال قريب أو صديق للطوارئ', 'Emergency contact phone (relative/friend)')} value={emergencyPhone} onChangeText={setEmergencyPhone} keyboardType="phone-pad" ltr required placeholder="+966 5X XXX XXXX" />
+              </View>
+
+              <NextButton label={tr(lang, 'التالي', 'Next')} onPress={handleNext} />
+            </View>
+          )}
+
+          {/* ── STEP 6: FEE ─────────────────────────────────────────────── */}
+          {step === 6 && (
+            <View style={styles.stepWrap}>
+              <StepHead icon="pricetag-outline" title={tr(lang, 'رسوم التأشيرة', 'Visa fee')} sub={tr(lang, 'الرسوم محددة حسب جنسية المعتمر', 'The fee is set according to the pilgrim nationality')} />
+
+              <View style={[styles.card, { backgroundColor: c.goldTint, borderColor: colors.gold, alignItems: 'center', gap: 6 }]}>
+                <Text style={[styles.feeLabel, { color: c.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>{tr(lang, 'رسوم تأشيرة العمرة', 'Umrah visa fee')}</Text>
+                {configLoading ? (
+                  <ActivityIndicator color={colors.gold} style={{ marginVertical: 8 }} />
+                ) : fee ? (
+                  <Text style={[styles.feeAmount, { color: colors.umrahGreen, fontFamily: 'Cairo_700Bold' }]}>
+                    {fee.amount} {fee.currency}
+                  </Text>
+                ) : (
+                  <Text style={[styles.feeAmount, { color: colors.umrahGreen, fontFamily: 'Cairo_700Bold' }]}>—</Text>
+                )}
+                {!!nationality && (
+                  <Text style={[styles.stepSub, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular', textAlign: 'center' }]}>
+                    {tr(lang, `الجنسية: ${nationality}`, `Nationality: ${nationality}`)}
+                  </Text>
+                )}
+              </View>
+
+              <NextButton label={tr(lang, 'المتابعة للسداد', 'Continue to payment')} onPress={handleNext} />
+            </View>
+          )}
+
+          {/* ── STEP 7: PAYMENT ─────────────────────────────────────────── */}
+          {step === 7 && (
+            <View style={styles.stepWrap}>
+              <StepHead icon="card-outline" title={tr(lang, 'الدفع', 'Payment')} sub={tr(lang, 'تأشيرة العمرة تتطلب الدفع مقدماً', 'The Umrah visa requires payment upfront')} />
+
+              <View style={[styles.card, { backgroundColor: c.goldTint, borderColor: colors.gold, alignItems: 'center', gap: 6 }]}>
+                <Text style={[styles.feeLabel, { color: c.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>{tr(lang, 'رسوم تأشيرة العمرة', 'Umrah visa fee')}</Text>
+                {fee ? (
+                  <Text style={[styles.feeAmount, { color: colors.umrahGreen, fontFamily: 'Cairo_700Bold' }]}>
+                    {fee.amount} {fee.currency}
+                  </Text>
+                ) : (
+                  <Text style={[styles.feeAmount, { color: colors.umrahGreen, fontFamily: 'Cairo_700Bold' }]}>—</Text>
+                )}
+                <Text style={[styles.stepSub, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular', textAlign: 'center' }]}>
+                  {tr(lang, 'الرسوم محددة حسب جنسية المعتمر', 'The fee is set according to the pilgrim nationality')}
+                </Text>
+              </View>
+
+              {!created ? (
+                <Pressable
+                  style={({ pressed }) => [styles.primaryBtn, { backgroundColor: colors.navy, opacity: pressed || createMutation.isPending ? 0.85 : 1 }]}
+                  onPress={submitCreate}
+                  disabled={createMutation.isPending}
+                >
+                  {createMutation.isPending ? <ActivityIndicator color="#FFFFFF" /> : (
+                    <>
+                      <Ionicons name="document-attach-outline" size={20} color="#FFFFFF" />
+                      <Text style={[styles.primaryBtnText, { fontFamily: 'Cairo_700Bold' }]}>{tr(lang, 'إنشاء الطلب والمتابعة للدفع', 'Create application & continue to payment')}</Text>
+                    </>
+                  )}
+                </Pressable>
+              ) : (
+                <>
+                  <View style={[styles.card, { backgroundColor: c.card, borderColor: c.border }]}>
+                    <View style={[styles.reviewRow, { borderBottomColor: c.border }]}>
+                      <Text style={[styles.reviewVal, { color: c.foreground, fontFamily: 'Cairo_700Bold' }]}>{created.trackingNumber}</Text>
+                      <Text style={[styles.reviewKey, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{tr(lang, 'رقم الطلب', 'Tracking number')}</Text>
+                    </View>
+                    <View style={[styles.reviewRow, { borderBottomColor: c.border, borderBottomWidth: 0 }]}>
+                      <Text style={[styles.reviewVal, { color: colors.umrahGreen, fontFamily: 'Cairo_700Bold' }]}>
+                        {created.feeAmount ?? fee?.amount ?? '—'} {created.feeCurrency}
+                      </Text>
+                      <Text style={[styles.reviewKey, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{tr(lang, 'المبلغ المستحق', 'Amount due')}</Text>
+                    </View>
+                  </View>
+                  <Pressable
+                    style={({ pressed }) => [styles.primaryBtn, { backgroundColor: colors.umrahGreen, opacity: pressed || payMutation.isPending ? 0.85 : 1 }]}
+                    onPress={submitPay}
+                    disabled={payMutation.isPending}
+                  >
+                    {payMutation.isPending ? <ActivityIndicator color="#FFFFFF" /> : (
+                      <>
+                        <Ionicons name="card" size={20} color="#FFFFFF" />
+                        <Text style={[styles.primaryBtnText, { fontFamily: 'Cairo_700Bold' }]}>{tr(lang, 'ادفع الآن', 'Pay now')}</Text>
+                      </>
+                    )}
+                  </Pressable>
+                </>
+              )}
+            </View>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* ── NO-HOST BLOCK MODAL (spec §3) ──────────────────────────────────── */}
+      {noHostModal && (
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { backgroundColor: c.card, borderColor: c.border }]}>
+            <View style={[styles.modalIcon, { backgroundColor: c.destructive + '15', borderColor: c.destructive + '40' }]}>
+              <Ionicons name="alert-circle-outline" size={34} color={c.destructive} />
+            </View>
+            <Text style={[styles.modalTitle, { color: c.foreground, fontFamily: 'Cairo_700Bold' }]}>{tr(lang, 'عذراً', 'Sorry')}</Text>
+            <Text style={[styles.modalMsg, { color: c.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
+              {tr(lang,
+                'لا يمكنك التقديم على تأشيرة العمرة لعدم وجود مستضيف في المملكة العربية السعودية.',
+                'You cannot apply for an Umrah visa because you do not have a host in Saudi Arabia.')}
+            </Text>
+            <Pressable
+              style={({ pressed }) => [styles.primaryBtn, { backgroundColor: colors.navy, opacity: pressed ? 0.9 : 1, width: '100%' }]}
+              onPress={() => { setNoHostModal(false); router.replace('/(tabs)' as never); }}
+            >
+              <Ionicons name="home-outline" size={20} color="#FFFFFF" />
+              <Text style={[styles.primaryBtnText, { fontFamily: 'Cairo_700Bold' }]}>{tr(lang, 'العودة للرئيسية', 'Back to Home')}</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: 16, paddingBottom: 8 },
-  headerTop: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  header: { paddingHorizontal: 16, paddingBottom: 4 },
+  headerRow: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  headerCenter: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  headerTitle: { fontSize: 18, color: '#FFFFFF' },
+  headerTitle: { color: '#FFFFFF', fontSize: 18, flex: 1, textAlign: 'center' },
 
-  stepWrap: { gap: 20 },
-  iconCircle: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center', alignSelf: 'center', borderWidth: 2, marginBottom: 8 },
-  stepTitle: { fontSize: 22, textAlign: 'right' },
-  stepSub: { fontSize: 14, textAlign: 'right', lineHeight: 22 },
+  stepWrap: { gap: 16 },
+  stepHead: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12, marginTop: 4 },
+  stepHeadIcon: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  stepTitle: { fontSize: 18, textAlign: 'right' },
+  stepSub: { fontSize: 13, textAlign: 'right', marginTop: 2, lineHeight: 19 },
 
-  // Host buttons
-  hostBtns: { flexDirection: 'row-reverse', gap: 14 },
-  hostBtn: { flex: 1, borderRadius: 18, padding: 20, alignItems: 'center', gap: 8, backgroundColor: 'rgba(212,175,55,0.06)', borderWidth: 1.5, borderColor: 'rgba(212,175,55,0.3)' },
-  hostBtnActive: { backgroundColor: '#D4AF37', borderColor: '#D4AF37' },
-  hostBtnText: { fontSize: 20 },
-  hostBtnSub: { fontSize: 12, textAlign: 'center' },
+  card: { borderRadius: 18, borderWidth: 1, padding: 18, gap: 12 },
 
-  // Next button
-  nextBtn: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', backgroundColor: '#D4AF37', borderRadius: 16, paddingVertical: 16, gap: 10, marginTop: 8 },
-  nextBtnDisabled: { opacity: 0.4 },
-  nextBtnText: { fontSize: 16, color: '#0A2342' },
+  questionText: { fontSize: 16, textAlign: 'right', lineHeight: 24 },
+  choiceRow: { flexDirection: 'row-reverse', gap: 12 },
+  choiceBtn: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1.5, borderRadius: 14, paddingVertical: 16 },
+  choiceText: { fontSize: 16 },
 
-  // Upload
-  uploadSection: { gap: 10 },
-  uploadLabel: { fontSize: 15, textAlign: 'right' },
-  uploadBox: { borderRadius: 18, borderWidth: 2, borderStyle: 'dashed', minHeight: 140, overflow: 'hidden' },
-  uploadPreview: { width: '100%', height: 180 },
-  uploadPlaceholder: { alignItems: 'center', justifyContent: 'center', padding: 28, gap: 10 },
-  uploadHint: { fontSize: 15, textAlign: 'center' },
-  uploadFormats: { fontSize: 12, textAlign: 'center' },
-  reupload: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-end' },
-  reuploadText: { fontSize: 13, color: '#D4AF37' },
+  phoneRow: { flexDirection: 'row-reverse', alignItems: 'center', borderWidth: 1, borderRadius: 12, overflow: 'hidden' },
+  phoneInput: { flex: 1, paddingHorizontal: 14, paddingVertical: 13, fontSize: 16, textAlign: 'left', writingDirection: 'ltr' },
+  phonePrefix: { paddingHorizontal: 14, paddingVertical: 13, borderRightWidth: 1 },
+  phonePrefixText: { fontSize: 15 },
 
-  // Passport
-  passportBox: { borderRadius: 18, borderWidth: 2, borderStyle: 'dashed', minHeight: 200, overflow: 'hidden' },
-  passportPreview: { width: '100%', height: 220 },
-  scanAnimation: { width: 90, height: 90, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 2 },
+  ocrRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
+  ocrText: { fontSize: 12.5, textAlign: 'right', flex: 1 },
 
-  // OCR status
-  ocrProgress: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12, borderRadius: 12, padding: 14, borderWidth: 1 },
-  ocrProgressText: { fontSize: 14, flex: 1, textAlign: 'right' },
-  ocrBadge: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8, borderRadius: 12, padding: 12, borderWidth: 1 },
-  ocrBadgeText: { fontSize: 14 },
+  genderBtn: { flex: 1, borderWidth: 1, borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
+  genderText: { fontSize: 15 },
 
-  // Fields
-  fields: { gap: 14 },
+  declarationBox: { maxHeight: 320 },
+  declarationText: { fontSize: 14, textAlign: 'right', lineHeight: 24 },
 
-  // Review
-  reviewCard: { borderRadius: 18, borderWidth: 1, padding: 18, gap: 12 },
-  reviewHeader: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, marginBottom: 4 },
-  reviewCardTitle: { fontSize: 16 },
-  reviewRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 },
+  checkRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12, borderWidth: 1.5, borderRadius: 14, padding: 16 },
+  checkText: { flex: 1, fontSize: 14, textAlign: 'right', lineHeight: 22 },
+
+  feeLabel: { fontSize: 14 },
+  feeAmount: { fontSize: 30, lineHeight: 38 },
+
+  reviewRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
   reviewKey: { fontSize: 13 },
-  reviewVal: { fontSize: 14 },
+  reviewVal: { fontSize: 15, writingDirection: 'ltr', textAlign: 'left' },
 
-  // Photo
-  photoBox: { borderRadius: 18, borderWidth: 2, borderStyle: 'dashed', height: 220, overflow: 'hidden', alignSelf: 'center', width: '70%' },
-  photoPreview: { width: '100%', height: '100%' },
-  avatarPlaceholder: { width: 100, height: 100, borderRadius: 50, alignItems: 'center', justifyContent: 'center', borderWidth: 2 },
+  nextBtn: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: colors.static.premiumGold, paddingVertical: 16, borderRadius: 14, marginTop: 4 },
+  nextBtnText: { fontSize: 16, color: colors.umrahGreen },
 
-  // Payment
-  priceCard: { borderRadius: 18, borderWidth: 1, padding: 20, alignItems: 'center', gap: 8 },
-  priceLabel: { fontSize: 14 },
-  priceValue: { fontSize: 32 },
-  divider: { width: '100%', height: 1, marginVertical: 8 },
-  demoNote: { fontSize: 12 },
-  payMethod: { flexDirection: 'row-reverse', alignItems: 'center', borderRadius: 16, borderWidth: 1.5, padding: 16, gap: 14 },
-  payRadio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  payRadioFill: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#D4AF37' },
-  payInfo: { flex: 1, gap: 2, alignItems: 'flex-end' },
-  payLabel: { fontSize: 15 },
-  paySub: { fontSize: 12 },
-  payIconWrap: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  submitBtn: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', backgroundColor: '#D4AF37', borderRadius: 16, paddingVertical: 17, gap: 10, marginTop: 8 },
+  primaryBtn: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16, borderRadius: 14 },
+  primaryBtnText: { fontSize: 16, color: '#FFFFFF' },
 
-  // Success
-  successWrap: { alignItems: 'center', gap: 20, paddingTop: 20 },
-  successIcon: { width: 130, height: 130, borderRadius: 65, alignItems: 'center', justifyContent: 'center', borderWidth: 2, marginBottom: 8 },
-  successTitle: { fontSize: 24, textAlign: 'center' },
-  successSub: { fontSize: 15, textAlign: 'center', lineHeight: 24 },
-  refCard: { width: '100%', borderRadius: 20, borderWidth: 1.5, padding: 22, gap: 12 },
-  refLabel: { fontSize: 13, textAlign: 'center' },
-  refValue: { fontSize: 28, textAlign: 'center', letterSpacing: 1 },
-  refRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
-  refRowKey: { fontSize: 13 },
-  refRowVal: { fontSize: 14 },
-  statusBadge: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
-  statusText: { fontSize: 13 },
-  homeBtn: { flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', backgroundColor: '#D4AF37', borderRadius: 16, paddingVertical: 16, paddingHorizontal: 32, gap: 10, width: '100%' },
+  successIcon: { width: 96, height: 96, borderRadius: 30, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  successTitle: { fontSize: 20, textAlign: 'center', marginTop: 16, lineHeight: 30 },
+
+  // No-host modal
+  modalBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(3,27,58,0.6)', alignItems: 'center', justifyContent: 'center', padding: 28 },
+  modalCard: { width: '100%', maxWidth: 360, borderRadius: 24, borderWidth: 1, paddingHorizontal: 22, paddingTop: 26, paddingBottom: 20, alignItems: 'center', gap: 12, boxShadow: '0px 8px 24px rgba(0,0,0,0.15)', elevation: 12 },
+  modalIcon: { width: 70, height: 70, borderRadius: 35, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  modalTitle: { fontSize: 19, textAlign: 'center' },
+  modalMsg: { fontSize: 14.5, textAlign: 'center', lineHeight: 23, marginBottom: 8 },
 });

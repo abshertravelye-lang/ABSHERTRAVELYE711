@@ -1,5 +1,6 @@
 import { Layout } from "@/components/layout";
 import { Switch, Route, Router as WouterRouter } from "wouter";
+import { useGuardedLocation } from "@/lib/guarded-location";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -28,6 +29,8 @@ import Login from "@/pages/login";
 import Register from "@/pages/register";
 import Account from "@/pages/account";
 import Admin from "@/pages/admin";
+import Umrah from "@/pages/umrah";
+import AgentPortal from "@/pages/agent-portal";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +51,10 @@ function Router() {
       <Route path="/visas/:countryId" component={VisaCountryDetail} />
       <Route path="/visas/:countryId/:visaId" component={VisaDetail} />
       
+      <Route path="/umrah" component={Umrah} />
+      <Route path="/agent" component={AgentPortal} />
+      <Route path="/agent/:rest*" component={AgentPortal} />
+
       <Route path="/about" component={About} />
       <Route path="/contact" component={Contact} />
       <Route path="/flights" component={Flights} />
@@ -84,7 +91,7 @@ function App() {
       <TranslationProvider>
         <AuthProvider>
           <TooltipProvider>
-            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")} hook={useGuardedLocation}>
               <Layout>
                 <Router />
               </Layout>

@@ -226,8 +226,15 @@ export default function Visas() {
   const { data: visas, isLoading } = useListVisas();
   const { data: countries } = useListVisaCountries({});
 
+  // Allow deep-linking to a pre-selected category, e.g. /visas?category=umrah
+  const initialCategory = (() => {
+    if (typeof window === "undefined") return "";
+    const c = new URLSearchParams(window.location.search).get("category") || "";
+    return CATEGORY_OPTIONS.some(o => o.value === c) ? c : "";
+  })();
+
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("");
+  const [category, setCategory] = useState(initialCategory);
   const [entryType, setEntryType] = useState("");
   const [processing, setProcessing] = useState("");
   const [sortBy, setSortBy] = useState("recommended");

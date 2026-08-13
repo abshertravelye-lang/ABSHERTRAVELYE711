@@ -1,3 +1,4 @@
+- [Git branch wipe recovery](git-branch-wipe-recovery.md) — if "our work was deleted", check reflog/branches for the real state and restore via checkout+patch, never rebuild.
 - [Drizzle-Zod Zod v3 lock](drizzle-zod-compat.md) — drizzle-zod must stay ≤0.5.1; ≥0.8 breaks with Zod v3.
 - [lib tsconfig types-node drop](lib-tsconfig-node-types.md) — lib packages (db, countries) must not declare types:["node"]; tsc --build cannot resolve it in composite mode.
 - [Drizzle decimal as-any inserts](drizzle-decimal-any.md) — db.insert/update with Zod-parsed bodies containing decimal/enum columns needs "as any" to satisfy Drizzle's strict column types.
@@ -11,3 +12,6 @@
 - [Auth token refresh](auth-token-refresh.md) — 15-min tokens need the shared 401-refresh-retry; refresh JWTs need jti; AI-check outages are 503, never "rejected".
 - [Country canonicalization](country-canonicalization.md) — all country fields store canonical English names from @workspace/countries; compare with isSameCountry, never substring.
 - [OpenAI proxy setup](openai-proxy-setup.md) — user's OpenAI key has no credits; server uses Replit AI Integrations proxy (both env vars required) with key fallback.
+- [Expo preview testing](expo-preview-testing.md) — mobile e2e/screenshots must hit the REPLIT_EXPO_DEV_DOMAIN root; the shared-proxy /absher-mobile path serves HTML for bundles → blank page.
+- [Document management rules](document-management-rules.md) — scoped staff file ACL, ownership at every upload path, idempotent doc requests/versions, refresh-aware multipart uploads.
+- [Leave/exit guard patterns](leave-guard-patterns.md) — wouter router-level blocker + history sentinel for Back; Expo wizards intercept their own header back, never raw GO_BACK.

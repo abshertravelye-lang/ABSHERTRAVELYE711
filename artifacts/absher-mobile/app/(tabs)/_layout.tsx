@@ -1,125 +1,135 @@
-/**
- * Tab bar design rule — ABSHER TRAVEL Premium Brand
- *   Always deep navy background (#0A2342 light, #071525 dark)
- *   Active icon / label → gold (#D4AF37) — matches the logo's gold accents
- *   Inactive → white 50% opacity (light) / slate-400 (dark)
- *   Subtle gold glow on active tab
- */
 import React from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { useTheme } from '@/context/ThemeContext';
+import { useLanguage } from '@/context/LanguageContext';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import { isLiquidGlassAvailable } from 'expo-glass-effect';
 import { Tabs } from 'expo-router';
-import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
 import { SymbolView } from 'expo-symbols';
+import colors from '@/constants/colors';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-// ── Navy + Gold tab bar (always branded) ────────────────────────────────────
-const NAVY   = '#0A2342';
-const DARK_NAVY = '#071525';
-const GOLD   = '#D4AF37';
+const NAVY = colors.static.primaryNavy;
+const GOLD = colors.static.premiumGold;
 
-function NativeTabLayout() {
-  return (
-    <NativeTabs>
-      <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: 'house', selected: 'house.fill' }} />
-        <Label>الرئيسية</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="flights">
-        <Icon sf={{ default: 'airplane', selected: 'paperplane.fill' }} />
-        <Label>رحلات</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="visas">
-        <Icon sf={{ default: 'doc.text', selected: 'doc.text.fill' }} />
-        <Label>تأشيرات</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="bookings">
-        <Icon sf={{ default: 'calendar', selected: 'calendar.badge.checkmark' }} />
-        <Label>حجوزاتي</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="programs">
-        <Icon sf={{ default: 'globe', selected: 'globe' }} />
-        <Label>البرامج</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="account">
-        <Icon sf={{ default: 'person', selected: 'person.fill' }} />
-        <Label>حسابي</Label>
-      </NativeTabs.Trigger>
-    </NativeTabs>
-  );
-}
-
-function ClassicTabLayout() {
+export default function TabLayout() {
   const { resolved } = useTheme();
+  const { t, lang } = useLanguage();
+  const insets = useSafeAreaInsets();
   const isDark = resolved === 'dark';
   const isIOS = Platform.OS === 'ios';
-  const isWeb = Platform.OS === 'web';
 
-  // Dark mode: slightly deeper navy so the tab bar contrasts with cards
-  const tabBg   = isDark ? DARK_NAVY : NAVY;
-  const inactive = isDark ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.50)';
+  const tabBg = isDark ? colors.dark.card : '#FFFFFF';
+  const inactive = isDark ? colors.dark.textSecondary : colors.light.textSecondary;
+  const activeText = isDark ? GOLD : NAVY;
 
-  const icon = (
-    sfName: string,
-    outline: keyof typeof Ionicons.glyphMap,
-    filled: keyof typeof Ionicons.glyphMap,
-    color: string,
-    focused: boolean,
-  ) =>
-    isIOS
-      ? <SymbolView name={sfName as Parameters<typeof SymbolView>[0]['name']} tintColor={color} size={24} />
-      : <Ionicons name={focused ? filled : outline} size={24} color={color} />;
+  const CustomIcon = ({ name, outline, filled, focused, label }: { name: string, outline: any, filled: any, focused: boolean, label: string }) => {
+    const isCenter = label === t('nav.home');
+    
+    if (focused) {
+      return (
+        <View style={[
+          styles.activeIconContainer,
+          isCenter ? styles.activeCenterContainer : {},
+          { backgroundColor: isDark ? '#FFFFFF' : NAVY }
+        ]}>
+          {isIOS ? (
+            <SymbolView name={name as any} tintColor={isDark ? NAVY : GOLD} size={22} />
+          ) : (
+            <Ionicons name={filled} size={22} color={isDark ? NAVY : GOLD} />
+          )}
+        </View>
+      );
+    }
+
+    return isIOS ? (
+      <SymbolView name={name as any} tintColor={inactive} size={24} />
+    ) : (
+      <Ionicons name={outline} size={24} color={inactive} />
+    );
+  };
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor:   GOLD,
+        tabBarActiveTintColor: activeText,
         tabBarInactiveTintColor: inactive,
-        tabBarLabelStyle: { fontFamily: 'Cairo_600SemiBold', fontSize: 11 },
-        tabBarStyle: {
-          position: 'absolute',
-          backgroundColor: isIOS ? 'transparent' : tabBg,
-          borderTopWidth: 0,
-          elevation: 0,
-          ...(isWeb ? { height: 84 } : {}),
-        },
+        tabBarLabelStyle: { fontFamily: 'Cairo_600SemiBold', fontSize: 11, paddingTop: 4 },
+        tabBarStyle: [
+          styles.tabBar,
+          {
+            backgroundColor: isIOS ? 'transparent' : tabBg,
+            bottom: Platform.OS === 'web' ? 24 : Math.max(insets.bottom, 24),
+          }
+        ],
         tabBarBackground: () =>
           isIOS ? (
             <BlurView
               intensity={95}
-              tint="dark"
-              style={[StyleSheet.absoluteFill, { backgroundColor: `${NAVY}E8` }]}
+              tint={isDark ? "dark" : "light"}
+              style={[StyleSheet.absoluteFill, { borderRadius: 32, overflow: 'hidden', backgroundColor: isDark ? 'rgba(10,35,66,0.8)' : 'rgba(255,255,255,0.8)' }]}
             />
-          ) : isWeb ? (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: tabBg }]} />
           ) : null,
       }}
     >
-      <Tabs.Screen name="index"
-        options={{ title: 'الرئيسية',
-          tabBarIcon: ({ color, focused }) => icon('house', 'home-outline', 'home', color, focused) }} />
-      <Tabs.Screen name="flights"
-        options={{ title: 'رحلات',
-          tabBarIcon: ({ color, focused }) => icon('airplane', 'airplane-outline', 'airplane', color, focused) }} />
-      <Tabs.Screen name="visas"
-        options={{ title: 'تأشيرات',
-          tabBarIcon: ({ color, focused }) => icon('doc.text', 'document-text-outline', 'document-text', color, focused) }} />
+      <Tabs.Screen name="more"
+        options={{ title: lang === 'ar' ? 'المزيد' : 'More',
+          tabBarIcon: ({ focused }) => <CustomIcon name="square.grid.2x2" outline="grid-outline" filled="grid" focused={focused} label="more" /> }} />
+          
       <Tabs.Screen name="bookings"
-        options={{ title: 'حجوزاتي',
-          tabBarIcon: ({ color, focused }) => icon('calendar', 'calendar-outline', 'calendar', color, focused) }} />
-      <Tabs.Screen name="programs"
-        options={{ title: 'البرامج',
-          tabBarIcon: ({ color, focused }) => icon('globe', 'globe-outline', 'globe', color, focused) }} />
+        options={{ title: t('nav.bookings'),
+          tabBarIcon: ({ focused }) => <CustomIcon name="calendar" outline="calendar-outline" filled="calendar" focused={focused} label="bookings" /> }} />
+          
+      <Tabs.Screen name="index"
+        options={{ title: t('nav.home'),
+          tabBarIcon: ({ focused }) => <CustomIcon name="house" outline="home-outline" filled="home" focused={focused} label={t('nav.home')} /> }} />
+          
+      <Tabs.Screen name="notifications"
+        options={{ title: lang === 'ar' ? 'الإشعارات' : 'Notifications',
+          tabBarIcon: ({ focused }) => <CustomIcon name="bell" outline="notifications-outline" filled="notifications" focused={focused} label="notifications" /> }} />
+          
       <Tabs.Screen name="account"
-        options={{ title: 'حسابي',
-          tabBarIcon: ({ color, focused }) => icon('person', 'person-outline', 'person', color, focused) }} />
+        options={{ title: t('nav.account'),
+          tabBarIcon: ({ focused }) => <CustomIcon name="person" outline="person-outline" filled="person" focused={focused} label="account" /> }} />
+      
+      {/* Hidden tabs */}
+      <Tabs.Screen name="flights" options={{ href: null }} />
+      <Tabs.Screen name="programs" options={{ href: null }} />
+      <Tabs.Screen name="visas" options={{ href: null }} />
+      <Tabs.Screen name="umrah" options={{ href: null }} />
     </Tabs>
   );
 }
 
-export default function TabLayout() {
-  return isLiquidGlassAvailable() ? <NativeTabLayout /> : <ClassicTabLayout />;
-}
+const styles = StyleSheet.create({
+  tabBar: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    height: 72,
+    borderRadius: 32,
+    borderTopWidth: 0,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    paddingHorizontal: 8,
+    paddingBottom: 8,
+    paddingTop: 8,
+  },
+  activeIconContainer: {
+    width: 48,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  activeCenterContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginTop: -16, // Lift it up slightly
+  }
+});

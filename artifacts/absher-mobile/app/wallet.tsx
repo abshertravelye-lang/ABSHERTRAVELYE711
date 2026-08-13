@@ -6,19 +6,21 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
+import { useLanguage } from '@/context/LanguageContext';
 import { EmptyState } from '@/components/EmptyState';
 
 // Hardcoded transactions for display
 const TRANSACTIONS = [
-  { id: '1', title: 'إيداع رصيد', date: '2024-05-15T10:30:00Z', amount: 5000, type: 'credit', status: 'completed' },
-  { id: '2', title: 'حجز رحلة طيران (جدة - دبي)', date: '2024-05-12T14:20:00Z', amount: -1250, type: 'debit', status: 'completed' },
-  { id: '3', title: 'استرداد حجز فندق', date: '2024-05-10T09:15:00Z', amount: 800, type: 'credit', status: 'completed' },
-  { id: '4', title: 'رسوم استخراج تأشيرة شنغن', date: '2024-05-01T11:45:00Z', amount: -450, type: 'debit', status: 'completed' },
-  { id: '5', title: 'حوالة بنكية', date: '2024-04-28T16:00:00Z', amount: 2000, type: 'credit', status: 'completed' },
-];
+  { id: '1', titleKey: 'wallet.tx.deposit', date: '2024-05-15T10:30:00Z', amount: 5000, type: 'credit', status: 'completed' },
+  { id: '2', titleKey: 'wallet.tx.flight', date: '2024-05-12T14:20:00Z', amount: -1250, type: 'debit', status: 'completed' },
+  { id: '3', titleKey: 'wallet.tx.hotelRefund', date: '2024-05-10T09:15:00Z', amount: 800, type: 'credit', status: 'completed' },
+  { id: '4', titleKey: 'wallet.tx.visaFee', date: '2024-05-01T11:45:00Z', amount: -450, type: 'debit', status: 'completed' },
+  { id: '5', titleKey: 'wallet.tx.bankTransfer', date: '2024-04-28T16:00:00Z', amount: 2000, type: 'credit', status: 'completed' },
+] as const;
 
 export default function WalletScreen() {
   const colors = useColors();
+  const { t, lang } = useLanguage();
   const insets = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const bottomInset = Platform.OS === 'web' ? 34 : Math.max(insets.bottom, 20);
@@ -33,22 +35,22 @@ export default function WalletScreen() {
 
   const handleAction = (actionName: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    Alert.alert('قريباً', `ميزة ${actionName} ستكون متاحة قريباً.`);
+    Alert.alert(t('common.comingSoon'), t('wallet.actionSoon').replace('{action}', actionName));
   };
 
   const formatDate = (iso: string) => {
-    return new Date(iso).toLocaleDateString('ar-SA', { day: 'numeric', month: 'short', year: 'numeric' });
+    return new Date(iso).toLocaleDateString(lang === 'ar' ? 'ar-SA' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: topInset + 12, backgroundColor: '#0A2342' }]}>
+      <View style={[styles.header, { paddingTop: topInset + 12, backgroundColor: '#052B5B' }]}>
         <View style={styles.headerRow}>
           <Pressable onPress={() => router.back()} hitSlop={10}>
             <Ionicons name="arrow-forward" size={24} color="#FFFFFF" />
           </Pressable>
-          <Text style={[styles.headerTitle, { fontFamily: 'Cairo_700Bold' }]}>المحفظة</Text>
+          <Text style={[styles.headerTitle, { fontFamily: 'Cairo_700Bold' }]}>{t('payment.wallet')}</Text>
           <View style={{ width: 24 }} />
         </View>
       </View>
@@ -62,7 +64,7 @@ export default function WalletScreen() {
         {/* Balance Card */}
         <View style={styles.cardContainer}>
           <LinearGradient
-            colors={['#1e3c72', '#0A2342']}
+            colors={['#1e3c72', '#052B5B']}
             style={styles.balanceCard}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
@@ -73,18 +75,18 @@ export default function WalletScreen() {
             
             <View style={styles.cardHeader}>
               <View style={[styles.badge, { backgroundColor: 'rgba(212, 175, 55, 0.2)' }]}>
-                <Text style={[styles.badgeText, { color: '#D4AF37', fontFamily: 'Cairo_600SemiBold' }]}>نشط</Text>
+                <Text style={[styles.badgeText, { color: '#D4AF37', fontFamily: 'Cairo_600SemiBold' }]}>{t('wallet.active')}</Text>
               </View>
-              <Text style={[styles.cardLabel, { fontFamily: 'Cairo_400Regular' }]}>الرصيد المتاح</Text>
+              <Text style={[styles.cardLabel, { fontFamily: 'Cairo_400Regular' }]}>{t('wallet.availableBalance')}</Text>
             </View>
             
             <View style={styles.balanceRow}>
-              <Text style={[styles.currency, { fontFamily: 'Cairo_600SemiBold' }]}>ر.س</Text>
+              <Text style={[styles.currency, { fontFamily: 'Cairo_600SemiBold' }]}>{t('wallet.currency')}</Text>
               <Text style={[styles.balanceAmount, { fontFamily: 'Cairo_700Bold' }]}>6,100.00</Text>
             </View>
 
             <View style={styles.cardFooter}>
-              <Text style={[styles.accountLabel, { fontFamily: 'Cairo_400Regular' }]}>رقم الحساب</Text>
+              <Text style={[styles.accountLabel, { fontFamily: 'Cairo_400Regular' }]}>{t('wallet.accountNumber')}</Text>
               <Text style={[styles.accountNumber, { fontFamily: 'Cairo_600SemiBold' }]}>**** **** **** 4921</Text>
             </View>
           </LinearGradient>
@@ -92,37 +94,37 @@ export default function WalletScreen() {
 
         {/* Quick Actions */}
         <View style={styles.actionsRow}>
-          <Pressable style={styles.actionBtn} onPress={() => handleAction('السحب')}>
+          <Pressable style={styles.actionBtn} onPress={() => handleAction(t('wallet.withdraw'))}>
             <View style={[styles.actionIconWrap, { backgroundColor: colors.muted }]}>
-              <Ionicons name="arrow-down-outline" size={24} color="#0A2342" />
+              <Ionicons name="arrow-down-outline" size={24} color="#052B5B" />
             </View>
-            <Text style={[styles.actionText, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>سحب</Text>
+            <Text style={[styles.actionText, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{t('wallet.withdraw')}</Text>
           </Pressable>
-          <Pressable style={styles.actionBtn} onPress={() => handleAction('التحويل')}>
+          <Pressable style={styles.actionBtn} onPress={() => handleAction(t('wallet.transfer'))}>
             <View style={[styles.actionIconWrap, { backgroundColor: colors.muted }]}>
-              <Ionicons name="swap-horizontal-outline" size={24} color="#0A2342" />
+              <Ionicons name="swap-horizontal-outline" size={24} color="#052B5B" />
             </View>
-            <Text style={[styles.actionText, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>تحويل</Text>
+            <Text style={[styles.actionText, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{t('wallet.transfer')}</Text>
           </Pressable>
-          <Pressable style={styles.actionBtn} onPress={() => handleAction('الإيداع')}>
+          <Pressable style={styles.actionBtn} onPress={() => handleAction(t('wallet.deposit'))}>
             <View style={[styles.actionIconWrap, { backgroundColor: '#FFF9E6' }]}>
               <Ionicons name="add-outline" size={24} color="#D4AF37" />
             </View>
-            <Text style={[styles.actionText, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>إيداع</Text>
+            <Text style={[styles.actionText, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]}>{t('wallet.deposit')}</Text>
           </Pressable>
         </View>
 
         {/* Transactions List */}
         <View style={styles.transactionsSection}>
           <View style={styles.transactionsHeader}>
-            <Text style={[styles.transactionsTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>سجل العمليات</Text>
+            <Text style={[styles.transactionsTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>{t('wallet.history')}</Text>
           </View>
 
-          {TRANSACTIONS.length === 0 ? (
+          {(TRANSACTIONS as unknown as unknown[]).length === 0 ? (
             <EmptyState
               icon="receipt-outline"
-              title="لا توجد عمليات"
-              description="لم تقم بأي عمليات مالية حتى الآن"
+              title={t('wallet.empty.title')}
+              description={t('wallet.empty.desc')}
             />
           ) : (
             <View style={[styles.transactionsList, { backgroundColor: colors.card }]}>
@@ -140,7 +142,7 @@ export default function WalletScreen() {
                   >
                     <View style={styles.txLeft}>
                       <Text style={[styles.txAmount, { color: txColor, fontFamily: 'Cairo_700Bold' }]}>
-                        {isCredit ? '+' : ''}{tx.amount.toLocaleString('ar-SA')} ر.س
+                        {isCredit ? '+' : ''}{tx.amount.toLocaleString(lang === 'ar' ? 'ar-SA' : 'en-US')} {t('wallet.currency')}
                       </Text>
                       <Text style={[styles.txDate, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
                         {formatDate(tx.date)}
@@ -150,17 +152,17 @@ export default function WalletScreen() {
                     <View style={styles.txRight}>
                       <View style={styles.txInfo}>
                         <Text style={[styles.txTitle, { color: colors.foreground, fontFamily: 'Cairo_600SemiBold' }]} numberOfLines={1}>
-                          {tx.title}
+                          {t(tx.titleKey)}
                         </Text>
                         <Text style={[styles.txStatus, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-                          ناجحة
+                          {t('wallet.txSuccess')}
                         </Text>
                       </View>
                       <View style={[styles.txIconWrap, { backgroundColor: isCredit ? 'rgba(22, 163, 74, 0.1)' : colors.muted }]}>
                         <Ionicons 
                           name={isCredit ? 'arrow-down-outline' : 'arrow-up-outline'} 
                           size={18} 
-                          color={isCredit ? '#16A34A' : '#0A2342'} 
+                          color={isCredit ? '#16A34A' : '#052B5B'} 
                         />
                       </View>
                     </View>
@@ -189,7 +191,7 @@ const styles = StyleSheet.create({
     height: 180,
     justifyContent: 'space-between',
     overflow: 'hidden',
-    shadowColor: '#0A2342',
+    shadowColor: '#052B5B',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 12,

@@ -13,6 +13,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
+import { useLanguage } from '@/context/LanguageContext';
+
+const MONTH_KEYS = [
+  'datePicker.month.jan', 'datePicker.month.feb', 'datePicker.month.mar', 'datePicker.month.apr',
+  'datePicker.month.may', 'datePicker.month.jun', 'datePicker.month.jul', 'datePicker.month.aug',
+  'datePicker.month.sep', 'datePicker.month.oct', 'datePicker.month.nov', 'datePicker.month.dec',
+] as const;
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -27,9 +34,9 @@ const daysInMonth = (y: number, m: number) => new Date(y, m, 0).getDate();
 const today = () => new Date();
 const isoToday = () => toISO(today().getFullYear(), today().getMonth() + 1, today().getDate());
 
-const MONTHS_AR = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
 const MONTHS_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DAYS_AR   = ['أح','اث','ث','أر','خ','ج','س'];
+const DAYS_EN   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 
 function compareDate(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
@@ -69,6 +76,9 @@ function CalendarPicker({
   lang: 'ar' | 'en'; onClose: () => void;
 }) {
   const colors = useColors();
+  const { t } = useLanguage();
+  const MONTHS = MONTH_KEYS.map((k) => t(k));
+  const DAYS = lang === 'ar' ? DAYS_AR : DAYS_EN;
   const now = today();
   const initYear  = parseISO(value)?.y  ?? now.getFullYear();
   const initMonth = parseISO(value)?.m  ?? now.getMonth() + 1;
@@ -160,7 +170,7 @@ function CalendarPicker({
             <Ionicons name="chevron-forward" size={22} color={colors.foreground} />
           </Pressable>
           <Text style={[cal.navTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>
-            {MONTHS_AR[viewMonth - 1]} {viewYear}
+            {MONTHS[viewMonth - 1]} {viewYear}
           </Text>
           <Pressable onPress={prevMonth} style={cal.navBtn} hitSlop={12}>
             <Ionicons name="chevron-back" size={22} color={colors.foreground} />
@@ -170,13 +180,13 @@ function CalendarPicker({
         {/* Range hint */}
         {mode === 'range' && (
           <Text style={[cal.hint, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-            {pickStep === 'start' ? 'اختر تاريخ المغادرة' : 'اختر تاريخ العودة'}
+            {pickStep === 'start' ? t('datePicker.pickDeparture') : t('datePicker.pickReturn')}
           </Text>
         )}
 
         {/* Day headers */}
         <View style={cal.dayRow}>
-          {DAYS_AR.map((d, i) => (
+          {DAYS.map((d, i) => (
             <Text key={i} style={[cal.dayHdr, { color: colors.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>{d}</Text>
           ))}
         </View>
@@ -196,8 +206,8 @@ function CalendarPicker({
                 key={idx}
                 style={[
                   cal.cell,
-                  inRange  && { backgroundColor: '#0A234220' },
-                  (isStart || isEnd) && { backgroundColor: '#0A234215', borderRadius: 10 },
+                  inRange  && { backgroundColor: '#052B5B20' },
+                  (isStart || isEnd) && { backgroundColor: '#052B5B15', borderRadius: 10 },
                 ]}
                 onPress={() => !disabled && day && onDayPress(day)}
                 disabled={disabled}
@@ -205,7 +215,7 @@ function CalendarPicker({
                 <View style={[
                   cal.dayCircle,
                   isStart || isEnd
-                    ? { backgroundColor: '#0A2342', borderRadius: 10 }
+                    ? { backgroundColor: '#052B5B', borderRadius: 10 }
                     : isToday
                     ? { borderWidth: 1.5, borderColor: '#D4AF37', borderRadius: 10 }
                     : undefined,
@@ -229,17 +239,17 @@ function CalendarPicker({
             {tempStart && (
               <View style={cal.rangeItem}>
                 <Text style={[cal.rangeLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-                  {mode === 'range' ? 'المغادرة' : 'التاريخ المختار'}
+                  {mode === 'range' ? t('datePicker.departure') : t('datePicker.selectedDate')}
                 </Text>
-                <Text style={[cal.rangeDate, { color: '#0A2342', fontFamily: 'Cairo_700Bold' }]}>{tempStart}</Text>
+                <Text style={[cal.rangeDate, { color: '#052B5B', fontFamily: 'Cairo_700Bold' }]}>{tempStart}</Text>
               </View>
             )}
             {mode === 'range' && (
               <>
                 <Ionicons name="arrow-back" size={16} color={colors.mutedForeground} />
                 <View style={cal.rangeItem}>
-                  <Text style={[cal.rangeLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>العودة</Text>
-                  <Text style={[cal.rangeDate, { color: tempEnd ? '#0A2342' : colors.mutedForeground, fontFamily: 'Cairo_700Bold' }]}>
+                  <Text style={[cal.rangeLabel, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{t('datePicker.return')}</Text>
+                  <Text style={[cal.rangeDate, { color: tempEnd ? '#052B5B' : colors.mutedForeground, fontFamily: 'Cairo_700Bold' }]}>
                     {tempEnd || '—'}
                   </Text>
                 </View>
@@ -252,16 +262,16 @@ function CalendarPicker({
       {/* ── Action buttons — always pinned at bottom ── */}
       <View style={[cal.actions, { borderTopColor: colors.border }]}>
         <Pressable style={[cal.btnClear, { borderColor: colors.border }]} onPress={clear}>
-          <Text style={[cal.btnClearText, { color: colors.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>مسح</Text>
+          <Text style={[cal.btnClearText, { color: colors.mutedForeground, fontFamily: 'Cairo_600SemiBold' }]}>{t('datePicker.clear')}</Text>
         </Pressable>
         <Pressable
-          style={[cal.btnConfirm, { backgroundColor: tempStart ? '#0A2342' : colors.muted }]}
+          style={[cal.btnConfirm, { backgroundColor: tempStart ? '#052B5B' : colors.muted }]}
           onPress={confirm}
           disabled={!tempStart}
         >
           <Ionicons name="checkmark" size={18} color={tempStart ? '#FFFFFF' : colors.mutedForeground} />
           <Text style={[cal.btnConfirmText, { color: tempStart ? '#FFFFFF' : colors.mutedForeground, fontFamily: 'Cairo_700Bold' }]}>
-            تأكيد
+            {t('datePicker.confirm')}
           </Text>
         </Pressable>
       </View>
@@ -302,6 +312,8 @@ function SteppedPicker({
   mode: 'birth' | 'passport'; onClose: () => void;
 }) {
   const colors = useColors();
+  const { t, lang } = useLanguage();
+  const MONTHS = MONTH_KEYS.map((k) => t(k));
   const now = today();
 
   const parsed = parseISO(value);
@@ -350,7 +362,11 @@ function SteppedPicker({
     onClose();
   };
 
-  const stepLabel = step === 'year' ? 'اختر السنة' : step === 'month' ? `${selYear} — اختر الشهر` : `${selYear} / ${pad(selMonth)} — اختر اليوم`;
+  const stepLabel = step === 'year'
+    ? t('datePicker.pickYear')
+    : step === 'month'
+    ? `${selYear} — ${t('datePicker.pickMonth')}`
+    : `${selYear} / ${pad(selMonth)} — ${t('datePicker.pickDay')}`;
 
   return (
     <View style={{ flex: 1 }}>
@@ -370,7 +386,7 @@ function SteppedPicker({
           {years.map((y) => (
             <Pressable
               key={y}
-              style={[sp.item, { backgroundColor: y === selYear ? '#0A2342' : colors.card, borderColor: colors.border }]}
+              style={[sp.item, { backgroundColor: y === selYear ? '#052B5B' : colors.card, borderColor: colors.border }]}
               onPress={() => pickYear(y)}
             >
               <Text style={[sp.itemText, { color: y === selYear ? '#FFFFFF' : colors.foreground, fontFamily: y === selYear ? 'Cairo_700Bold' : 'Cairo_400Regular' }]}>
@@ -388,11 +404,11 @@ function SteppedPicker({
             {months.map((m) => (
               <Pressable
                 key={m}
-                style={[sp.monthItem, { backgroundColor: m === selMonth ? '#0A2342' : colors.card, borderColor: colors.border }]}
+                style={[sp.monthItem, { backgroundColor: m === selMonth ? '#052B5B' : colors.card, borderColor: colors.border }]}
                 onPress={() => pickMonth(m)}
               >
                 <Text style={[sp.monthText, { color: m === selMonth ? '#FFFFFF' : colors.foreground, fontFamily: m === selMonth ? 'Cairo_700Bold' : 'Cairo_400Regular' }]}>
-                  {MONTHS_AR[m - 1]}
+                  {MONTHS[m - 1]}
                 </Text>
                 <Text style={[sp.monthEn, { color: m === selMonth ? 'rgba(255,255,255,0.7)' : colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
                   {MONTHS_EN[m - 1]}
@@ -415,7 +431,7 @@ function SteppedPicker({
                   key={d}
                   style={[
                     sp.dayItem,
-                    { backgroundColor: d === selDay ? '#0A2342' : colors.card, borderColor: colors.border, opacity: disabled ? 0.35 : 1 },
+                    { backgroundColor: d === selDay ? '#052B5B' : colors.card, borderColor: colors.border, opacity: disabled ? 0.35 : 1 },
                   ]}
                   onPress={() => !disabled && pickDay(d)}
                   disabled={!!disabled}

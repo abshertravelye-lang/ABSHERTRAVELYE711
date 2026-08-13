@@ -7,12 +7,14 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
+import { useLanguage } from '@/context/LanguageContext';
 import { useGetProgram, useCreateBooking } from '@workspace/api-client-react';
 import { getImageUrl } from '@/hooks/useImageUrl';
 
 export default function ProgramDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const colors = useColors();
+  const { t, lang } = useLanguage();
   const insets = useSafeAreaInsets();
 
   const { data: program, isLoading } = useGetProgram(Number(id));
@@ -21,16 +23,16 @@ export default function ProgramDetailScreen() {
 
   const handleBook = () => {
     Alert.prompt
-      ? Alert.prompt('احجز الآن', 'أدخل اسمك ورقم هاتفك', [
-          { text: 'إلغاء', style: 'cancel' },
+      ? Alert.prompt(t('programDetail.bookNow'), t('programDetail.bookPromptBody'), [
+          { text: t('flow.cancel'), style: 'cancel' },
           {
-            text: 'تأكيد الحجز',
-            onPress: (name?: string) => confirmBook(name || 'زبون'),
+            text: t('programDetail.confirmBooking'),
+            onPress: (name?: string) => confirmBook(name || t('programDetail.defaultClient')),
           },
         ])
-      : Alert.alert('احجز الآن', 'هل تريد حجز هذا البرنامج؟', [
-          { text: 'إلغاء', style: 'cancel' },
-          { text: 'تأكيد', onPress: () => confirmBook('زبون') },
+      : Alert.alert(t('programDetail.bookNow'), t('programDetail.bookConfirmBody'), [
+          { text: t('flow.cancel'), style: 'cancel' },
+          { text: t('flow.confirm'), onPress: () => confirmBook(t('programDetail.defaultClient')) },
         ]);
   };
 
@@ -43,16 +45,16 @@ export default function ProgramDetailScreen() {
           clientName: name,
           clientPhone: '0500000000',
           destination: program?.country,
-          notes: `برنامج: ${program?.titleAr}`,
+          notes: `${t('programDetail.notePrefix')} ${program?.titleAr}`,
           totalPrice: program?.price,
         },
       },
       {
         onSuccess: () => {
           setBooked(true);
-          Alert.alert('تم الحجز', 'سيتواصل معك فريقنا قريباً لتأكيد الحجز.');
+          Alert.alert(t('programDetail.bookedTitle'), t('programDetail.bookedBody'));
         },
-        onError: () => Alert.alert('خطأ', 'تعذر إتمام الحجز، حاول مرة أخرى'),
+        onError: () => Alert.alert(t('flow.error'), t('programDetail.bookError')),
       }
     );
   };
@@ -68,7 +70,7 @@ export default function ProgramDetailScreen() {
   if (!program) {
     return (
       <View style={[styles.loading, { backgroundColor: colors.background }]}>
-        <Text style={[styles.errorText, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>لم يتم العثور على البرنامج</Text>
+        <Text style={[styles.errorText, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{t('programDetail.notFound')}</Text>
       </View>
     );
   }
@@ -94,8 +96,8 @@ export default function ProgramDetailScreen() {
         <View style={styles.content}>
           {/* Title + Price */}
           <View style={styles.titleRow}>
-            <Text style={[styles.price, { color: '#0A2342', fontFamily: 'Cairo_700Bold' }]}>
-              {program.price.toLocaleString('ar-SA')} {program.currency || 'ريال'}
+            <Text style={[styles.price, { color: '#052B5B', fontFamily: 'Cairo_700Bold' }]}>
+              {program.price.toLocaleString(lang === 'ar' ? 'ar-SA' : 'en-US')} {program.currency || t('programDetail.currency')}
             </Text>
             <Text style={[styles.title, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>{program.titleAr}</Text>
           </View>
@@ -103,13 +105,13 @@ export default function ProgramDetailScreen() {
           {/* Meta badges */}
           <View style={styles.badges}>
             <View style={[styles.badge, { backgroundColor: '#F0F5FF' }]}>
-              <Ionicons name="time-outline" size={14} color="#0A2342" />
-              <Text style={[styles.badgeText, { color: '#0A2342', fontFamily: 'Cairo_600SemiBold' }]}>{program.days} يوم</Text>
+              <Ionicons name="time-outline" size={14} color="#052B5B" />
+              <Text style={[styles.badgeText, { color: '#052B5B', fontFamily: 'Cairo_600SemiBold' }]}>{program.days} {t('programDetail.dayUnit')}</Text>
             </View>
             {program.country && (
               <View style={[styles.badge, { backgroundColor: '#F0F5FF' }]}>
-                <Ionicons name="location-outline" size={14} color="#0A2342" />
-                <Text style={[styles.badgeText, { color: '#0A2342', fontFamily: 'Cairo_600SemiBold' }]}>{program.country}</Text>
+                <Ionicons name="location-outline" size={14} color="#052B5B" />
+                <Text style={[styles.badgeText, { color: '#052B5B', fontFamily: 'Cairo_600SemiBold' }]}>{program.country}</Text>
               </View>
             )}
             {program.cities?.map((c) => (
@@ -122,7 +124,7 @@ export default function ProgramDetailScreen() {
           {/* Description */}
           {program.descriptionAr && (
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>وصف البرنامج</Text>
+              <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>{t('programDetail.description')}</Text>
               <Text style={[styles.desc, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>{program.descriptionAr}</Text>
             </View>
           )}
@@ -130,7 +132,7 @@ export default function ProgramDetailScreen() {
           {/* Included Services */}
           {!!program.includedServices?.length && (
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>الخدمات المشمولة</Text>
+              <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>{t('programDetail.includedServices')}</Text>
               {program.includedServices.map((s, i) => (
                 <View key={i} style={styles.serviceRow}>
                   <Text style={[styles.serviceText, { color: colors.foreground, fontFamily: 'Cairo_400Regular' }]}>{s}</Text>
@@ -143,11 +145,11 @@ export default function ProgramDetailScreen() {
           {/* Itinerary */}
           {!!program.dailyItinerary?.length && (
             <View style={styles.section}>
-              <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>البرنامج اليومي</Text>
+              <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>{t('programDetail.dailyItinerary')}</Text>
               {program.dailyItinerary.map((day) => (
                 <View key={day.day} style={[styles.dayCard, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-                  <View style={[styles.dayBadge, { backgroundColor: '#0A2342' }]}>
-                    <Text style={[styles.dayNum, { fontFamily: 'Cairo_700Bold' }]}>يوم {day.day}</Text>
+                  <View style={[styles.dayBadge, { backgroundColor: '#052B5B' }]}>
+                    <Text style={[styles.dayNum, { fontFamily: 'Cairo_700Bold' }]}>{t('programDetail.dayPrefix')} {day.day}</Text>
                   </View>
                   <View style={styles.dayBody}>
                     <Text style={[styles.dayTitle, { color: colors.foreground, fontFamily: 'Cairo_700Bold' }]}>{day.titleAr}</Text>
@@ -167,7 +169,7 @@ export default function ProgramDetailScreen() {
         <Pressable
           style={({ pressed }) => [
             styles.bookBtn,
-            { backgroundColor: booked ? '#16A34A' : '#0A2342', opacity: pressed ? 0.9 : 1 },
+            { backgroundColor: booked ? '#16A34A' : '#052B5B', opacity: pressed ? 0.9 : 1 },
           ]}
           onPress={handleBook}
           disabled={booked || createBooking.isPending}
@@ -178,7 +180,7 @@ export default function ProgramDetailScreen() {
             <>
               <Ionicons name={booked ? 'checkmark-circle' : 'calendar-outline'} size={20} color="#FFFFFF" />
               <Text style={[styles.bookBtnText, { fontFamily: 'Cairo_700Bold' }]}>
-                {booked ? 'تم الحجز' : 'احجز الآن'}
+                {booked ? t('programDetail.booked') : t('programDetail.bookNow')}
               </Text>
             </>
           )}

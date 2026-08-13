@@ -129,6 +129,81 @@ export function requireSuperAdmin() {
   };
 }
 
+import { agenciesTable } from "@workspace/db";
+
+/**
+ * Loaded agent-portal context, attached to the request by requireAgent.
+ * Distinguishes a B2B travel-portal agent (role "agent" WITH an agency_id) from
+ * a staff employee (role "agent" WITHOUT an agency_id but WITH permissions).
+ */
+export interface AgentContext {
+  userId: string;
+  agencyId: number;
+  agencyName: string;
+  agencyStatus: "active" | "suspended" | "pending";
+}
+
+declare global {
+  namespace Express {
+    interface Request {
+      agent?: AgentContext;
+    }
+  }
+}
+
+/**
+ * Agent-portal gate. Loads the caller from the DB and requires:
+ *  - role === "agent" AND a non-null agency_id (a travel-portal agent, not a
+ *    staff employee),
+ *  - an active user account,
+ *  - (unless allowInactiveAgency) an "active" agency.
+ * On success attaches req.agent. Rejects staff/customers/admins with 403.
+ */
+export function requireAgent(opts: { allowInactiveAgency?: boolean } = {}) {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    if (!req.user) {
+      res.status(401).json({ error: "Not authenticated" });
+      return;
+    }
+    try {
+      const [user] = await db
+        .select({ id: usersTable.id, role: usersTable.role, isActive: usersTable.isActive, agencyId: usersTable.agencyId })
+        .from(usersTable)
+        .where(and(eq(usersTable.id, req.user.sub), isNull(usersTable.deletedAt)));
+      if (!user || !user.isActive) {
+        res.status(401).json({ error: "Account is inactive" });
+        return;
+      }
+      if (user.role !== "agent" || user.agencyId == null) {
+        res.status(403).json({ error: "Agent portal access only" });
+        return;
+      }
+      const [agency] = await db
+        .select({ id: agenciesTable.id, name: agenciesTable.name, status: agenciesTable.status })
+        .from(agenciesTable)
+        .where(eq(agenciesTable.id, user.agencyId));
+      if (!agency) {
+        res.status(403).json({ error: "Agency not found" });
+        return;
+      }
+      if (!opts.allowInactiveAgency && agency.status !== "active") {
+        res.status(403).json({ error: "Your agency is not active. Please contact ABSHER TRAVEL." });
+        return;
+      }
+      req.agent = {
+        userId: user.id,
+        agencyId: agency.id,
+        agencyName: agency.name,
+        agencyStatus: agency.status,
+      };
+      next();
+    } catch (e) {
+      req.log?.error(e);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  };
+}
+
 export function requireRole(...roles: string[]) {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {

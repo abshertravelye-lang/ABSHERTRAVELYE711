@@ -1,14 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
+import { useLanguage } from '@/context/LanguageContext';
 
 export default function OtpScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { t } = useLanguage();
   const { phone, email } = useLocalSearchParams<{ phone?: string; email?: string }>();
   
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -17,7 +20,7 @@ export default function OtpScreen() {
   const inputRefs = useRef<Array<TextInput | null>>([]);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval> | undefined;
     if (timer > 0) {
       interval = setInterval(() => setTimer((t) => t - 1), 1000);
     }
@@ -66,7 +69,7 @@ export default function OtpScreen() {
     setTimeout(() => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setIsVerifying(false);
-      router.replace('/(tabs)/');
+      router.replace('/(tabs)');
     }, 1500);
   };
 
@@ -78,34 +81,34 @@ export default function OtpScreen() {
     inputRefs.current[0]?.focus();
   };
 
-  const recipient = phone || email || 'رقم جوالك';
+  const recipient = phone || email || '';
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView style={[styles.container, { backgroundColor: colors.background }]} contentContainerStyle={{ flexGrow: 1 }}>
         {/* Header */}
-        <View style={[styles.header, { paddingTop: insets.top + 16, backgroundColor: '#0A2342' }]}>
+        <LinearGradient colors={['#071525', '#052B5B', '#1E3A5F']} style={[styles.header, { paddingTop: insets.top + 16 }]}>
           <Pressable onPress={() => router.back()} style={styles.backBtn}>
             <Ionicons name="arrow-forward" size={24} color="#FFFFFF" />
           </Pressable>
           <View style={styles.headerContent}>
             <View style={[styles.iconCircle, { backgroundColor: '#D4AF37' }]}>
-              <Ionicons name="chatbubble-ellipses" size={32} color="#0A2342" />
+              <Ionicons name="chatbubble-ellipses" size={32} color="#052B5B" />
             </View>
-            <Text style={[styles.title, { fontFamily: 'Cairo_700Bold' }]}>رمز التحقق</Text>
+            <Text style={[styles.title, { fontFamily: 'Cairo_700Bold' }]}>{t('otp.title')}</Text>
             <Text style={[styles.subtitle, { fontFamily: 'Cairo_400Regular' }]}>
-              أدخل رمز التحقق المكون من 6 أرقام المرسل إلى{'\n'}
-              <Text style={{ fontFamily: 'Cairo_700Bold', color: '#D4AF37' }}>{recipient}</Text>
+              {t('otp.subtitle')}{recipient ? '\n' : ''}
+              {recipient ? <Text style={{ fontFamily: 'Cairo_700Bold', color: '#D4AF37' }}>{recipient}</Text> : null}
             </Text>
           </View>
-        </View>
+        </LinearGradient>
 
         <View style={styles.form}>
           <View style={styles.otpContainer}>
             {otp.map((digit, index) => (
               <TextInput
                 key={index}
-                ref={(ref) => (inputRefs.current[index] = ref)}
+                ref={(ref) => { inputRefs.current[index] = ref; }}
                 style={[
                   styles.otpInput,
                   { 
@@ -128,26 +131,26 @@ export default function OtpScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.verifyBtn,
-              { backgroundColor: '#0A2342', opacity: pressed || isVerifying || otp.join('').length < 6 ? 0.8 : 1 }
+              { backgroundColor: '#D4AF37', opacity: pressed || isVerifying || otp.join('').length < 6 ? 0.8 : 1 }
             ]}
             onPress={handleVerify}
             disabled={isVerifying || otp.join('').length < 6}
           >
             <Text style={[styles.verifyBtnText, { fontFamily: 'Cairo_700Bold' }]}>
-              {isVerifying ? 'جاري التحقق...' : 'تأكيد'}
+              {isVerifying ? t('otp.verifying') : t('otp.verify')}
             </Text>
           </Pressable>
 
           <View style={styles.resendContainer}>
             <Text style={[styles.resendText, { color: colors.mutedForeground, fontFamily: 'Cairo_400Regular' }]}>
-              لم يصلك الرمز؟
+              {t('otp.noCode')}
             </Text>
             <Pressable onPress={handleResend} disabled={timer > 0}>
               <Text style={[
                 styles.resendBtn,
-                { color: timer > 0 ? colors.mutedForeground : '#2563EB', fontFamily: 'Cairo_600SemiBold' }
+                { color: timer > 0 ? colors.mutedForeground : colors.secondary, fontFamily: 'Cairo_600SemiBold' }
               ]}>
-                {timer > 0 ? `إعادة الإرسال (${timer}ث)` : 'إعادة الإرسال الآن'}
+                {timer > 0 ? `${t('otp.resendIn')} (${timer})` : t('otp.resendNow')}
               </Text>
             </Pressable>
           </View>
@@ -175,8 +178,8 @@ const styles = StyleSheet.create({
     fontSize: 24,
     textAlign: 'center',
   },
-  verifyBtn: { borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
-  verifyBtnText: { color: '#FFFFFF', fontSize: 16 },
+  verifyBtn: { borderRadius: 16, paddingVertical: 17, alignItems: 'center', shadowColor: '#D4AF37', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
+  verifyBtnText: { color: '#052B5B', fontSize: 17 },
   resendContainer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6 },
   resendText: { fontSize: 14 },
   resendBtn: { fontSize: 14 },

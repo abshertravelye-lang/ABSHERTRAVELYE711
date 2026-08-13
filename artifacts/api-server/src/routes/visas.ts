@@ -2,8 +2,9 @@ import { Router } from "express";
 import { requireAuth, requirePermission } from "../middleware/auth";
 import { logAudit } from "../lib/audit";
 import { db } from "@workspace/db";
-import { visasTable, notificationsTable, usersTable } from "@workspace/db";
+import { visasTable } from "@workspace/db";
 import { eq, and, isNull } from "drizzle-orm";
+import { notifyAllActiveUsers } from "../lib/notify";
 import { canonicalCountryEn } from "@workspace/countries";
 import {
   CreateVisaBody,
@@ -29,7 +30,11 @@ const toResponse = (r: typeof visasTable.$inferSelect) => ({
   requiresSchengenDoc: (r as unknown as Record<string, unknown>).requiresSchengenDoc ?? false,
 });
 
-/** Broadcast an in-app notification to every active user. Fire-and-forget. */
+/**
+ * Broadcast an in-app notification to every active user AND fire a real push
+ * to each of their registered devices (in each user's preferred language).
+ * Fire-and-forget: never throws into the caller.
+ */
 async function notifyAllUsers(
   log: { error: (e: unknown) => void },
   titleAr: string,
@@ -40,30 +45,14 @@ async function notifyAllUsers(
   relatedEntityId: string,
 ) {
   try {
-    const users = await db
-      .select({ id: usersTable.id })
-      .from(usersTable)
-      .where(and(eq(usersTable.isActive, true), isNull(usersTable.deletedAt)));
-
-    if (users.length === 0) return;
-
-    const rows = users.map((u) => ({
-      userId: u.id,
+    await notifyAllActiveUsers({
       titleAr,
       titleEn,
       messageAr,
       messageEn,
-      channel: "in_app" as const,
       relatedEntityType,
       relatedEntityId,
-      isRead: false,
-    }));
-
-    // Insert in chunks of 100 to stay within DB param limits
-    const CHUNK = 100;
-    for (let i = 0; i < rows.length; i += CHUNK) {
-      await db.insert(notificationsTable).values(rows.slice(i, i + CHUNK) as never);
-    }
+    });
   } catch (e) {
     log.error(e);
   }

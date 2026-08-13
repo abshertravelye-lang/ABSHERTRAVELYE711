@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
+import brand from '@/constants/colors';
 import { Nationality, searchNationalities } from '@/constants/nationalities';
 
 interface Props {
@@ -136,8 +137,8 @@ export default function NationalityPicker({ value, onChange, placeholder = 'اخ
                   </View>
                 </View>
                 {/* Left: code badge */}
-                <View style={[p.codeBadge, { backgroundColor: '#0A234215' }]}>
-                  <Text style={[p.codeText, { color: '#0A2342', fontFamily: 'Cairo_700Bold' }]}>
+                <View style={[p.codeBadge, { backgroundColor: brand.gold + '22' }]}>
+                  <Text style={[p.codeText, { color: brand.gold, fontFamily: 'Cairo_700Bold' }]}>
                     {item.code}
                   </Text>
                 </View>

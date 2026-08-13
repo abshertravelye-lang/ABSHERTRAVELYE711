@@ -17,9 +17,6 @@
     },
     {
       "path": "./lib/countries"
-    },
-    {
-      "path": "./lib/i18n"
     }
   ]
 }

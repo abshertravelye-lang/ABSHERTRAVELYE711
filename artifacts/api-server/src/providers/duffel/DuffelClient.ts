@@ -1,22 +1,47 @@
-import { Duffel } from "@duffel/api";
 import { logger } from "../../lib/logger";
 
-let _client: Duffel | null = null;
-
-export function getDuffelClient(): Duffel {
-  if (!_client) {
-    const token = process.env.DUFFEL_API_KEY;
-    if (!token) throw new Error("DUFFEL_API_KEY environment variable is required");
-    _client = new Duffel({ token });
-  }
-  return _client;
-}
+const DUFFEL_BASE_URL = "https://api.duffel.com";
+const DUFFEL_VERSION = "v2";
 
 export function hasDuffelCredentials(): boolean {
   return !!process.env.DUFFEL_API_KEY;
 }
 
-// Re-export for convenience so callers don't need to import Duffel directly
-export type { Duffel };
+async function duffelRequest<T>(
+  method: "GET" | "POST",
+  path: string,
+  body?: unknown,
+): Promise<T> {
+  const token = process.env.DUFFEL_API_KEY;
+  if (!token) throw new Error("DUFFEL_API_KEY environment variable is required");
 
-export { logger };
+  const start = Date.now();
+  const resp = await fetch(`${DUFFEL_BASE_URL}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Duffel-Version": DUFFEL_VERSION,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const ms = Date.now() - start;
+
+  if (!resp.ok) {
+    const errBody = await resp.text();
+    logger.error({ status: resp.status, ms, path }, `Duffel API error: ${errBody}`);
+    throw new Error(`Duffel ${resp.status}: ${errBody}`);
+  }
+
+  logger.info({ path, ms }, "Duffel request completed");
+  return resp.json() as Promise<T>;
+}
+
+export function duffelGet<T>(path: string): Promise<T> {
+  return duffelRequest<T>("GET", path);
+}
+
+export function duffelPost<T>(path: string, body: unknown): Promise<T> {
+  return duffelRequest<T>("POST", path, body);
+}

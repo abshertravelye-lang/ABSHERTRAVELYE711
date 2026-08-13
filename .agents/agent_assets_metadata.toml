@@ -1,3 +1,8 @@
 uploads = []
 generated = []
-outputs = []
+
+[[outputs]]
+id = "kGNWMWmoOtybpbzLq67tK"
+uri = "file://absher_travel_flutter.zip"
+type = "unspecified"
+title = "أبشر أعمال - كود Flutter"

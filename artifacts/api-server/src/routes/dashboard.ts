@@ -1,5 +1,4 @@
 import { Router } from "express";
-import { requireAuth, requirePermission } from "../middleware/auth";
 import { db } from "@workspace/db";
 import {
   offersTable, destinationsTable, programsTable, visasTable, bookingsTable,
@@ -10,7 +9,7 @@ import { sql, count, sum, eq } from "drizzle-orm";
 
 const router = Router();
 
-router.get("/dashboard/stats", requireAuth, requirePermission("overview"), async (req, res) => {
+router.get("/dashboard/stats", async (req, res) => {
   try {
     const [totalBookingsResult] = await db.select({ count: count() }).from(bookingsTable);
     const [pendingResult] = await db.select({ count: count() }).from(bookingsTable).where(sql`status = 'pending'`);
@@ -119,7 +118,7 @@ router.get("/dashboard/stats", requireAuth, requirePermission("overview"), async
   }
 });
 
-router.get("/dashboard/recent-bookings", requireAuth, requirePermission("overview"), async (req, res) => {
+router.get("/dashboard/recent-bookings", async (req, res) => {
   try {
     const params = GetRecentBookingsQueryParams.parse(req.query);
     const limit = params.limit ?? 10;

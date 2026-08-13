@@ -10,8 +10,6 @@ import {
   DeleteDestinationParams,
 } from "@workspace/api-zod";
 
-import { requireAuth, requirePermission } from "../middleware/auth";
-
 const router = Router();
 
 router.get("/destinations", async (req, res) => {
@@ -24,7 +22,7 @@ router.get("/destinations", async (req, res) => {
   }
 });
 
-router.post("/destinations", requireAuth, requirePermission("visa_config"), async (req, res) => {
+router.post("/destinations", async (req, res) => {
   try {
     const body = CreateDestinationBody.parse(req.body);
     const [row] = await db.insert(destinationsTable).values(body).returning();
@@ -47,7 +45,7 @@ router.get("/destinations/:id", async (req, res) => {
   }
 });
 
-router.patch("/destinations/:id", requireAuth, requirePermission("visa_config"), async (req, res) => {
+router.patch("/destinations/:id", async (req, res) => {
   try {
     const { id } = UpdateDestinationParams.parse({ id: Number(req.params.id) });
     const body = UpdateDestinationBody.parse(req.body);
@@ -60,7 +58,7 @@ router.patch("/destinations/:id", requireAuth, requirePermission("visa_config"),
   }
 });
 
-router.delete("/destinations/:id", requireAuth, requirePermission("visa_config"), async (req, res) => {
+router.delete("/destinations/:id", async (req, res) => {
   try {
     const { id } = DeleteDestinationParams.parse({ id: Number(req.params.id) });
     await db.delete(destinationsTable).where(eq(destinationsTable.id, id));

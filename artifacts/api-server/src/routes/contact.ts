@@ -1,5 +1,4 @@
 import { Router } from "express";
-import { requireAuth, requirePermission } from "../middleware/auth";
 import { db } from "@workspace/db";
 import { contactMessagesTable } from "@workspace/db";
 import { SubmitContactBody } from "@workspace/api-zod";
@@ -22,7 +21,7 @@ router.post("/contact", async (req, res) => {
   }
 });
 
-router.get("/contact/messages", requireAuth, requirePermission("messages"), async (req, res) => {
+router.get("/contact/messages", async (req, res) => {
   try {
     const rows = await db.select().from(contactMessagesTable).orderBy(contactMessagesTable.createdAt);
     res.json(rows.map(format));
@@ -32,7 +31,7 @@ router.get("/contact/messages", requireAuth, requirePermission("messages"), asyn
   }
 });
 
-router.patch("/contact/messages/:id/read", requireAuth, requirePermission("messages"), async (req, res) => {
+router.patch("/contact/messages/:id/read", async (req, res) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: "Invalid id" });

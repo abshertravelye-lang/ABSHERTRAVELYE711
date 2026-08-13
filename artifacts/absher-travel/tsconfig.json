@@ -22,9 +22,6 @@
     },
     {
       "path": "../../lib/object-storage-web"
-    },
-    {
-      "path": "../../lib/i18n"
     }
   ]
 }

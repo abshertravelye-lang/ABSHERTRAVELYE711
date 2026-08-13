@@ -8,7 +8,7 @@
  * toast), and a footer row of trust badges.
  *
  * All existing auth logic is preserved: useLoginUser / useRegisterUser
- * mutations, setAuth token storage, router.back() redirect, and validation.
+ * mutations, setAuth token storage, router.replace to the home tabs, and validation.
  */
 import React, { useState } from 'react';
 import {
@@ -100,7 +100,7 @@ export default function AuthScreen() {
         onSuccess: async (res) => {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           await setAuth(res);
-          router.back();
+          router.replace("/(tabs)");
         },
         onError: () => Alert.alert(t('login.errorTitle'), t('login.errorBody')),
       },
@@ -127,7 +127,7 @@ export default function AuthScreen() {
         onSuccess: async (res) => {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           await setAuth(res);
-          router.back();
+          router.replace("/(tabs)");
         },
         onError: () => Alert.alert(t('register.errorTitle'), t('register.errorBody')),
       },

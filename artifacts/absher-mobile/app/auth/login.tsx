@@ -33,6 +33,7 @@ import { useColors } from '@/hooks/useColors';
 import { useLoginUser, useRegisterUser } from '@workspace/api-client-react';
 import { useAuth } from '@/context/AuthContext';
 import { useLanguage } from '@/context/LanguageContext';
+import { useTheme } from '@/context/ThemeContext';
 import { CountryDialPicker } from '@/components/CountryDialPicker';
 
 const NAVY = '#0A2342';
@@ -56,6 +57,12 @@ export default function AuthScreen() {
   const insets = useSafeAreaInsets();
   const { setAuth } = useAuth();
   const { t, lang, toggle, writingDirection, isRTL } = useLanguage();
+  const { resolved: themeMode, setMode: setThemeMode } = useTheme();
+  const isDark = themeMode === 'dark';
+  const toggleTheme = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setThemeMode(isDark ? 'light' : 'dark');
+  };
 
   const loginMutation = useLoginUser();
   const registerMutation = useRegisterUser();
@@ -217,10 +224,16 @@ export default function AuthScreen() {
             style={StyleSheet.absoluteFill}
           />
 
-          {/* Top row: moon (decorative) + language pill */}
+          {/* Top row: working dark/light toggle + language pill */}
           <View style={[styles.heroTop, { paddingTop: topInset + 10 }]}>
-            <Pressable style={styles.moonBtn} hitSlop={8} accessibilityRole="button">
-              <Ionicons name="moon-outline" size={20} color="rgba(255,255,255,0.85)" />
+            <Pressable
+              onPress={toggleTheme}
+              style={styles.moonBtn}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              <Ionicons name={isDark ? 'sunny-outline' : 'moon-outline'} size={20} color={isDark ? GOLD : 'rgba(255,255,255,0.9)'} />
             </Pressable>
             <Pressable
               onPress={() => {
@@ -235,9 +248,10 @@ export default function AuthScreen() {
             </Pressable>
           </View>
 
-          {/* Logo + tagline */}
+          {/* Logo + brand name + tagline */}
           <View style={styles.brandWrap}>
             <Image source={require('@/assets/images/absher-logo-transparent.png')} style={styles.logo} contentFit="contain" />
+            <Text style={[styles.brandName, { fontFamily: 'Cairo_700Bold' }]}>ABSHER TRAVEL</Text>
             <Text style={[styles.tagline, { fontFamily: 'Cairo_600SemiBold' }]}>{t('auth.tagline')}</Text>
           </View>
         </View>
@@ -389,14 +403,15 @@ export default function AuthScreen() {
 }
 
 const styles = StyleSheet.create({
-  hero: { height: 300, position: 'relative', overflow: 'hidden' },
+  hero: { height: 360, position: 'relative', overflow: 'hidden' },
   heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 },
-  moonBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
+  moonBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(255,255,255,0.14)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
   langPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.15)', borderColor: 'rgba(201,162,75,0.5)', borderWidth: 1, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 22 },
   langText: { color: '#FFFFFF', fontSize: 13 },
-  brandWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 30 },
-  logo: { width: 200, height: 108 },
-  tagline: { color: 'rgba(255,255,255,0.9)', fontSize: 13, marginTop: 2 },
+  brandWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 34, gap: 2 },
+  logo: { width: 300, height: 140 },
+  brandName: { color: '#FFFFFF', fontSize: 22, letterSpacing: 4, marginTop: 6, textShadowColor: 'rgba(0,0,0,0.35)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8 },
+  tagline: { color: GOLD, fontSize: 13.5, marginTop: 3, letterSpacing: 0.3 },
 
   card: { marginHorizontal: 16, marginTop: -40, borderRadius: 28, padding: 18, shadowColor: NAVY, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 20, elevation: 8 },
   tabs: { borderRadius: 16, padding: 5, gap: 4 },

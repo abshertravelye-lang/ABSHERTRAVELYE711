@@ -183,7 +183,7 @@ export const auth: Domain = {
   "register.missingTitle": { ar: "بيانات ناقصة", en: "Missing information" },
   "register.errorTitle": { ar: "خطأ", en: "Error" },
   // Auth screen redesign
-  "auth.tagline": { ar: "شريكك المميز في السفر", en: "Your Premium Travel Partner" },
+  "auth.tagline": { ar: "شريكك المتميز في السفر", en: "Your Premium Travel Partner" },
   "auth.tabLogin": { ar: "تسجيل الدخول", en: "Sign In" },
   "auth.tabRegister": { ar: "إنشاء حساب", en: "Sign Up" },
   "auth.identifier": { ar: "البريد الإلكتروني أو رقم الجوال", en: "Email or phone number" },

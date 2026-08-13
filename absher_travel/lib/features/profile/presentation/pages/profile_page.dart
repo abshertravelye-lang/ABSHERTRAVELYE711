@@ -42,8 +42,8 @@ class ProfilePage extends ConsumerWidget {
                                 radius: 44,
                                 backgroundColor: AppColors.accent,
                                 child: Text(
-                                  user.displayName.isNotEmpty
-                                      ? user.displayName[0].toUpperCase()
+                                  (user.displayName ?? '').isNotEmpty
+                                      ? (user.displayName ?? '')[0].toUpperCase()
                                       : 'م',
                                   style: const TextStyle(
                                     fontSize: 36,
@@ -53,7 +53,7 @@ class ProfilePage extends ConsumerWidget {
                                 ),
                               ),
                               const SizedBox(height: 12),
-                              Text(user.displayName,
+                              Text(user.displayName ?? '',
                                   style: const TextStyle(
                                     color: AppColors.white,
                                     fontSize: 20,
@@ -174,6 +174,7 @@ class _LoggedInMenu extends StatelessWidget {
                 ),
               );
               if (confirmed == true) {
+                if (!context.mounted) return;
                 await ref.read(authStateNotifierProvider.notifier).logout();
               }
             },
